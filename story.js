@@ -1139,6 +1139,14 @@ function globusReise(nach, tageText, fertig){
   if(story.phase === 'platzhalter') story.phase = 'reise';
   schwarz('', 0.1, () => {
     hudSichtbar(false);                       // kein HUD ueber dem Globus
+    // Alles, was zur alten Szene gehoert, aufraeumen – sonst laeuft es nach dem Globus weiter
+    // (z. B. die Sirene des Loeschboots nach einem Absturz: resetPlane, das sie sonst stoppt,
+    // wird beim Etappen-Ende uebersprungen).
+    if(typeof clearRescue === 'function') clearRescue();          // Feuerwehr + Sirene
+    if(typeof clearParachute === 'function') clearParachute();
+    if(typeof clearBoatSpray === 'function') clearBoatSpray();
+    if(typeof clearFire === 'function') clearFire();
+    state.crashed = false; state.crashTimer = 0;
     gl.von = story.reise[story.reise.length - 1];
     gl.nach = nach;
     story.reise.push(nach);
