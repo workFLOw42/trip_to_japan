@@ -846,16 +846,47 @@ function hookRadarAnzeige(){
   // Periskop: die Engine malt ihr Dreieck mittig (Spitze 7 px ueber der Mitte). Danach das alte
   // Dreieck mit Wasserfarbe abdecken (unter dem U-Boot ist nie Land) und das neue mit der Spitze auf
   // der Mitte malen – gleiches Prinzip wie beim Radar.
+  //
+  // Ausserdem zeigt das Periskop nur nach einem Sonar-Ping (B) ein Bild: voll fuer PERI_HALT s, dann
+  // blendet es aus, bis es nach PERI_ZEIT s weg ist. Jeder Ping baut es neu auf und startet die Zeit
+  // von vorn. So gewoehnt man sich an, den Ping zu benutzen.
+  const PERI_ZEIT = 10, PERI_HALT = 2;
+  let periPingT = -1;                                      // s seit dem letzten Ping (-1 = keiner)
+  const pingOrig = sonarPing;
+  sonarPing = function(){
+    const neu = sonarCool <= 0;                            // nur ein echter Ping, nicht in der Sperre
+    const r = pingOrig.apply(this, arguments);
+    if(neu){ periPingT = 0; periT = 0; }                   // periT = 0: Umgebung jetzt neu abtasten
+    return r;
+  };
   const periOrig = updatePeriscope;
   updatePeriscope = function(dt){
     const r = periOrig.apply(this, arguments);
-    if(!r) return r;
-    const W = radarCv.width, H = radarCv.height, cx = W/2, cy = H/2, g = radarCtx;
+    if(!r){ periPingT = -1; return r; }
+    if(periPingT >= 0) periPingT += dt || 0;
+    const W = radarCv.width, H = radarCv.height, cx = W/2, cy = H/2, R = W/2 - 6, g = radarCtx;
+    // Deckkraft des Sonarbilds: 1 bis PERI_HALT, dann linear auf 0 bei PERI_ZEIT
+    const sicht = periPingT < 0 ? 0
+      : Math.max(0, Math.min(1, 1 - (periPingT - PERI_HALT) / (PERI_ZEIT - PERI_HALT)));
+    // Bild mit (1 - sicht) leerer Scheibe ueberdecken
+    if(sicht < 1){
+      g.save();
+      g.globalAlpha = 1 - sicht;
+      g.fillStyle = 'rgb(20,70,90)';
+      g.beginPath(); g.arc(cx, cy, R - 1, 0, Math.PI*2); g.fill();
+      g.restore();
+    }
+    // altes, mittiges Dreieck abdecken und neues mit der Spitze auf der Mitte malen
     g.fillStyle = 'rgb(20,70,90)';
     g.beginPath(); g.moveTo(cx, cy - 8); g.lineTo(cx - 6.5, cy + 7); g.lineTo(cx + 6.5, cy + 7); g.closePath(); g.fill();
-    // Wracks, die unter dem alten Dreieck lagen, sind direkt unter dem Boot: nichts Wichtiges verloren
     g.fillStyle = '#ffffff';
     g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx - 5, cy + 13); g.lineTo(cx + 5, cy + 13); g.closePath(); g.fill();
+    // ohne Bild: kleiner Hinweis auf den Ping
+    if(sicht <= 0){
+      g.fillStyle = 'rgba(255,255,255,0.55)';
+      g.font = '11px system-ui,sans-serif'; g.textAlign = 'center';
+      g.fillText('B: Ping', cx, cy + 30);
+    }
     return r;
   };
   updateRadar = function(){
@@ -1227,7 +1258,7 @@ const UBOOT_TEXT = [   // den Code NICHT aussprechen – er steht gross genug im
   'Jetzt erklären wir dir kurz die Steuerung.',
   'Mit dem rechten Stick oder W und S gibst du Fahrt. Ohne Fahrt kann das U-Boot nicht tauchen.',
   'Linker Stick nach vorn oder Pfeil hoch taucht ab, nach hinten taucht wieder auf. Gelenkt wird nach links und rechts.',
-  'Mit B schickst du einen Sonar-Ping: Je näher ein Wrack ist, desto lauter kommt er zurück. Die Scheibe oben rechts zeigt Wracks als rote Punkte.',
+  'Mit B schickst du einen Sonar-Ping: Je näher ein Wrack ist, desto lauter kommt er zurück. Nach jedem Ping zeigt dir die Scheibe oben rechts kurz die Wracks als rote Punkte.',
   'Wir möchten die Wracks nachbauen, um daraus künstliche Riffe zu erschaffen.',
   'Wir wissen, dass es hier in der Nähe viele Wracks gibt.',
   'Finde zwei unterschiedliche Schiffswracks und mache jeweils ein Foto davon, dann können wir der Umwelt helfen.',
