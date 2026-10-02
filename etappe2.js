@@ -60,11 +60,11 @@ function baueKulisse(){
   const g = new THREE.Group();
   const bahnMat = new THREE.MeshLambertMaterial({ color: 0x8a8274 });
   const bahn = new THREE.Mesh(new THREE.PlaneGeometry(40, 600), bahnMat);
-  bahn.rotation.x = -Math.PI / 2; bahn.position.set(60, 0.05, 0); g.add(bahn);
+  bahn.rotation.x = -Math.PI / 2; bahn.position.set(18, 0.05, 0); g.add(bahn);
   const strich = new THREE.MeshBasicMaterial({ color: 0xf2f2f2 });
   for(let z = -280; z <= 280; z += 40){
     const s = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 18), strich);
-    s.rotation.x = -Math.PI / 2; s.position.set(60, 0.07, z); g.add(s);
+    s.rotation.x = -Math.PI / 2; s.position.set(18, 0.07, z); g.add(s);
   }
   // kleiner Tower
   const tw = new THREE.Mesh(new THREE.BoxGeometry(8, 14, 8), new THREE.MeshLambertMaterial({ color: 0xd8cbb0 }));
@@ -127,10 +127,10 @@ function baueKulisse(){
 // Transall steht als Kulisse am Bahnende, bis man einsteigt.
 // Ankunft wie in Etappe 1: Kenji schaut nach Norden (-Z), der X-Wing steht ~30 Grad links, die
 // Transall ~30 Grad rechts vor ihm, je gut 100 m entfernt – keiner direkt voraus.
-const ANKUNFT    = { x: 0, z: 420 };
-const XWING_PARK = { x: -60, z: 320, yaw: Math.PI * 0.15 };
+const ANKUNFT    = { x: 0, z: 380 };
+const XWING_PARK = { x: -18, z: 320, yaw: Math.PI * 0.15 };   // 75 % naeher an der Transall als vorher (60 -> 18 m)
 const PARK = {
-  Transall: { x: 60, z: 320, yaw: 0, obj: null },   // Nase nach Norden (-Z), Bahn liegt laengs Z
+  Transall: { x: 18, z: 320, yaw: 0, obj: null },   // Nase nach Norden (-Z), Bahn liegt laengs Z
 };
 story.e2xwing = XWING_PARK;
 story.e2park = PARK;
@@ -208,15 +208,17 @@ function hookWelt2(){
   const isOnLandOrig = isOnLand, isOnBeachOrig = isOnBeach, surfaceYOrig = surfaceY,
         isOpenWaterOrig = isOpenWater, seaYAtOrig = seaYAt, seabedYOrig = seabedY,
         updateSeaOrig = updateSea, hitsBuildingOrig = hitsBuilding, evaFootYOrig = evaFootY;
-  isOnLand    = function(x, z){ return e2() && locale === 'earth' ? true  : isOnLandOrig(x, z); };
-  isOnBeach   = function(x, z){ return e2() && locale === 'earth' ? false : isOnBeachOrig(x, z); };
-  isOpenWater = function(x, z){ return e2() && locale === 'earth' ? false : isOpenWaterOrig(x, z); };
-  surfaceY    = function(x, z){ return e2() && locale === 'earth' ? duene(x, z) : surfaceYOrig(x, z); };
-  evaFootY    = function(x, z){ return e2() && locale === 'earth' ? duene(x, z) : evaFootYOrig(x, z); };
+  isOnLand    = function(x, z){ return e2() && locale === 'earth' ? true  : isOnLandOrig.apply(this, arguments); };
+  isOnBeach   = function(x, z){ return e2() && locale === 'earth' ? false : isOnBeachOrig.apply(this, arguments); };
+  isOpenWater = function(x, z){ return e2() && locale === 'earth' ? false : isOpenWaterOrig.apply(this, arguments); };
+  surfaceY    = function(x, z){ return e2() && locale === 'earth' ? duene(x, z) : surfaceYOrig.apply(this, arguments); };
+  evaFootY    = function(x, z){ return e2() && locale === 'earth' ? duene(x, z) : evaFootYOrig.apply(this, arguments); };
   // "Wasserhoehe" = weit unter dem Sand (kein Schwimmen, keine Wellen)
-  seaYAt      = function(x, z, t){ return e2() && locale === 'earth' ? -500 : seaYAtOrig(x, z, t); };
-  seabedY     = function(x, z){ return e2() && locale === 'earth' ? -600 : seabedYOrig(x, z); };
-  hitsBuilding = function(x, y, z, a){ return e2() && locale === 'earth' ? false : hitsBuildingOrig(x, y, z, a); };
+  seaYAt      = function(x, z, t){ return e2() && locale === 'earth' ? -500 : seaYAtOrig.apply(this, arguments); };
+  seabedY     = function(x, z){ return e2() && locale === 'earth' ? -600 : seabedYOrig.apply(this, arguments); };
+  // alle Argumente durchreichen: das 5. ist das Schiff, das sich selbst nicht treffen darf – mit nur
+  // vier Argumenten stiess jedes Handelsschiff gegen sich selbst und drehte auf der Stelle
+  hitsBuilding = function(){ return e2() && locale === 'earth' ? false : hitsBuildingOrig.apply(this, arguments); };
   const seaFloorNeededOrig = seaFloorNeeded, updateFishOrig = updateFish, updateReefFishOrig = updateReefFish,
         updateOrcasOrig = updateOrcas;
   seaFloorNeeded = function(){ return e2() && locale === 'earth' ? false : seaFloorNeededOrig(); };
@@ -283,7 +285,9 @@ function wuesteStart(){
   updateSand();
   evaExit();
   eva.group.position.set(ANKUNFT.x, duene(ANKUNFT.x, ANKUNFT.z), ANKUNFT.z);
-  eva.yaw = 0; eva.group.rotation.y = 0;               // Blick nach Norden zwischen die beiden
+  // Blick genau auf die Mitte zwischen beiden Flugzeugen (Gesicht -Z: yaw = atan2(-dx, -dz))
+  const mx = (XWING_PARK.x + PARK.Transall.x) / 2 - ANKUNFT.x, mz = (XWING_PARK.z + PARK.Transall.z) / 2 - ANKUNFT.z;
+  eva.yaw = Math.atan2(-mx, -mz); eva.group.rotation.y = eva.yaw;
   evaOrbit = 0; evaPitch = 0;
   snapCamera();
   stelleFahrzeuge();
@@ -311,10 +315,185 @@ function updateE2Marken(){
   for(const o of e2m) story.setzeMarke(o.m, o.x, 0, o.z, o.h, zeigen);
 }
 
+// ---- Transall-Flugschule ---------------------------------------------------------------------
+// Ablauf (story.phase = 'flugschule', fs.schritt):
+//   erklaeren  – am Boden: Pilot erklaert Startsequenz, Kurzschluss-Symbol, Abwurf-Physik
+//   frage      – am Boden: "Du kannst doch fliegen?" [JA] / [NEIN] (Auswahl wie im Startmenue)
+//                NEIN -> "Fuer Anfaenger ist das nichts, steig aus" -> 7 Tage -> Etappe 3
+//   reise      – JA: Autopilot startet, steigt auf 300 m, fliegt erst einen Bogen weg von der Oase
+//   (folgt: uebernehmen, abwurf)
+const FS_HOEHE = 300;          // m ueber Grund
+const FS_TEXT = [
+  'Hallo, willkommen an Bord! Ich bin dein Pilot. Wir bringen Hilfsgüter zu einer Oase in der Wüste. Pass gut auf, dann lernst du was.',
+  'Vor jedem Flug machen wir die Startsequenz: Bremse halten, Ruder links und rechts, Nase hoch und runter, Bremse los, Gas geben.',
+  'Leuchtet dabei dieses rote Symbol mit den zwei Pfeilen, hat der Flieger einen Kurzschluss. Dann ist alles vertauscht, und du musst umgekehrt steuern.',
+  'Wir fliegen auf dreihundert Metern. Halte die Höhe zwischen zweihundertsiebzig und dreihundertdreißig.',
+  'Die Kisten fallen mit unserem Schwung nach vorne. Je schneller wir sind, desto früher musst du sie abwerfen.',
+  'Merk dir: Schub in Prozent mal fünf gleich Meter vor dem Ziel. Bei sechzig Prozent wirfst du also dreihundert Meter vorher ab, bei hundert Prozent fünfhundert Meter.',
+];
+const fsch = story.flugschule = { schritt: null, rede: null, frageEl: null, symbolEl: null };
+
+function fsEinsteigen(){
+  story.phase = 'flugschule';
+  fsch.schritt = 'erklaeren';
+  // in die Transall: Modell wechseln, an die Kulissenposition, Kulisse ausblenden
+  const idx = MODEL_NAMES.indexOf('Transall');
+  clearEva();
+  currentModel = idx;
+  document.getElementById('mdl').textContent = 'Transall';
+  buildModel('Transall'); spec = PLANE_SPECS.Transall || DEFAULT_SPEC;
+  const tp = PARK.Transall;
+  state.pos.set(tp.x, 0, tp.z);
+  state.quat.setFromEuler(new THREE.Euler(0, tp.yaw, 0, 'YXZ'));
+  state.vel.set(0, 0, 0); state.throttle = 0; state.onGround = true; state.crashed = false;
+  planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
+  tp.weg = true;
+  snapCamera();
+  if(story.hinweis) story.hinweis('');
+  fsch.rede = story.sprich(FS_TEXT, () => fsFrage(), 'pilot');
+  // waehrend der Kurzschluss-Erklaerung das Symbol kurz zeigen
+  setTimeout(() => fsSymbol(true), 9000);
+  setTimeout(() => fsSymbol(false), 17000);
+}
+
+function fsSymbol(an){
+  if(!fsch.symbolEl){
+    fsch.symbolEl = document.createElement('div');
+    fsch.symbolEl.style.cssText = 'position:absolute;left:16px;top:50%;transform:translateY(-50%);padding:6px 12px;'
+      + 'border-radius:8px;background:#e03c31;box-shadow:0 0 14px #e03c31;color:#fff;font:700 26px system-ui;z-index:20;';
+    fsch.symbolEl.textContent = '⇄';
+    document.body.appendChild(fsch.symbolEl);
+  }
+  fsch.symbolEl.style.display = an ? '' : 'none';
+}
+
+// Frage mit JA / NEIN (Stick links-rechts, A / Enter / Klick)
+function fsFrage(){
+  fsch.schritt = 'frage';
+  story.sprich(['Und, du kannst doch fliegen, oder?'], null, 'pilot');
+  if(!fsch.frageEl){
+    fsch.frageEl = document.createElement('div');
+    fsch.frageEl.style.cssText = 'position:absolute;left:50%;bottom:16%;transform:translateX(-50%);display:flex;gap:18px;z-index:22;';
+    fsch.frageEl.innerHTML = ['JA', 'NEIN'].map((t, i) => '<button data-i="' + i + '" style="width:140px;height:54px;border-radius:12px;'
+      + 'border:2px solid #fff;background:rgba(0,0,0,.5);color:#fff;font:700 22px system-ui;cursor:pointer">' + t + '</button>').join('');
+    document.body.appendChild(fsch.frageEl);
+    fsch.frageEl.querySelectorAll('button').forEach((b, i) => {
+      b.addEventListener('pointerenter', () => { fsch.wahl = i; fsZeige(); });
+      b.addEventListener('pointerdown', (e) => { e.stopPropagation(); fsch.wahl = i; fsAntwort(); });
+    });
+  }
+  fsch.wahl = 0; fsch.frageEl.style.display = 'flex'; fsZeige();
+  fsPrev = { l: true, r: true, a: true };          // erst nach Loslassen zaehlen
+  window.addEventListener('keydown', fsTaste, true);
+}
+function fsZeige(){
+  fsch.frageEl.querySelectorAll('button').forEach((b, i) => {
+    const an = i === fsch.wahl;
+    b.style.background = an ? '#ffd23f' : 'rgba(0,0,0,.5)'; b.style.color = an ? '#1a1a1a' : '#fff';
+    b.style.transform = an ? 'scale(1.08)' : 'none';
+  });
+}
+function fsAntwort(){
+  if(fsch.schritt !== 'frage') return;
+  fsch.frageEl.style.display = 'none';
+  window.removeEventListener('keydown', fsTaste, true);
+  if(fsch.wahl === 1){
+    fsch.schritt = 'nein';
+    story.sprich(['Oh man! Für Anfänger ist das leider nichts. Bitte steige wieder aus.'], () => {
+      story.etappeEnde(7, 'ausgestiegen');
+    }, 'pilot');
+    return;
+  }
+  fsch.schritt = 'reise';
+  fsch.startT = performance.now();
+  story.sprich(['Super, dann los!'], null, 'pilot');
+}
+// Eingaben fuer die Frage: Pfeile/Stick links-rechts, A/Enter/Leertaste – als Tastendruck-Ereignis
+// (Capture-Phase, stoppt die Weitergabe), damit nichts in die Flugsteuerung durchrutscht.
+function fsTaste(e){
+  if(fsch.schritt !== 'frage') return;
+  if(e.code === 'ArrowLeft' || e.code === 'KeyA'){ fsch.wahl = 0; fsZeige(); }
+  else if(e.code === 'ArrowRight' || e.code === 'KeyD'){ fsch.wahl = 1; fsZeige(); }
+  else if(e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter'){ fsAntwort(); }
+  else return;
+  e.preventDefault(); e.stopPropagation();
+}
+let fsPrev = { l: true, r: true, a: true };
+function fsFrageEingabe(){
+  if(fsch.schritt !== 'frage') return;
+  const gp = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
+  if(!gp){ fsPrev = { l: false, r: false, a: false }; return; }
+  const x = gp.axes[0] || 0;
+  const l = x < -0.5 || !!(gp.buttons[14] && gp.buttons[14].pressed);
+  const r = x >  0.5 || !!(gp.buttons[15] && gp.buttons[15].pressed);
+  const a = !!(gp.buttons[0] && gp.buttons[0].pressed);
+  if(l && !fsPrev.l){ fsch.wahl = 0; fsZeige(); }
+  if(r && !fsPrev.r){ fsch.wahl = 1; fsZeige(); }
+  if(a && !fsPrev.a) fsAntwort();
+  fsPrev = { l, r, a };
+}
+
+// Autopilot: Start, Steigflug auf FS_HOEHE, Kurs auf die Oase. Ersetzt die Spielereingabe.
+function fsAutopilot(dt){
+  const v = state.vel.length();
+  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);
+  const agl = state.pos.y - duene(state.pos.x, state.pos.z);
+  const e = new THREE.Euler().setFromQuaternion(state.quat, 'YXZ');
+  state.throttle = agl < FS_HOEHE - 40 ? 1.0 : 0.75;
+  // Nase: bis 45 m/s am Boden waagerecht, dann Steigwinkel nach Hoehenfehler (max ~12 Grad)
+  let sollPitch = 0;
+  if(v > 45 || !state.onGround) sollPitch = Math.max(-0.12, Math.min(0.2, (FS_HOEHE - agl) * 0.004));
+  const pitchIn = Math.max(-1, Math.min(1, (sollPitch - e.x) * 3));
+  // Kurs: erst ~40 s einen Bogen nach Osten (weg von der Oase, Zeit fuer die Uebernahme), dann zur
+  // Oase drehen (erst ab 60 m Hoehe), Schraeglage begrenzt
+  let rollIn = 0;
+  if(agl > 60){
+    const weg = (performance.now() - (fsch.startT || 0)) / 1000 < 40;
+    const zielX = weg ? 4000 : OASE.x, zielZ = weg ? 600 : OASE.z;
+    const zx = zielX - state.pos.x, zz = zielZ - state.pos.z;
+    const soll = Math.atan2(-zx, -zz);
+    let d = soll - e.y; while(d > Math.PI) d -= 2 * Math.PI; while(d < -Math.PI) d += 2 * Math.PI;
+    // gemessen: roll +1 -> Schraeglage z negativ, Kurs (yaw) sinkt = Rechtskurve.
+    // d > 0 heisst "yaw muss steigen" (links) -> Schraeglage z positiv -> roll negativ.
+    const sollZ = Math.max(-0.45, Math.min(0.45, d * 1.2));
+    rollIn = Math.max(-1, Math.min(1, -(sollZ - e.z) * 2.5));
+  }
+  return { pitch: pitchIn, roll: rollIn, yaw: 0 };
+}
+
+function hookFlugschule(){
+  // Y an der Transall: einsteigen in die Flugschule
+  const boardYOrig = evaBoardY;
+  evaBoardY = function(){
+    if(e2() && !story.phase && transallNah()){ fsEinsteigen(); return; }
+    return boardYOrig.apply(this, arguments);
+  };
+  // Physik: waehrend Erklaerung/Frage/Reise fliegt der Autopilot
+  const physOrig = stepPhysics;
+  stepPhysics = function(dt, inp){
+    if(e2() && story.phase === 'flugschule' && (fsch.schritt === 'erklaeren' || fsch.schritt === 'frage' || fsch.schritt === 'nein')){
+      // am Boden stehen bleiben, Bremse an, keine Spielereingabe
+      state.vel.set(0, 0, 0); state.throttle = 0;
+      return;
+    }
+    if(e2() && story.phase === 'flugschule' && fsch.schritt === 'reise'){
+      return physOrig.call(this, dt, fsAutopilot(dt));
+    }
+    return physOrig.apply(this, arguments);
+  };
+}
+function transallNah(){
+  const tp = PARK.Transall;
+  if(!eva || tp.weg) return false;
+  return Math.hypot(eva.group.position.x - tp.x, eva.group.position.z - tp.z) < 16;
+}
+story.transallNah = transallNah;
+
 // Kulisse jedes Bild nachfuehren (Fahrzeug-Kulisse ein-/ausblenden)
 function updateE2(dt){
   updateWuesteSound(dt || 0);
   if(!e2()) return;
+  if(story.phase === 'flugschule') fsFrageEingabe();
   updateE2Marken();
   for(const name of Object.keys(PARK)){
     const p = PARK[name];
@@ -327,5 +506,6 @@ const hookOrig = window.STORY_HOOK;
 window.STORY_HOOK = function(){
   if(hookOrig) hookOrig();
   hookWelt2();
+  hookFlugschule();
 };
 })();

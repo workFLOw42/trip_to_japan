@@ -175,6 +175,9 @@ function hookWracks(){
 // Wasser gibt es weiterhin, wenn ein Flugzeug abstuerzt – das laeuft ueber aiCrash, nicht hier.
 function hookFeuer(){
   spawnFire = function(){ return false; };
+  // Auch die KI-Canadairs legen keine Brandherde mehr (sie suchten sich eine Insel – ohne andere
+  // Inseln die Startinsel). Ohne Ziel fliegen sie Wegpunkte ab.
+  aiFindFireIsland = function(){ return null; };
 }
 
 // Parkplatz des X-Wings: auf dem Land knapp vor dem Sand, XWING_NEBEN m entlang des Ufers neben
@@ -316,7 +319,7 @@ const GEH_MAX = 0.3;          // Anteil von EVA_SPEED bei 50 % Stick (≈ 1,8 m/
 const TRICK_CLIP = { tanz: 'dance_silly', twirl: 'butterfly_twirl', evade: 'aerial_evade' };
 const tricks = story.tricks = { aktiv: null, t: 0, moon: false, ausschlag: 0, prev: {} };
 
-function amFahrzeug(){ return !!eva && (evaCanBoard() || !!harborSubNear() || marsSteinNah()); }
+function amFahrzeug(){ return !!eva && (evaCanBoard() || !!harborSubNear() || marsSteinNah() || !!(story.transallNah && story.transallNah())); }
 
 // Rohzustand der vier Tasten (Controller + Tastatur)
 function trickTasten(){
@@ -605,6 +608,8 @@ function springeZu(n){
 }
 story.springeZu = springeZu;
 story.sprich = sprich;
+story.hinweis = hinweis;
+story.etappeEnde = (t, w) => etappeEnde(t, w);
 
 // ---- Schule ----------------------------------------------------------------------------------
 // Einfaches Schulgebaeude (kein Modell vorhanden). Steht mit der Tuer zum Strand.
@@ -1460,7 +1465,7 @@ function pfFertig(ok){
 const auto = story.autostart = { aktiv: false, t: 0, camPos: null };
 function autostart(){
   story.phase = 'autostart';
-  auto.aktiv = true; auto.t = 0;
+  auto.aktiv = true; auto.t = 0; auto.blende = false;     // blende hing nach dem Mars-Trip auf true -> Autostart endlos
   auto.camPos = camera.position.clone();
   // ein Stueck zurueck und hoeher, damit man den Start sieht
   const back = new THREE.Vector3(0, 0, 1).applyQuaternion(state.quat);
@@ -1507,6 +1512,10 @@ function absturzEnde(){
 }
 
 story.e1aufraeumen = function(){
+  // Zustaende, die sonst in die naechste Etappe mitlaufen (siehe autostart: blende blieb haengen)
+  auto.blende = false; auto.t = 0; story.ende = false;
+  mars.stein = null; mars.ort = null; mars.hinweisWeg = false; mars.rede = null;
+  pf.gruen = false; pf.schritt = 0; pf.t = 0;
   for(const m of marken){ m.saeule.visible = m.pfeil.visible = false; if(m.schild) m.schild.visible = false; }
   if(ringMesh) ringMesh.visible = false;
   if(mars.steinObj){ scene.remove(mars.steinObj); mars.steinObj = null; }
@@ -1557,7 +1566,7 @@ function mondLang(){
   return [
     'Hallo. Da hatte der Flieger wohl einen Kurzschluss, deshalb war die Startsequenz nicht wie gewohnt.',
     'Aber keine Sorge, wir haben die Startsequenz und den Start automatisch durchgeführt.',
-    'Zur Erinnerung: Du hast dich freiwillig gemeldet, als erster Mensch zum Mond zu fliegen und als Beweis einen Stein mitzubringen.',
+    'Zur Erinnerung: Du hast dich freiwillig gemeldet, zum Mond zu fliegen und als Beweis einen Stein mitzubringen.',
   ].concat(MARS_TEXT.slice(3, 9)).concat([MARS_TEXT[9]]);   // Flugerklaerung + Schluss wie beim Mars
 }
 const TRIP = {
@@ -1604,10 +1613,28 @@ function marsStart(){
 }
 
 // Stein neben dem Landeplatz: leuchtend orange, mit Lichtsaeule
+// Wo liegt der Stein? Mars: 22/10 m neben dem Landeplatz. Mond: auf der hellen Plattform der
+// Mondbasis (Ringe 100-260 m ums Zentrum, eigene Hoehe ueber basePlatformNear) – dort ist der Boden
+// sicher bekannt; neben dem Landeplatz lag er auf dem noch nicht vermessenen Kraterfeld in der Luft.
+const STEIN_PLATTFORM_R = 130;
+function steinPlatz(){
+  if((mars.ort || 'mars') === 'moon' && typeof _lastBase !== 'undefined' && _lastBase){
+    const b = _lastBase;
+    let dx = state.pos.x - b.x, dz = state.pos.z - b.z; const n = Math.hypot(dx, dz) || 1;
+    return { x: b.x + dx / n * STEIN_PLATTFORM_R, z: b.z + dz / n * STEIN_PLATTFORM_R, plattform: true };
+  }
+  return { x: state.pos.x + 22, z: state.pos.z + 10, plattform: false };
+}
+function steinHoehe(x, z){
+  const pl = typeof basePlatformNear === 'function' ? basePlatformNear(x, z) : null;
+  return pl !== null ? pl : surfaceY(x, z);
+}
 function marsStein(){
   if(mars.steinObj || mars.stein === 'geholt') return;
-  const x = state.pos.x + 22, z = state.pos.z + 10;
-  const y = surfaceY(x, z);
+  if((mars.ort || 'mars') === 'moon' && (typeof _lastBase === 'undefined' || !_lastBase)) return;   // Basis noch nicht gestellt
+  const sp = steinPlatz();
+  const x = sp.x, z = sp.z;
+  const y = steinHoehe(x, z);
   const g = new THREE.Group();
   const stein = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3, 0),   // ein Brocken zum Mitnehmen
     new THREE.MeshLambertMaterial({ color: TRIP[mars.ort || 'mars'].farbe, emissive: TRIP[mars.ort || 'mars'].glanz, emissiveIntensity: 0.9 }));
@@ -1625,7 +1652,10 @@ function marsStein(){
 
 function marsUpdate(dt){
   if(!mars.phase) return;
-  if(mars.steinObj) mars.steinObj.children[0].rotation.y += dt * 1.5;
+  if(mars.steinObj){
+    mars.steinObj.children[0].rotation.y += dt * 1.5;
+    mars.steinObj.position.y = steinHoehe(mars.steinObj.position.x, mars.steinObj.position.z);
+  }
   if(locale === (mars.ort || 'mars')){
     if(mars.phase === 'hin'){ mars.phase = 'gelandet'; hinweis('Lande mit 10 % Schub, steig mit Y aus und hol das ' + TRIP[mars.ort || 'mars'].stein); }
     if(state.onGround || eva) marsStein();
@@ -2018,7 +2048,7 @@ function hookHud(){
         if(alt && alt.textContent !== String(t)) alt.textContent = String(t);
       }
       if(statEl){
-        const ein = evaCanBoard() || harborSubNear();
+        const ein = evaCanBoard() || harborSubNear() || (story.transallNah && story.transallNah());
         const s = marsSteinNah() ? 'Y: ' + TRIP[mars.ort || 'mars'].stein + ' aufheben' : (ein ? 'Y: einsteigen' : '');
         if(statEl.textContent !== s) statEl.textContent = s;
       }
