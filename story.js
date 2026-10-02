@@ -28,6 +28,16 @@ function hookWelt(){
   // Auf der Startinsel stehen in Etappe 1 nur X-Wing und U-Boot zur Wahl: kein Vorfeld mit
   // Flugzeugen, kein Feuerwehrboot. Das Jetpack gibt es im ganzen Spiel nicht (Y ins Leere tut nichts).
   _parkLocalCalc = function(){ return null; };
+  // Kein Steg (Hafen-Modell) an den Inseln: Modell nicht laden, Kollision aus (harborHeight < 0).
+  // harborLocal bleibt – daran haengen nur noch Freiflaechen-Pruefungen fuer andere Bauten.
+  preloadHarbor = function(){};
+  harborHeight = -10;
+  // Im All bleiben ISS, Todesstern und Sternenzerstoerer als Objekte, gelandet wird dort aber nicht:
+  // alle Anflugstellen pruefen den Rueckgabewert und fliegen bei false einfach weiter.
+  enterHangar = function(){ return false; };
+  preloadHangar = function(){};          // ohne Hangar-Innenraum faellt auch der Reset dorthin weg
+  // Keine zufaelligen Brandherde (Absturz-Feuer auf dem Wasser bleiben)
+  hookFeuer();
   harborSubNear = function(){ return imRing() ? { cx: 0, cz: 0 } : null; };
   harborBoatLocal = function(){ return null; };     // Loeschboot am Strand: weder Modell noch Einstieg
   evaStartJet = function(){};
@@ -92,6 +102,13 @@ function hookWracks(){
     return proZelle.get(cx + ',' + cz) || [];
   };
   _wreckCache.clear();
+}
+
+// ---- Keine Brandherde ----------------------------------------------------------------------
+// Die zufaelligen Braende (spawnFire, fuer Canadair / Feuerwehrboot) entfallen. Feuer auf dem
+// Wasser gibt es weiterhin, wenn ein Flugzeug abstuerzt – das laeuft ueber aiCrash, nicht hier.
+function hookFeuer(){
+  spawnFire = function(){ return false; };
 }
 
 // Parkplatz des X-Wings: auf dem Land knapp vor dem Sand, XWING_NEBEN m entlang des Ufers neben
@@ -259,7 +276,7 @@ function trickStart(name){
 
 // Vor updateEva: Eingabe umformen (Tempo-Kurve, Stillstand bei Tricks/Moonwalk)
 function kenjiEingabe(inp){
-  if(!eva || eva.rover || eva.boat || intro.phase !== 'aus') return inp;
+  if(!eva || eva.rover || eva.boat || !steuerbar()) return inp;
   const roh = -(inp.pitch || 0);
   const a = Math.abs(roh);
   tricks.ausschlag = a;
@@ -280,7 +297,7 @@ addEventListener('keydown', e => { if(!e.repeat && tippTaste[e.code]) getippt[ti
 
 // Tasten auswerten (Flanken), einmal pro Bild
 function kenjiTasten(){
-  if(!eva || eva.rover || eva.boat || sw.aktiv || intro.phase !== 'aus' || story.phase){
+  if(!eva || eva.rover || eva.boat || sw.aktiv || !steuerbar() || story.phase){
     for(const n in getippt) delete getippt[n];
     return;
   }
@@ -561,18 +578,28 @@ function introVorbereiten(){
   });
 }
 
+// Phasen: warten (Startbildschirm) -> laeuft (Kamerafahrt, Kenji geht allein) -> frei (Schwenk
+// fertig, Ansage laeuft noch: Kenji ist steuerbar, nur Einsteigen/Reset warten) -> aus.
 function introDt(dt){
-  if(intro.phase !== 'laeuft') return;
+  if(intro.phase !== 'laeuft' && intro.phase !== 'frei') return;
   intro.t += dt;
-  if(intro.fertigRede && intro.t > INTRO_FAHRT + INTRO_DREH + 1) introEnde();
+  if(intro.phase === 'laeuft' && intro.t > INTRO_FAHRT + INTRO_DREH){
+    intro.phase = 'frei';
+    hudSichtbar(true);
+    evaOrbit = 0; evaPitch = 0;
+  }
+  if(intro.phase === 'frei' && intro.fertigRede) introEnde();
 }
 
 function introEnde(){
+  const warFrei = intro.phase === 'frei';
   intro.phase = 'aus';
   hudSichtbar(true);
-  evaOrbit = 0; evaPitch = 0;
+  if(!warFrei){ evaOrbit = 0; evaPitch = 0; }
   if(story.onIntroEnde) story.onIntroEnde();
 }
+// steuerbar = nach dem Schwenk (frei) oder nach dem Intro (aus)
+function steuerbar(){ return intro.phase === 'aus' || intro.phase === 'frei'; }
 
 function hookIntro(){
   // Im Intro geht Kenji von allein; die Spielereingaben werden ignoriert.
@@ -588,8 +615,8 @@ function hookIntro(){
     if(sw.aktiv){ schwimmUpdate(dt, inp); return; }
     return updateEvaOrig(dt, kenjiEingabe(inp));
   };
-  // Einsteigen (Y) und Reset (R) erst nach dem Intro. Y abseits der Fahrzeuge = Twirl (kenjiTasten).
-  const introAktiv = () => intro.phase === 'warten' || intro.phase === 'laeuft';
+  // Einsteigen (Y) und Reset (R) erst nach der Ansage. Y abseits der Fahrzeuge = Twirl (kenjiTasten).
+  const introAktiv = () => intro.phase !== 'aus';     // Einsteigen erst, wenn die Ansage fertig ist
   const boardYOrig = evaBoardY;
   evaBoardY = function(){ if(introAktiv() || !amFahrzeug()) return; return boardYOrig.apply(this, arguments); };
   const resetO = resetPlane;
@@ -602,7 +629,7 @@ function hookIntro(){
   // Kamera: erst vorne (Gesicht), langsam heran, dann 180° nach hinten herum.
   const camOrig = updateCamera;
   updateCamera = function(){
-    if(eva && sw.aktiv && intro.phase === 'aus'){
+    if(eva && sw.aktiv && steuerbar()){
       const p = eva.group.position, yaw = eva.yaw + evaOrbit;
       const tief = seaYAt(p.x, p.z) - p.y;                     // wie weit unter der Oberflaeche
       const k = Math.min(1, Math.max(0, (tief - 0.5) / 2));    // 0 = an der Oberflaeche, 1 = getaucht
@@ -613,7 +640,7 @@ function hookIntro(){
       camera.lookAt(p.x, p.y + 0.4, p.z);
       return;
     }
-    if(!eva || (intro.phase !== 'warten' && intro.phase !== 'laeuft')) return camOrig();
+    if(!eva || (intro.phase !== 'warten' && intro.phase !== 'laeuft')) return camOrig();   // ab 'frei': normale Kamera
     const p = eva.group.position, yaw = eva.yaw;
     let a, dist, hoch;
     const t = intro.phase === 'warten' ? 0 : intro.t;
@@ -1160,7 +1187,7 @@ function setzeMarken(){
 function updateMarken(){
   if(!marken.length) return;
   const zeigen = !!eva && story.etappe === 1 && locale === 'earth' && !story.phase
-    && intro.phase === 'aus';
+    && steuerbar();
   updateRing(zeigen);
   const t = performance.now() / 1000;
   for(const m of marken){
