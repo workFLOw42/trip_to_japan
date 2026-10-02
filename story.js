@@ -34,6 +34,7 @@ function hookWelt(){
   // placeAtStart auf, das Kenji (EVA) wieder einsammeln wuerde.
   preloadFord = function(){};
   _islandCache.clear(); _subBerthCache.clear(); _xwpCache.clear(); _parkCache.clear();
+  hookWracks();
 
   // Startplatz des X-Wings = Strand. Gilt auch fuer jeden Reset (R, Absturz) und fuer den
   // nachtraeglichen placeAtStart, den die Engine nach dem Laden des Traeger-Modells macht.
@@ -47,10 +48,55 @@ function hookWelt(){
   };
 }
 
-// Parkplatz des X-Wings: auf dem Land knapp vor dem Sand, ~50 Grad entlang des Strandes neben dem
+// ---- Wracks fuer den U-Boot-Weg --------------------------------------------------------------
+// Genau fuenf echte Wracks, keine kleinen: 2x Segler, 3x Liberty. Im Ring 700-1500 m um die
+// Startinsel (dort ist es ueberall > 80 m tief), gleiche Typen nicht nebeneinander. Die Bucht vor
+// dem U-Boot-Liegeplatz bleibt frei, damit man nicht beim Ablegen schon darauf stoesst.
+// Winkel relativ zum Liegeplatz, Abstand von der Inselmitte.
+const WRACKS = [
+  { key: 'liberty', a:  1.2, r: 1150 },
+  { key: 'sail',    a:  2.4, r:  900 },
+  { key: 'liberty', a:  3.4, r: 1400 },
+  { key: 'sail',    a:  4.3, r: 1100 },
+  { key: 'liberty', a:  5.3, r:  800 },
+];
+story.wracks = [];
+function hookWracks(){
+  const info0 = () => islandInfo(0, 0);
+  const proZelle = new Map();
+  let fertig = false;
+  function berechnen(){
+    if(fertig) return;
+    fertig = true;
+    const info = info0(), bl = harborSubLocal(0, 0);
+    const a0 = bl ? Math.atan2(bl.z, bl.x) : 0;
+    WRACKS.forEach((w, i) => {
+      const wx = info.wx + Math.cos(a0 + w.a) * w.r, wz = info.wz + Math.sin(a0 + w.a) * w.r;
+      const y = seabedY(wx, wz);
+      const rot = cellRnd(i, 7, 4) * Math.PI * 2;
+      const def = SHIP_TYPES.find(d => d.key === w.key);
+      const len = def ? def.len : 100;
+      const wi = { wx, wz, y, key: w.key, gross: true, len, rot,
+                   roll: (0.5 + cellRnd(i, 7, 5) * 0.5) * (i % 2 ? -1 : 1),
+                   pitch: wreckPitch(wx, wz, rot, len, w.key), nr: i };
+      const k = Math.round(wx / CELL) + ',' + Math.round(wz / CELL);
+      if(!proZelle.has(k)) proZelle.set(k, []);
+      proZelle.get(k).push(wi);
+      story.wracks.push(wi);
+    });
+  }
+  _wreckInfosCalc = function(cx, cz){
+    if(story.etappe !== 1) return [];
+    berechnen();
+    return proZelle.get(cx + ',' + cz) || [];
+  };
+  _wreckCache.clear();
+}
+
+// Parkplatz des X-Wings: auf dem Land knapp vor dem Sand, ~30 Grad entlang des Strandes neben dem
 // U-Boot-Liegeplatz – so stehen die beiden nicht hintereinander in einer Sichtachse.
 // Gesucht wird in kleinen Schritten, bis kein Gebaeude im Weg steht.
-const XWING_VERSATZ = 0.9;   // rad entlang des Strandes
+const XWING_VERSATZ = 0.55;  // rad entlang des Strandes (so passen beide nach dem Intro ins Bild)
 function xwingStrandPlatz(){
   const info = islandInfo(0, 0);
   const bl = harborSubLocal(0, 0);
@@ -112,7 +158,7 @@ function preloadKenji(){
 function kenjiAnim(name){
   if(kenji.cur === name || !kenji.acts[name]) return;
   const a = kenji.acts[name];
-  if(name !== TRICK_CLIP.tanz && name !== TRICK_CLIP.twirl){ a.setLoop(THREE.LoopRepeat); a.clampWhenFinished = false; }
+  if(!Object.values(TRICK_CLIP).includes(name)){ a.setLoop(THREE.LoopRepeat); a.clampWhenFinished = false; }
   a.reset().play();
   if(kenji.cur && kenji.acts[kenji.cur]) kenji.acts[kenji.cur].crossFadeTo(a, 0.25, false);
   kenji.cur = name;
@@ -132,22 +178,23 @@ function hookKenji(){
 
 // ---- Kenji zu Fuss: Tempo nach Stick-Ausschlag, Tasten fuer Tricks ---------------------------
 // Stick bis 50 % = gehen, darueber = rennen. Abseits der Fahrzeuge:
-//   A / Leertaste = springen · B (halten) = Moonwalk · X = Silly Dance · Y = Butterfly Twirl
+//   A / Leertaste = springen · B = Aerial Evade · X = Silly Dance · Y = Butterfly Twirl
+//   L3 (linken Stick druecken) / M halten = Moonwalk – gelaufen wird dabei mit dem linken Stick
 // Am Fahrzeug bleibt Y Einsteigen. Tanz/Twirl spielen einmal ab; Stick bewegen bricht sie ab.
 const GEH_MAX = 0.3;          // Anteil von EVA_SPEED bei 50 % Stick (≈ 1,8 m/s)
-const TRICK_CLIP = { tanz: 'dance_silly', twirl: 'butterfly_twirl' };
+const TRICK_CLIP = { tanz: 'dance_silly', twirl: 'butterfly_twirl', evade: 'aerial_evade' };
 const tricks = story.tricks = { aktiv: null, t: 0, moon: false, ausschlag: 0, prev: {} };
 
 function amFahrzeug(){ return !!eva && (evaCanBoard() || !!harborSubNear()); }
 
 // Rohzustand der vier Tasten (Controller + Tastatur)
 function trickTasten(){
-  const k = { a: !!keys['Space'], b: !!keys['KeyB'], x: !!keys['KeyX'], y: !!keys['KeyY'] };
+  const k = { a: !!keys['Space'], b: !!keys['KeyB'], x: !!keys['KeyX'], y: !!keys['KeyY'], moon: !!keys['KeyM'] };
   if(gamepadIndex !== null){
     const gp = navigator.getGamepads()[gamepadIndex];
     if(gp){
       const d = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
-      k.a = k.a || d(0); k.b = k.b || d(1); k.x = k.x || d(2); k.y = k.y || d(3);
+      k.a = k.a || d(0); k.b = k.b || d(1); k.x = k.x || d(2); k.y = k.y || d(3); k.moon = k.moon || d(10);
     }
   }
   return k;
@@ -179,7 +226,7 @@ function kenjiEingabe(inp){
 
 // Tastatur-Druecke als Ereignis merken: ein kurzer Tipp kann zwischen zwei Bildern liegen und
 // waere im Tastenzustand pro Bild nie zu sehen.
-const tippTaste = { Space: 'a', KeyX: 'x', KeyY: 'y' };
+const tippTaste = { Space: 'a', KeyB: 'b', KeyX: 'x', KeyY: 'y' };
 const getippt = {};
 addEventListener('keydown', e => { if(!e.repeat && tippTaste[e.code]) getippt[tippTaste[e.code]] = true; });
 
@@ -193,7 +240,8 @@ function kenjiTasten(){
   const neu = n => (k[n] && !pr[n]) || getippt[n];
   const frei = !amFahrzeug();
   if(neu('a') && eva.onGround){ tricks.aktiv = null; evaJumpOrig(); }
-  tricks.moon = frei && k.b;
+  tricks.moon = frei && k.moon && !tricks.aktiv;
+  if(frei && neu('b')) trickStart('evade');
   if(frei && neu('x')) trickStart('tanz');
   if(frei && neu('y')) trickStart('twirl');
   tricks.prev = k;
@@ -237,29 +285,50 @@ function untertitel(text){
 }
 // Spricht die Saetze nacheinander und zeigt jeweils den aktuellen als Untertitel.
 // fertig() wird genau einmal gerufen.
+// Ton aus (D-Pad runter / N): der laufende Satz bricht ab, der Untertitel laeuft im Ersatz-Takt
+// weiter. Ton an: ab dem gerade angezeigten Satz wird wieder gesprochen.
+const reden = new Set();
 function sprich(saetze, fertig){
-  let i = 0, done = false, timer = null;
+  let i = 0, done = false, timer = null, utt = null;
   const synth = window.speechSynthesis;
   const stimme = synth && synth.getVoices().find(v => /^de/i.test(v.lang));
-  function naechster(){
+  const laut = () => !!(synth && story.ton && soundOn);
+  function satz(s){
     clearTimeout(timer);
-    if(done) return;
-    if(i >= saetze.length){ done = true; untertitel(''); if(fertig) fertig(); return; }
-    const s = saetze[i++];
     untertitel(s);
     const dauer = 1200 + s.split(/\s+/).length * 420;   // Ersatz-Takt ohne Stimme
-    if(synth && story.ton && soundOn){
-      const u = new SpeechSynthesisUtterance(s);
+    if(laut()){
+      const u = utt = new SpeechSynthesisUtterance(s);
       u.lang = 'de-DE'; if(stimme) u.voice = stimme; u.rate = 1.0;
-      u.onend = naechster; u.onerror = naechster;
+      u.onend = u.onerror = () => { if(utt === u) naechster(); };
       synth.speak(u);
       timer = setTimeout(naechster, dauer * 2.5);       // falls onend nie kommt
     } else {
+      utt = null;
       timer = setTimeout(naechster, dauer);
     }
   }
+  function naechster(){
+    clearTimeout(timer); utt = null;
+    if(done) return;
+    if(i >= saetze.length){ done = true; reden.delete(r); untertitel(''); if(fertig) fertig(); return; }
+    satz(saetze[i++]);
+  }
+  const r = {
+    abbrechen(){ done = true; reden.delete(r); clearTimeout(timer); utt = null; if(synth) synth.cancel(); untertitel(''); },
+    tonGeaendert(){ if(done || i === 0) return; utt = null; if(synth) synth.cancel(); satz(saetze[i - 1]); },
+  };
+  reden.add(r);
   naechster();
-  return { abbrechen(){ done = true; clearTimeout(timer); if(synth) synth.cancel(); untertitel(''); } };
+  return r;
+}
+function hookTon(){
+  const orig = toggleSound;
+  toggleSound = function(){
+    const r = orig.apply(this, arguments);
+    for(const rd of [...reden]) rd.tonGeaendert();
+    return r;
+  };
 }
 
 // ---- Startbildschirm -------------------------------------------------------------------------
@@ -341,28 +410,53 @@ const INTRO_TEXT = [
   'Am Ende winkt ein Abenteuer, das er so noch nie erlebt hat – und vielleicht der größte Spaß seines Lebens.',
 ];
 const INTRO_GEH = 0.3;     // Stick-Ausschlag beim Gehen im Intro (EVA_SPEED * 0.3 ≈ 1,8 m/s)
+const INTRO_WEG = 7;       // m: so weit geht er von der Schultuer weg, dann bleibt er stehen
 const INTRO_FAHRT = 9;     // s: Kamera faehrt von vorne auf Kenji zu
 const INTRO_DREH  = 7;     // s: Kamera kreist 180° hinter ihn
 
-// Startpunkt vor der Schultuer: vom X-Wing ins Inselinnere, auf freiem Weg (keine Gebaeude).
+// Startpunkt vor der Schultuer. Nach dem Intro sollen X-Wing und U-Boot BEIDE im Bild sein, links
+// und rechts vor Kenji, keines direkt voraus. Das U-Boot liegt draussen am Liegeplatz (~375 m von
+// der Inselmitte), der X-Wing auf dem Land (~235 m) – eine feste Formel passt deshalb nicht.
+// Gesucht wird im Raster ein freier Platz, von dem beide 60-260 m entfernt sind, zusammen unter
+// 70 Grad liegen (Bildbreite ~87 Grad) und moeglichst gleich weit weg sind. Hinter Kenji muss Platz
+// fuer die Schule sein, und der Weg von der Tuer (INTRO_WEG) muss frei sein.
 function introPlatz(){
-  const p = story.xwingPlatz;
   const info = islandInfo(0, 0);
-  let dx = info.wx - p.x, dz = info.wz - p.z;
-  const n = Math.hypot(dx, dz) || 1; dx /= n; dz /= n;
-  let best = 30;
-  for(let d = 30; d <= 70; d += 2){
-    let frei = true;
-    for(let s = 0; s <= d + 12 && frei; s += 2){
-      const x = p.x + dx * s, z = p.z + dz * s;
-      if(!isOnLand(x, z) || hitsBuilding(x, ISLAND_Y + 1, z, false)) frei = false;
+  const bl = harborSubLocal(0, 0);
+  const xp = story.xwingPlatz;
+  const sx = bl ? info.wx + bl.x : xp.x + 150, sz = bl ? info.wz + bl.z : xp.z;
+  const frei = (x, z) => isOnLand(x, z) && !hitsBuilding(x, ISLAND_Y + 1, z, false);
+  let best = null, bestWert = Infinity;
+  for(let x = info.wx - 250; x <= info.wx + 250; x += 10){
+    for(let z = info.wz - 250; z <= info.wz + 250; z += 10){
+      if(!frei(x, z)) continue;
+      const d1 = Math.hypot(xp.x - x, xp.z - z), d2 = Math.hypot(sx - x, sz - z);
+      if(d1 < 60 || d2 < 60 || d1 > 260 || d2 > 260) continue;
+      const a1 = Math.atan2(xp.x - x, xp.z - z), a2 = Math.atan2(sx - x, sz - z);
+      let dw = Math.abs(a1 - a2); if(dw > Math.PI) dw = 2 * Math.PI - dw;
+      if(dw > 70 * Math.PI / 180) continue;
+      // Blick auf die Mitte; Schule 8,5 m dahinter (+ Gebaeudebreite) und Weg nach vorn frei?
+      const mx = (xp.x + sx) / 2 - x, mz = (xp.z + sz) / 2 - z, ml = Math.hypot(mx, mz) || 1;
+      const fx = mx / ml, fz = mz / ml;
+      let ok = true;
+      for(const [b, q] of [[8.5, 0], [8.5, 15], [8.5, -15], [14, 0]]){
+        if(!frei(x - fx * b - fz * q, z - fz * b + fx * q)) { ok = false; break; }
+      }
+      for(let s = 0; s <= INTRO_WEG + 4 && ok; s += 2) ok = frei(x + fx * s, z + fz * s);
+      if(!ok) continue;
+      const wert = Math.abs(d1 - d2) + Math.abs(dw * 180 / Math.PI - 55);   // gleich weit, ~55 Grad
+      if(wert < bestWert){ bestWert = wert; best = { x, z, fx, fz }; }
     }
-    if(!frei) break;
-    best = d;
   }
-  return { x: p.x + dx * best, z: p.z + dz * best,
-           yaw: Math.atan2(dx, dz),               // Blick zum Strand (Gesicht -Z: atan2(-(-dx), -(-dz)))
-           schuleX: p.x + dx * (best + 8.5), schuleZ: p.z + dz * (best + 8.5) };
+  if(!best){   // Notfall: zwischen beiden, Richtung Inselmitte versetzt
+    const x = (xp.x + sx) / 2 * 0.4, z = (xp.z + sz) / 2 * 0.4;
+    const mx = (xp.x + sx) / 2 - x, mz = (xp.z + sz) / 2 - z, ml = Math.hypot(mx, mz) || 1;
+    best = { x, z, fx: mx / ml, fz: mz / ml };
+  }
+  // Startpunkt = Schultuer; er geht INTRO_WEG nach vorn und steht dann am gefundenen Platz
+  const x0 = best.x - best.fx * INTRO_WEG, z0 = best.z - best.fz * INTRO_WEG;
+  return { x: x0, z: z0, yaw: Math.atan2(-best.fx, -best.fz),        // Gesicht -Z
+           schuleX: x0 - best.fx * 8.5, schuleZ: z0 - best.fz * 8.5 };
 }
 
 const intro = story.intro = { phase: 'aus', t: 0, rede: null, fertigRede: false };
@@ -373,6 +467,7 @@ function introVorbereiten(){
   const g = eva.group;
   g.position.set(ip.x, evaFootY(ip.x, ip.z), ip.z);
   eva.yaw = ip.yaw; g.rotation.y = ip.yaw;
+  intro.start = { x: ip.x, z: ip.z };
   kenji.last = null;
   intro.phase = 'warten'; intro.t = 0;
   startbildschirm(() => {
@@ -397,12 +492,12 @@ function hookIntro(){
   // Im Intro geht Kenji von allein; die Spielereingaben werden ignoriert.
   const updateEvaOrig = updateEva;
   updateEva = function(dt, inp){
-    if(intro.phase === 'warten') return updateEvaOrig(dt, {});
+    if(intro.phase === 'warten'){ tricks.ausschlag = 0; return updateEvaOrig(dt, {}); }
     if(intro.phase === 'laeuft'){
-      const xp = story.xwingPlatz;
-      const p = eva.group.position;
-      const weit = Math.hypot(xp.x - p.x, xp.z - p.z) > 14;
-      return updateEvaOrig(dt, { pitch: weit ? -INTRO_GEH : 0 });
+      const s = intro.start, p = eva.group.position;
+      const geht = Math.hypot(p.x - s.x, p.z - s.z) < INTRO_WEG;
+      tricks.ausschlag = geht ? 0.3 : 0;                      // Animation: gehen bzw. stehen
+      return updateEvaOrig(dt, { pitch: geht ? -INTRO_GEH : 0 });
     }
     return updateEvaOrig(dt, kenjiEingabe(inp));
   };
@@ -452,6 +547,7 @@ function hookLoop(){
     updateKenji(dt);
     kenjiWache(dt);
     kenjiTasten();
+    updateAufgabe();
     introDt(dt);
     updateMarken();
     return loopOrig.apply(this, arguments);
@@ -679,8 +775,139 @@ function freiflugUpdate(){
   }
 }
 
+// ---- U-Boot-Weg ------------------------------------------------------------------------------
+// Stimme + Ziffernfeld (Code 14 02 – kommt in Etappe 6 wieder!), dann frei tauchen. Zwei
+// UNTERSCHIEDLICHE Wracks fotografieren (X / F) -> 4 Tage. Scheitern kann man hier nicht.
+const UBOOT_TEXT = [
+  'Hallo, danke für deine Hilfe.',
+  'Du siehst jung aus, und als würdest du zum ersten Mal ein U-Boot fahren. Wir helfen dir.',
+  'Wir haben schon mal den universellen Code für U-Boote eingegeben: vierzehn – null zwei.',
+  'Jetzt erklären wir dir kurz die Steuerung.',
+  'Mit dem rechten Stick oder W und S gibst du Fahrt. Ohne Fahrt kann das U-Boot nicht tauchen.',
+  'Linker Stick nach vorn oder Pfeil hoch taucht ab, nach hinten taucht wieder auf. Gelenkt wird nach links und rechts.',
+  'Mit B schickst du einen Sonar-Ping: Je näher ein Wrack ist, desto lauter kommt er zurück. Die Scheibe oben rechts zeigt Wracks als rote Punkte.',
+  'Wir möchten die Wracks nachbauen, um daraus künstliche Riffe zu erschaffen.',
+  'Wir wissen, dass es hier in der Nähe viele Wracks gibt.',
+  'Finde zwei unterschiedliche Schiffswracks und mache jeweils ein Foto davon, dann können wir der Umwelt helfen.',
+  'Fotografiert wird mit X oder F, wenn du nah genug dran bist. Viel Spaß!',
+];
+const FOTO_R = 130;             // m waagerecht vom Wrack
+const FOTO_TIEFE = -10;         // m: getaucht
+const ub = story.uboot = { aktiv: false, fotos: {}, rede: null, padEl: null, fotoEl: null, nah: null };
+
+function ziffernfeld(code){
+  if(!ub.padEl){
+    ub.padEl = document.createElement('div');
+    ub.padEl.style.cssText = 'position:absolute;right:16px;bottom:16px;padding:10px;border-radius:10px;'
+      + 'background:#1c1f24;border:2px solid #444;box-shadow:0 4px 14px rgba(0,0,0,.5);z-index:20;'
+      + 'font-family:monospace;';
+    document.body.appendChild(ub.padEl);
+  }
+  const tasten = ['1','2','3','4','5','6','7','8','9','*','0','#'];
+  ub.padEl.innerHTML = '<div style="background:#0b0d0f;color:#ff2a2a;font-size:28px;letter-spacing:4px;'
+    + 'padding:4px 10px;margin-bottom:8px;text-align:right;text-shadow:0 0 8px #f00;border-radius:4px">'
+    + code + '</div><div style="display:grid;grid-template-columns:repeat(3,34px);gap:5px">'
+    + tasten.map(t => '<div style="background:#3a3f46;color:#ddd;text-align:center;line-height:30px;'
+      + 'border-radius:4px;font-size:15px">' + t + '</div>').join('') + '</div>';
+  ub.padEl.style.display = '';
+}
+
+function ubootStart(){
+  ub.aktiv = true; story.phase = 'uboot';
+  hinweis('');
+  ziffernfeld('14 02');
+  ub.rede = sprich(UBOOT_TEXT, () => {
+    hinweis('Finde zwei unterschiedliche Wracks und fotografiere sie (X / F)');
+    setTimeout(() => { if(ub.aktiv) hinweis(''); }, 9000);
+  });
+}
+
+function fotoAnzeige(){
+  if(!ub.fotoEl){
+    ub.fotoEl = document.createElement('div');
+    ub.fotoEl.style.cssText = 'position:absolute;left:50%;top:60px;transform:translateX(-50%);'
+      + 'padding:6px 14px;border-radius:8px;background:rgba(0,0,0,.5);color:#fff;'
+      + 'font:16px system-ui,sans-serif;pointer-events:none;z-index:20;';
+    document.body.appendChild(ub.fotoEl);
+  }
+  const n = Object.keys(ub.fotos).length;
+  ub.fotoEl.textContent = '📷 Fotos ' + n + '/2' + (ub.nah ? '  ·  X / F: Foto machen' : '');
+}
+
+// naechstes Wrack in Fotoreichweite (oder null): getaucht, nah genug und VOR dem U-Boot
+// (hoechstens 60 Grad seitlich) – fotografiert wird, was man sieht.
+const FOTO_KEGEL = Math.cos(60 * Math.PI / 180);
+function wrackNah(){
+  if(state.pos.y > FOTO_TIEFE) return null;
+  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);
+  const fl = Math.hypot(fwd.x, fwd.z) || 1;
+  let best = null, bd = FOTO_R;
+  for(const w of story.wracks){
+    const dx = w.wx - state.pos.x, dz = w.wz - state.pos.z;
+    const d = Math.hypot(dx, dz);
+    if(d >= bd) continue;
+    if(d > 20 && (dx * fwd.x + dz * fwd.z) / (d * fl) < FOTO_KEGEL) continue;
+    bd = d; best = w;
+  }
+  return best;
+}
+
+let blitzEl = null;
+function blitz(){
+  if(!blitzEl){
+    blitzEl = document.createElement('div');
+    blitzEl.style.cssText = 'position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;'
+      + 'z-index:24;transition:opacity .5s;';
+    document.body.appendChild(blitzEl);
+  }
+  blitzEl.style.transition = 'none'; blitzEl.style.opacity = '0.85';
+  requestAnimationFrame(() => { blitzEl.style.transition = 'opacity .6s'; blitzEl.style.opacity = '0'; });
+}
+
+const NAME = { liberty: 'Frachter', sail: 'Segelschiff' };
+function fotoMachen(){
+  const w = ub.nah;
+  if(!w || !ub.aktiv) return;
+  blitz();
+  if(ub.fotos[w.key]){
+    sprich(['Diesen Schiffstyp haben wir schon. Such ein anderes Schiff!']);
+    return;
+  }
+  ub.fotos[w.key] = true;
+  const n = Object.keys(ub.fotos).length;
+  if(n < 2){
+    sprich(['Super, ein ' + NAME[w.key] + '! Jetzt fehlt noch ein anderes Schiff.']);
+  } else {
+    sprich(['Toll gemacht! Mit beiden Fotos können wir die Riffe bauen. Danke!']);
+    ub.aktiv = false; story.phase = 'uboot-fertig';
+    ub.nah = null; fotoAnzeige();
+    setTimeout(() => {
+      ub.fotoEl.style.display = 'none'; ub.padEl.style.display = 'none';
+      schwarz(tageVergangen(4), 3, () => platzhalter('Etappe 2 (folgt) – U-Boot: 4 Tage vergangen'));
+    }, 3500);
+  }
+}
+
+function ubootUpdate(){
+  if(!ub.aktiv) return;
+  ub.nah = wrackNah();
+  fotoAnzeige();
+  // X am Controller (sonst Boost) bzw. F: Foto
+  const gp = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
+  const x = !!(gp && gp.buttons[2] && gp.buttons[2].pressed);
+  if(x && !ub.xPrev) fotoMachen();
+  ub.xPrev = x;
+}
+addEventListener('keydown', e => { if(e.code === 'KeyF' && !e.repeat) fotoMachen(); });
+
 // ---- Einsteigen ------------------------------------------------------------------------------
 function hookEinsteigen(){
+  const subOrig = evaBoardHarborSub;
+  evaBoardHarborSub = function(){
+    const r = subOrig.apply(this, arguments);
+    if(story.etappe === 1 && !story.phase && isSub()) ubootStart();
+    return r;
+  };
   const boardOrig = evaBoard;
   evaBoard = function(){
     const r = boardOrig.apply(this, arguments);
@@ -699,6 +926,7 @@ function hookEinsteigen(){
     if(story.phase === 'platzhalter'){ state.vel.set(0, 0, 0); return; }   // Spiel steht hinter dem Schild
     const r = physOrig.apply(this, arguments);
     if(story.phase === 'freiflug') freiflugUpdate();
+    if(ub.aktiv){ ubootUpdate(); boosting = false; }      // X ist im U-Boot das Foto, kein Boost
     return r;
   };
   // Aussteigen (Y) waehrend Startsequenz/Autostart/danach nicht erlaubt
@@ -730,6 +958,22 @@ function hookEinsteigen(){
 // Leuchtsaeule (wie die Engine sie auf Mond/Mars zeigt) + wippender Pfeil, in der Radarfarbe.
 // Nur zu Fuss sichtbar.
 const marken = [];
+// Schild ueber dem Fahrzeug: was der Weg kostet ("1 Tag" / "4 Tage", wie im Konzept)
+function baueSchild(text, col){
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160;
+  const g = cv.getContext('2d');
+  g.fillStyle = 'rgba(0,0,0,0.55)';
+  g.beginPath(); g.roundRect ? g.roundRect(8, 8, 496, 144, 36) : g.rect(8, 8, 496, 144); g.fill();
+  g.font = 'bold 92px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 10; g.strokeStyle = '#000'; g.strokeText(text, 256, 84);
+  g.fillStyle = col; g.fillText(text, 256, 84);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv),
+    depthTest: false, transparent: true }));
+  sp.scale.set(12, 3.75, 1);
+  sp.renderOrder = 999;
+  scene.add(sp);
+  return sp;
+}
 function baueMarke(col){
   const saeule = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 300, 10, 1, true),
     new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.16,
@@ -738,12 +982,15 @@ function baueMarke(col){
     new THREE.MeshBasicMaterial({ color: col }));
   pfeil.rotation.x = Math.PI;                    // Spitze nach unten
   saeule.renderOrder = 995; scene.add(saeule); scene.add(pfeil);
-  const m = { saeule, pfeil, x: 0, y: 0, z: 0, hoehe: 10 };
+  const m = { saeule, pfeil, schild: null, x: 0, y: 0, z: 0, hoehe: 10 };
   marken.push(m);
   return m;
 }
 function setzeMarken(){
-  if(!marken.length){ baueMarke(0xffffff); baueMarke(0xffd23f); }
+  if(!marken.length){
+    baueMarke(0xffffff).schild = baueSchild('1 Tag', '#ffffff');
+    baueMarke(0xffd23f).schild = baueSchild('4 Tage', '#ffd23f');
+  }
   const xp = story.xwingPlatz;
   const info = islandInfo(0, 0), bl = harborSubLocal(0, 0);
   marken[0].x = xp.x; marken[0].z = xp.z; marken[0].y = ISLAND_Y; marken[0].hoehe = 9;
@@ -756,7 +1003,14 @@ function updateMarken(){
   const t = performance.now() / 1000;
   for(const m of marken){
     m.saeule.visible = m.pfeil.visible = zeigen;
+    if(m.schild) m.schild.visible = zeigen;
     if(!zeigen) continue;
+    if(m.schild){
+      const d = Math.hypot(camera.position.x - m.x, camera.position.z - m.z);
+      const s = Math.max(1, d / 45);                 // ab 45 m mitwachsen
+      m.schild.scale.set(12 * s, 3.75 * s, 1);
+      m.schild.position.set(m.x, m.y + m.hoehe + 3 + 2.2 * s, m.z);
+    }
     m.saeule.position.set(m.x, m.y + 150, m.z);
     m.pfeil.position.set(m.x, m.y + m.hoehe + Math.sin(t * 2.5) * 0.8, m.z);
     m.pfeil.rotation.y = t * 1.5;
@@ -817,14 +1071,16 @@ function kenjiWache(dt){
 }
 
 // ---- Anleitung (D-Pad hoch / H) und Aufgabe (D-Pad links / T) --------------------------------
-// Beide nutzen das #hint-Overlay der Engine: solange es offen ist, steht das Spiel still.
-// Der Inhalt wird je nach Taste getauscht.
+// Die Anleitung nutzt das #hint-Overlay der Engine: solange es offen ist, steht das Spiel still.
+// Die Aufgabe ist ein eigenes Fenster im selben Stil und laeuft NICHT als Pause – sonst gewaenne
+// man damit Bedenkzeit (z. B. waehrend der 10 s Startsequenz).
 const ANLEITUNG = [
   ['🎮 Controller', [
     ['L-Stick', 'laufen · bis zur Hälfte gehen, weiter rennen'],
     ['R-Stick', 'umsehen'],
     ['A', 'springen'],
-    ['B (halten)', 'Moonwalk'],
+    ['B', 'Aerial Evade'],
+    ['L3 (halten) + L-Stick', 'Moonwalk'],
     ['X', 'Silly Dance'],
     ['Y', 'Butterfly Twirl · am Fahrzeug: einsteigen'],
     ['D-Pad ↑', 'diese Anleitung (Pause)'],
@@ -835,7 +1091,8 @@ const ANLEITUNG = [
     ['↑ ↓ ← →', 'laufen und drehen'],
     ['J L I K', 'umsehen'],
     ['Leertaste', 'springen'],
-    ['B (halten)', 'Moonwalk'],
+    ['B', 'Aerial Evade'],
+    ['M (halten) + Pfeile', 'Moonwalk'],
     ['X / Y', 'Silly Dance / Butterfly Twirl'],
     ['Y am Fahrzeug', 'einsteigen'],
     ['H / T', 'Anleitung / Aufgabe (Pause)'],
@@ -863,8 +1120,8 @@ function aufgabeText(){
     ['Zeit', 'Fliegen kostet keine Zeit – erst über dem Ziel geht es weiter'],
   ]];
   return ['Etappe 1: Der Aufbruch am Strand', [
-    ['X-Wing (weiß)', 'schnell, aber riskant: vor dem Start muss die Startsequenz in 10 s klappen'],
-    ['U-Boot (gelb)', 'sicher, aber langsamer'],
+    ['X-Wing (weiß)', '1 Tag Reisedauer, aber riskant'],
+    ['U-Boot (gelb)', '4 Tage Reisedauer'],
     ['Einsteigen', 'hinlaufen und Y drücken'],
     ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],
   ]];
@@ -874,16 +1131,43 @@ function hilfeHtml(spalten){
     + zeilen.map(([k, v]) => '<div class="hrow"><span>' + k + '</span><b>' + v + '</b></div>').join('')
     + '</div>').join('');
 }
-const hilfe = { art: null };
 function hilfeEl(){ return document.getElementById('hint'); }
 function hilfeOffen(){ const h = hilfeEl(); return !!(h && h.classList.contains('show')); }
+let aufgabeEl = null, aufgabeAuf = false;
 function zeigeHilfe(art){
+  if(art === 'aufgabe'){
+    if(!aufgabeEl){
+      aufgabeEl = document.createElement('div');
+      aufgabeEl.id = 'aufgabe';
+      // gleicher Stil wie #hint (siehe index.html), aber eigenes Element -> keine Pause
+      aufgabeEl.style.cssText = 'position:absolute;bottom:12px;left:12px;color:#fff;display:none;gap:26px;'
+        + 'background:rgba(10,25,40,0.72);border-radius:10px;padding:12px 16px;font-size:13px;'
+        + 'line-height:1.55;pointer-events:none;user-select:none;z-index:15;';
+      document.body.appendChild(aufgabeEl);
+    }
+    aufgabeAuf = !aufgabeAuf;
+    if(aufgabeAuf){ const h = hilfeEl(); if(h) h.classList.remove('show'); }
+    aufgabeEl.style.display = aufgabeAuf ? 'flex' : 'none';
+    return;
+  }
   const h = hilfeEl(); if(!h) return;
-  if(hilfeOffen() && hilfe.art === art){ h.classList.remove('show'); hilfe.art = null; return; }
-  h.innerHTML = art === 'aufgabe' ? hilfeHtml([aufgabeText()]) : hilfeHtml(ANLEITUNG);
-  h.classList.add('show'); hilfe.art = art;
+  if(hilfeOffen()){ h.classList.remove('show'); return; }
+  h.innerHTML = hilfeHtml(ANLEITUNG);
+  h.classList.add('show');
+  if(aufgabeAuf) zeigeHilfe('aufgabe');      // Aufgabe schliessen, damit sich nichts ueberlappt
+}
+// Inhalt der Aufgabe folgt dem Spielstand (Phase, Tage), solange sie offen ist
+function updateAufgabe(){
+  if(!aufgabeAuf || !aufgabeEl) return;
+  const html = hilfeHtml([aufgabeText()]).replace(/class="hcol"/, 'class="hcol" style="min-width:210px"');
+  if(aufgabeEl._html !== html){ aufgabeEl.innerHTML = html; aufgabeEl._html = html; }
 }
 function hookHilfe(){
+  const st = document.createElement('style');
+  st.textContent = '#aufgabe .htitle{font-weight:bold;font-size:14px;margin-bottom:5px;color:#cfe}'
+    + '#aufgabe .hrow{display:flex;justify-content:space-between;gap:10px}'
+    + '#aufgabe .hrow span{color:#9cf;white-space:nowrap}';
+  document.head.appendChild(st);
   toggleHelp = function(){ zeigeHilfe('anleitung'); };
   addEventListener('keydown', e => { if(e.code === 'KeyT' && !e.repeat) zeigeHilfe('aufgabe'); });
   // D-Pad links (14) – die Engine wertet es nicht aus, also eigene Flanke
@@ -914,6 +1198,7 @@ window.STORY_HOOK = function(){
   hookEinsteigen();
   hookHud();
   hookHilfe();
+  hookTon();
   hookLoop();
 };
 window.STORY_START = function(){
