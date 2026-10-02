@@ -1,0 +1,11 @@
+# Rohdaten bleiben lokal (Quellmodelle, Mixamo-Zwischenstände, interne Notizen)
+_quellen/
+_mixamo/
+_intern/
+
+# Roh- und Zwischendateien im Projekt-Root (fertige Modelle liegen in models/)
+/*.glb
+/*.stl
+/*.3mf
+/*.png
+/*.zip
