@@ -953,6 +953,57 @@ function hookWarp(){
   };
 }
 
+// ---- Schatten -------------------------------------------------------------------------------
+// Die Engine legt den Schatten an Land fest auf ISLAND_Y. Auf unebenem Boden (Duenen in Etappe 2)
+// liegt er dann unter der Figur und wirkt von schraeg oben versetzt. Hier: auf die echte Bodenhoehe
+// unter Kenji setzen (Flugzeugschatten bleiben, wie sie sind). Kenji: 35 % kleiner (0,9 -> 0,59 m).
+const KENJI_SCHATTEN = 0.65;
+function hookSchatten(){
+  const ovalOrig = updateOvalShadow;
+  updateOvalShadow = function(){
+    const r = ovalOrig.apply(this, arguments);
+    if(!ovalShadow.visible) return r;
+    if(eva && !eva.boat){
+      const px = eva.group.position.x, pz = eva.group.position.z;
+      ovalShadow.scale.x *= KENJI_SCHATTEN; ovalShadow.scale.y *= KENJI_SCHATTEN;
+      // Boden unter Kenji (auf Wasser/Strand bleibt die Engine-Hoehe)
+      if(locale === 'earth' && isOnLand(px, pz)) ovalShadow.position.y = evaFootY(px, pz) + 0.08;
+    }
+    return r;
+  };
+}
+
+// ---- Master-Lautstaerke ---------------------------------------------------------------------
+// Alle Engine-Sounds gehen an audioCtx.destination. Gleich nach dem Erzeugen des AudioContext wird
+// ein eigener Gain dazwischengeschaltet und destination auf ihn umgebogen – so landet alles (Motor,
+// Meer, Wind, Crash, Ping ...) im Master, ohne die Engine anzufassen. Der Master blendet mit der
+// Schwarzblende zum Globus aus und mit der neuen Etappe wieder ein.
+const master = { gain: null, ziel: 1 };
+function hookMaster(){
+  const initOrig = initAudio;
+  initAudio = function(){
+    const neu = !audioCtx;
+    const r = initOrig.apply(this, arguments);
+    if(neu && audioCtx && !master.gain){
+      const echt = audioCtx.destination;
+      master.gain = audioCtx.createGain();
+      master.gain.connect(echt);
+      Object.defineProperty(audioCtx, 'destination', { get: () => master.gain, configurable: true });
+    }
+    return r;
+  };
+}
+// aus = 0..1 (0 = stumm); dauer in s
+function masterBlende(ziel, dauer){
+  master.ziel = ziel;
+  if(!master.gain || !audioCtx) return;
+  const g = master.gain.gain, t = audioCtx.currentTime;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(g.value, t);
+  g.linearRampToValueAtTime(ziel, t + (dauer || 0.8));
+}
+story.masterBlende = masterBlende;
+
 // ---- Globus-Reise ---------------------------------------------------------------------------
 // Zwischen zwei Etappen: Schwarzblende -> Globus, der Faden waechst vom letzten zum neuen Ort ->
 // Schwarzblende. Der Weg bleibt gespeichert (story.reise): je mehr Etappen, desto laenger der Faden.
@@ -1082,6 +1133,7 @@ function globusText(text){
 // Oeffentlich: reise(nachIndex, tageText, fertig) – Schwarzblende, Globus, Schwarzblende, fertig()
 function globusReise(nach, tageText, fertig){
   globusBauen();
+  masterBlende(0, 0.9);                       // alle Geraeusche mit der Schwarzblende aus
   // ein stehendes Platzhalter-Schild (spaetere Etappen) wieder freigeben
   if(schwarzEl){ schwarzEl.innerHTML = ''; schwarzEl.style.transition = 'opacity .8s'; }
   if(story.phase === 'platzhalter') story.phase = 'reise';
@@ -1110,6 +1162,7 @@ function globusUpdate(dt){
       gl.aktiv = false; gl.ende = false;
       globusText('');
       hudSichtbar(true);
+      masterBlende(1, 1.5);                   // neue Etappe: Ton wieder ein
       const f = gl.fertig; gl.fertig = null;
       if(f) f();
     });
@@ -1473,6 +1526,7 @@ function etappeEnde(tage, wie){
 // Vorlaeufiges Schild fuer noch nicht gebaute Teile
 function platzhalter(text){
   story.phase = 'platzhalter';
+  masterBlende(0, 0.8);
   schwarzEl.style.transition = 'none';
   schwarzEl.style.opacity = '1';
   schwarzEl.innerHTML = '<div>' + text + '<div style="font-size:18px;opacity:.7;margin-top:12px">(Taste R: neu starten)</div></div>';
@@ -2135,6 +2189,8 @@ window.STORY_HOOK = function(){
   hookHilfe();
   hookTon();
   hookSchwimmen();
+  hookMaster();
+  hookSchatten();
   hookWarp();
   hookMars();
   hookVerdreht();
