@@ -12,7 +12,7 @@ sw="sw.js"
 [ -f "$sw" ] || exit 0
 staged=$(git diff --cached --name-only)
 [ -z "$staged" ] && exit 0
-relevant=$(printf '%s\n' "$staged" | grep -vE '^(README\.md|Konzept\.md|\.gitignore|\.nojekyll|sw\.js|tools/.*|models/.*)$')
+relevant=$(printf '%s\n' "$staged" | grep -vE '^([^/]*\.md|\.gitignore|\.nojekyll|sw\.js|tools/.*|models/.*)$')
 [ -z "$relevant" ] && exit 0
 
 ver(){ grep -oE "reise-nach-japan-v[0-9]+" | head -1 | grep -oE "[0-9]+$"; }

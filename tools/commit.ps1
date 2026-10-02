@@ -10,7 +10,7 @@ Set-Location $root
 git add -A
 $staged = git diff --cached --name-only
 if(-not $staged){ 'Nichts zu committen.'; exit 0 }
-$relevant = $staged | Where-Object { $_ -notmatch '^(README\.md|Konzept\.md|\.gitignore|\.nojekyll|sw\.js|tools/.*|models/.*)$' }
+$relevant = $staged | Where-Object { $_ -notmatch '^([^/]*\.md|\.gitignore|\.nojekyll|sw\.js|tools/.*|models/.*)$' }
 if($relevant){
   $sw = Join-Path $root 'sw.js'
   $utf8 = New-Object Text.UTF8Encoding $false
