@@ -565,7 +565,7 @@ function introVorbereiten(){
   }
   hudSichtbar(false);
   const ip = introPlatz();
-  baueSchule(ip.schuleX, ip.schuleZ, ip.yaw);
+  story.schule = baueSchule(ip.schuleX, ip.schuleZ, ip.yaw);
   const g = eva.group;
   g.position.set(ip.x, evaFootY(ip.x, ip.z), ip.z);
   eva.yaw = ip.yaw; g.rotation.y = ip.yaw;
@@ -800,6 +800,170 @@ function hookWarp(){
   };
 }
 
+// ---- Globus-Reise ---------------------------------------------------------------------------
+// Zwischen zwei Etappen: Schwarzblende -> Globus, der Faden waechst vom letzten zum neuen Ort ->
+// Schwarzblende. Der Weg bleibt gespeichert (story.reise): je mehr Etappen, desto laenger der Faden.
+const ORTE = [
+  { name: 'Start: München',              lat: 48.14, lon: 11.58 },
+  { name: 'Etappe 2: Die Wüste',         lat: 23.5, lon:  46.0 },
+  { name: 'Etappe 3: Der Indische Ozean',lat:  8.0, lon:  73.0 },
+  { name: 'Etappe 4: Südostasien',       lat:  3.0, lon: 101.0 },
+  { name: 'Etappe 5: Chinesisches Meer', lat: 22.3, lon: 114.2 },
+  { name: 'Etappe 6: Japan',             lat: 35.4, lon: 138.7 },   // Ziel (Fuji)
+];
+story.reise = [0];                 // besuchte Orte (Index in ORTE), Start ist immer dabei
+const GLOBUS_R = 1;
+const GLOBUS_FAHRT = 4.5;          // s Kamerafahrt + Faden waechst
+const GLOBUS_HALT = 2.5;           // s danach stehen bleiben
+const gl = { szene: null, kam: null, erde: null, faden: null, punkte: null, aktiv: false, t: 0,
+             von: 0, nach: 0, fertig: null, textEl: null };
+
+function latLon(lat, lon, r){
+  const phi = (90 - lat) * Math.PI / 180, th = (lon + 180) * Math.PI / 180;
+  return new THREE.Vector3(-r * Math.sin(phi) * Math.cos(th), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(th));
+}
+// Grosskreis zwischen zwei Orten, leicht ueber der Oberflaeche (Bogen hebt sich in der Mitte)
+function bogen(a, b, n){
+  const va = latLon(a.lat, a.lon, 1), vb = latLon(b.lat, b.lon, 1);
+  const out = [];
+  const w = va.angleTo(vb);
+  for(let i = 0; i <= n; i++){
+    const t = i / n;
+    const v = new THREE.Vector3().copy(va).multiplyScalar(Math.sin((1 - t) * w) / Math.sin(w))
+      .addScaledVector(vb, Math.sin(t * w) / Math.sin(w));
+    v.normalize().multiplyScalar(GLOBUS_R * (1.01 + 0.09 * Math.sin(Math.PI * t)));
+    out.push(v);
+  }
+  return out;
+}
+
+function globusBauen(){
+  if(gl.szene) return;
+  gl.szene = new THREE.Scene();
+  gl.szene.background = new THREE.Color(0x02040a);
+  gl.kam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.01, 100);
+  gl.szene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const sonne = new THREE.DirectionalLight(0xffffff, 0.9); sonne.position.set(3, 2, 4);
+  gl.szene.add(sonne);
+  // Sterne
+  const sg = new THREE.BufferGeometry(), sp = new Float32Array(1500 * 3);
+  for(let i = 0; i < 1500; i++){
+    const v = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(30 + Math.random() * 20);
+    sp[i*3] = v.x; sp[i*3+1] = v.y; sp[i*3+2] = v.z;
+  }
+  sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+  gl.szene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 0.08 })));
+  // Erde: eigene Kugel (bekannte UV-Abbildung), Textur aus dem Erd-GLB der Engine
+  gl.erde = new THREE.Mesh(new THREE.SphereGeometry(GLOBUS_R, 64, 48),
+    new THREE.MeshLambertMaterial({ color: 0x3a6ea5 }));
+  gl.szene.add(gl.erde);
+  if(window.EARTH_GLB && THREE.GLTFLoader){
+    const b64 = window.EARTH_GLB.split(',')[1], bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    new THREE.GLTFLoader().parse(bytes.buffer, '', (g) => {
+      g.scene.traverse(o => { if(o.isMesh && o.material && o.material.map && !gl.erde.material.map){
+        const tex = o.material.map;
+        // Die Karte im GLB liegt auf dem Kopf (Sueden oben): hier wieder richtig herum
+        tex.flipY = !tex.flipY; tex.needsUpdate = true;
+        gl.erde.material.map = tex; gl.erde.material.color.set(0xffffff); gl.erde.material.needsUpdate = true;
+      } });
+    }, (e) => console.warn('Globus-Textur:', e));
+  }
+  gl.punkte = new THREE.Group(); gl.erde.add(gl.punkte);
+  gl.faden = new THREE.Group(); gl.erde.add(gl.faden);
+}
+
+function punkt(ort, farbe, gross){
+  const m = new THREE.Mesh(new THREE.SphereGeometry(gross ? 0.028 : 0.02, 16, 12),
+    new THREE.MeshBasicMaterial({ color: farbe }));
+  m.position.copy(latLon(ort.lat, ort.lon, GLOBUS_R * 1.012));
+  gl.punkte.add(m);
+}
+function fadenStueck(a, b, anteil){
+  const pts = bogen(a, b, 48);
+  const n = Math.max(2, Math.round(pts.length * anteil));
+  const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.slice(0, n)), Math.max(4, n * 2), 0.009, 8, false);
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xe02020 }));
+  gl.faden.add(m);
+  return m;
+}
+// Zustand zeichnen: alle bisherigen Fadenstuecke + Punkte, das letzte Stueck bis "anteil"
+function globusZeichnen(anteil){
+  gl.punkte.clear(); gl.faden.clear();
+  const r = story.reise;
+  for(let i = 1; i < r.length; i++){
+    const letztes = i === r.length - 1;
+    fadenStueck(ORTE[r[i - 1]], ORTE[r[i]], letztes ? anteil : 1);
+  }
+  punkt(ORTE[0], 0x3b82ff, true);                                   // Start blau
+  for(let i = 1; i < r.length; i++){
+    if(i === r.length - 1 && anteil < 1) continue;                  // neuer Punkt erst bei Ankunft
+    if(r[i] !== ORTE.length - 1) punkt(ORTE[r[i]], 0xffd23f, false); // Etappen gelb
+  }
+  punkt(ORTE[ORTE.length - 1], 0xb04cff, true);                     // Ziel Japan lila
+}
+
+// Kamera: schaut auf einen Punkt zwischen "von" und "nach", sanft dazwischen
+function globusKamera(k){
+  const a = ORTE[gl.von], b = ORTE[gl.nach];
+  const e = k * k * (3 - 2 * k);
+  const lat = a.lat + (b.lat - a.lat) * e, lon = a.lon + (b.lon - a.lon) * e;
+  const v = latLon(lat, lon, 1).normalize();
+  gl.kam.position.copy(v).multiplyScalar(4.2 - 0.6 * Math.sin(Math.PI * e));
+  gl.kam.up.set(0, 1, 0);
+  gl.kam.lookAt(0, 0, 0);
+}
+
+function globusText(text){
+  if(!gl.textEl){
+    gl.textEl = document.createElement('div');
+    gl.textEl.style.cssText = 'position:absolute;left:0;right:0;bottom:12%;text-align:center;color:#fff;'
+      + 'font:600 30px system-ui,sans-serif;text-shadow:0 2px 8px #000;pointer-events:none;z-index:26;'
+      + 'transition:opacity .6s;';
+    document.body.appendChild(gl.textEl);
+  }
+  gl.textEl.innerHTML = text || '';
+  gl.textEl.style.opacity = text ? '1' : '0';
+}
+
+// Oeffentlich: reise(nachIndex, tageText, fertig) – Schwarzblende, Globus, Schwarzblende, fertig()
+function globusReise(nach, tageText, fertig){
+  globusBauen();
+  // ein stehendes Platzhalter-Schild (spaetere Etappen) wieder freigeben
+  if(schwarzEl){ schwarzEl.innerHTML = ''; schwarzEl.style.transition = 'opacity .8s'; }
+  if(story.phase === 'platzhalter') story.phase = 'reise';
+  schwarz('', 0.1, () => {
+    hudSichtbar(false);                       // kein HUD ueber dem Globus
+    gl.von = story.reise[story.reise.length - 1];
+    gl.nach = nach;
+    story.reise.push(nach);
+    gl.aktiv = true; gl.t = 0; gl.fertig = fertig;
+    globusZeichnen(0); globusKamera(0);
+    globusText(ORTE[nach].name + '<div style="font-size:20px;font-weight:400;margin-top:6px;opacity:.85">'
+      + (tageText || '') + '</div>');
+    gl.textEl.style.opacity = '0';
+  });
+}
+function globusUpdate(dt){
+  gl.t += dt;
+  const k = Math.min(1, gl.t / GLOBUS_FAHRT);
+  globusZeichnen(k);
+  globusKamera(k);
+  if(gl.t > 0.6) gl.textEl.style.opacity = '1';
+  gl.erde.rotation.y = 0;
+  if(gl.t > GLOBUS_FAHRT + GLOBUS_HALT && !gl.ende){
+    gl.ende = true;
+    schwarz('', 0.6, () => {
+      gl.aktiv = false; gl.ende = false;
+      globusText('');
+      hudSichtbar(true);
+      const f = gl.fertig; gl.fertig = null;
+      if(f) f();
+    });
+  }
+}
+story.globusReise = globusReise;
+
 // ---- Hauptschleife ---------------------------------------------------------------------------
 function hookLoop(){
   const loopOrig = loop;
@@ -808,8 +972,17 @@ function hookLoop(){
     const now = performance.now();
     const dt = Math.min(0.1, (now - tPrev) / 1000); tPrev = now;
     if(hilfeOffen()) return loopOrig.apply(this, arguments);   // Pause (Anleitung offen)
+    if(gl.aktiv){
+      globusUpdate(dt);
+      gl.kam.aspect = innerWidth / innerHeight; gl.kam.updateProjectionMatrix();
+      renderer.render(gl.szene, gl.kam);
+      requestAnimationFrame(loop);
+      return;
+    }
     updateKenji(dt);
     kenjiWache(dt);
+    // Die Schule steht in Weltkoordinaten – Mond/Mars nutzen denselben Raum, dort darf sie nicht stehen
+    if(story.schule) story.schule.visible = locale === 'earth';
     kenjiTasten();
     updateAufgabe();
     if(eva && story.phase === 'mars') marsUpdate(dt);
@@ -1098,6 +1271,16 @@ function autoUpdate(dt){
   }
 }
 
+// Etappe 1 geschafft: Globus-Reise nach Etappe 2, dann (vorerst) Platzhalter
+function etappeEnde(tage, wie){
+  story.phase = 'reise';
+  const text = tageVergangen(tage) + ' (' + wie + ') · noch ' + (42 - story.tage) + ' von 42 Tagen';
+  story.globusReise(story.etappe, text, () => {
+    story.etappe++;
+    platzhalter('Etappe 2 (folgt) – Tag ' + story.tage + ' von 42');
+  });
+}
+
 // Vorlaeufiges Schild fuer noch nicht gebaute Teile
 function platzhalter(text){
   story.phase = 'platzhalter';
@@ -1198,7 +1381,7 @@ function marsSteinHolen(){
 function marsErde(){
   if(mars.phase === 'zurueck'){
     mars.phase = 'fertig';
-    schwarz(tageVergangen(7), 3, () => platzhalter('Etappe 2 (folgt) – Mars-Trip: 7 Tage vergangen'));
+    etappeEnde(7, 'mit dem Mars-Trip');
     return true;
   }
   return false;
@@ -1238,13 +1421,13 @@ function freiflugUpdate(){
   if(locale !== 'earth' || !story.ziel) return;
   if(state.crashed && !story.ende){
     story.ende = true;
-    schwarz(tageVergangen(7), 3, () => platzhalter('Etappe 2 (folgt) – nach Absturz: 7 Tage vergangen'));
+    etappeEnde(7, 'nach Absturz');
     return;
   }
   const d = Math.hypot(state.pos.x - story.ziel.x, state.pos.z - story.ziel.z);
   if(d < ZIEL_R && !story.ende){
     story.ende = true;
-    schwarz(tageVergangen(1), 3, () => platzhalter('Etappe 2 (folgt) – geschafft: 1 Tag vergangen'));
+    etappeEnde(1, 'mit dem X-Wing');
   }
 }
 
@@ -1357,7 +1540,7 @@ function fotoMachen(){
     ub.nah = null; fotoAnzeige();
     setTimeout(() => {
       ub.fotoEl.style.display = 'none'; ub.padEl.style.display = 'none';
-      schwarz(tageVergangen(4), 3, () => platzhalter('Etappe 2 (folgt) – U-Boot: 4 Tage vergangen'));
+      etappeEnde(4, 'mit dem U-Boot');
     }, 3500);
   }
 }
