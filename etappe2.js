@@ -60,17 +60,17 @@ function baueKulisse(){
   const g = new THREE.Group();
   const bahnMat = new THREE.MeshLambertMaterial({ color: 0x8a8274 });
   const bahn = new THREE.Mesh(new THREE.PlaneGeometry(40, 600), bahnMat);
-  bahn.rotation.x = -Math.PI / 2; bahn.position.set(0, 0.05, 0); g.add(bahn);
+  bahn.rotation.x = -Math.PI / 2; bahn.position.set(60, 0.05, 0); g.add(bahn);
   const strich = new THREE.MeshBasicMaterial({ color: 0xf2f2f2 });
   for(let z = -280; z <= 280; z += 40){
     const s = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 18), strich);
-    s.rotation.x = -Math.PI / 2; s.position.set(0, 0.07, z); g.add(s);
+    s.rotation.x = -Math.PI / 2; s.position.set(60, 0.07, z); g.add(s);
   }
   // kleiner Tower
   const tw = new THREE.Mesh(new THREE.BoxGeometry(8, 14, 8), new THREE.MeshLambertMaterial({ color: 0xd8cbb0 }));
-  tw.position.set(60, 7, 120); g.add(tw);
+  tw.position.set(130, 7, 120); g.add(tw);
   const kanzel = new THREE.Mesh(new THREE.BoxGeometry(10, 4, 10), new THREE.MeshLambertMaterial({ color: 0x4a6a80 }));
-  kanzel.position.set(60, 16, 120); g.add(kanzel);
+  kanzel.position.set(130, 16, 120); g.add(kanzel);
   // Felsen und Kakteen verstreut (fester Zufall)
   const fels = new THREE.MeshLambertMaterial({ color: 0xa47b52 });
   const kaktus = new THREE.MeshLambertMaterial({ color: 0x4f7a3a });
@@ -125,9 +125,12 @@ function baueKulisse(){
 // ---- Geparkte Fahrzeuge (Kulisse, bis man einsteigt) -----------------------------------------
 // Der X-Wing ist das "eigene" Fahrzeug (state/planeGroup) und braucht keine Kulisse. Nur die
 // Transall steht als Kulisse am Bahnende, bis man einsteigt.
-const XWING_PARK = { x: -70, z: 200, yaw: Math.PI * 0.75 };
+// Ankunft wie in Etappe 1: Kenji schaut nach Norden (-Z), der X-Wing steht ~30 Grad links, die
+// Transall ~30 Grad rechts vor ihm, je gut 100 m entfernt – keiner direkt voraus.
+const ANKUNFT    = { x: 0, z: 420 };
+const XWING_PARK = { x: -60, z: 320, yaw: Math.PI * 0.15 };
 const PARK = {
-  Transall: { x: 0, z: 260, yaw: 0, obj: null },    // am Bahnende, Nase zur Bahn (-Z)
+  Transall: { x: 60, z: 320, yaw: 0, obj: null },   // Nase nach Norden (-Z), Bahn liegt laengs Z
 };
 story.e2xwing = XWING_PARK;
 story.e2park = PARK;
@@ -157,6 +160,46 @@ function stelleFahrzeuge(){
       w.position.set(p.x, 0, p.z); w.rotation.y = p.yaw;
       scene.add(w); p.obj = w;
     });
+  }
+}
+
+// ---- Sounds ---------------------------------------------------------------------------------
+// Kein Meer und keine Moewen in der Wueste. Dafuer: Wuestenwind als Dauerloop in derselben
+// Lautstaerke wie das Meeresrauschen (AMB_OCEAN_VOL) und zu Beginn ganz leise arabische Musik,
+// bis sie zu Ende ist oder man einsteigt. Beide Dateien werden wie die Engine-Kulisse auf denselben
+// Spitzenwert normiert (normalizePeak), die Lautstaerke steuert allein der Gain.
+const MUSIK_VOL = 0.06;
+const snd = { wind: null, windGain: null, musik: null, musikGain: null, musikAus: false, laedt: false };
+function sndStart(url, loop, fertig){
+  if(!audioCtx || !url) return;
+  decodeSound(url).then((buf) => {
+    normalizePeak(buf, 0.9);
+    const s = audioCtx.createBufferSource(); s.buffer = buf; s.loop = loop;
+    const g = audioCtx.createGain(); g.gain.value = 0;
+    s.connect(g).connect(audioCtx.destination); s.start();
+    fertig(s, g);
+  }).catch((e) => console.warn('Wuesten-Sound:', e));
+}
+function updateWuesteSound(dt){
+  if(!audioCtx || audioCtx.state !== 'running' || !window.WUESTE_SND) return;
+  const an = e2() && locale === 'earth' && soundOn && !(story.globusAktiv && story.globusAktiv());
+  if(e2() && !snd.laedt){
+    snd.laedt = true;
+    sndStart(window.WUESTE_SND.wind, true, (s, g) => { snd.wind = s; snd.windGain = g; });
+    sndStart(window.WUESTE_SND.musik, false, (s, g) => { snd.musik = s; snd.musikGain = g; s.onended = () => { snd.musikAus = true; }; });
+  }
+  const k = Math.min(1, 0.7 * dt);
+  if(snd.windGain){
+    const y = eva ? eva.group.position.y : state.pos.y;
+    const hoehe = 1 - Math.max(0, Math.min(1, (y - duene(state.pos.x, state.pos.z)) / AMB_MAX_Y));
+    const ziel = an ? AMB_OCEAN_VOL * hoehe : 0;
+    snd.windGain.gain.value += (ziel - snd.windGain.gain.value) * k;
+  }
+  if(snd.musikGain){
+    if(!eva) snd.musikAus = true;                     // eingestiegen: Musik aus
+    const ziel = an && !snd.musikAus ? MUSIK_VOL : 0;
+    snd.musikGain.gain.value += (ziel - snd.musikGain.gain.value) * Math.min(1, (snd.musikAus ? 0.6 : 1.5) * dt);
+    if(snd.musikAus && snd.musikGain.gain.value < 0.001 && snd.musik){ try { snd.musik.stop(); } catch(e){} snd.musik = null; }
   }
 }
 
@@ -192,6 +235,13 @@ function hookWelt2(){
     return updateTrafficOrig(dt);
   };
   updateFlyby = function(dt){ if(e2() && locale === 'earth'){ if(typeof clearFlyby === 'function') clearFlyby(); return; } return updateFlybyOrig(dt); };
+  const updateAmbientOrig = updateAmbient;
+  updateAmbient = function(dt){
+    if(!(e2() && locale === 'earth')) return updateAmbientOrig(dt);
+    const k = Math.min(1, AMB_RATE * dt);
+    if(ambGullGain)  ambGullGain.gain.value  += (0 - ambGullGain.gain.value) * k;
+    if(ambOceanGain) ambOceanGain.gain.value += (0 - ambOceanGain.gain.value) * k;
+  };
   // keine Schiffe auf dem Sand
   const updateShipsSeaOrig = updateShipsSea;
   updateShipsSea = function(dt){ if(e2() && locale === 'earth'){ if(typeof clearSeaShips === 'function') clearSeaShips(); return; } return updateShipsSeaOrig(dt); };
@@ -232,8 +282,12 @@ function wuesteStart(){
   ground.position.set(0, 0, 0);
   updateSand();
   evaExit();
+  eva.group.position.set(ANKUNFT.x, duene(ANKUNFT.x, ANKUNFT.z), ANKUNFT.z);
+  eva.yaw = 0; eva.group.rotation.y = 0;               // Blick nach Norden zwischen die beiden
+  evaOrbit = 0; evaPitch = 0;
   snapCamera();
   stelleFahrzeuge();
+  story.e2marken = true;
   story.phase = null;
   story.ende = false;
   story.e2 = { start: performance.now() };
@@ -244,9 +298,24 @@ story.etappe2Start = wuesteStart;
 const zielVorher = story.zielFuer;
 story.zielFuer = function(et){ return et === 2 ? { x: 2500, z: 9000 } : (zielVorher ? zielVorher(et) : { x: 0, z: -9000 }); };
 
+// Marken ueber den Fahrzeugen (wie Etappe 1): weiss = X-Wing, gelb = Transall
+const e2m = [];
+function e2Marken(){
+  if(e2m.length || !story.baueMarke) return;
+  e2m.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: XWING_PARK.x, z: XWING_PARK.z, h: 9 });
+  e2m.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: PARK.Transall.x, z: PARK.Transall.z, h: 14 });
+}
+function updateE2Marken(){
+  e2Marken();
+  const zeigen = e2() && !!eva && locale === 'earth' && !story.phase;
+  for(const o of e2m) story.setzeMarke(o.m, o.x, 0, o.z, o.h, zeigen);
+}
+
 // Kulisse jedes Bild nachfuehren (Fahrzeug-Kulisse ein-/ausblenden)
-function updateE2(){
+function updateE2(dt){
+  updateWuesteSound(dt || 0);
   if(!e2()) return;
+  updateE2Marken();
   for(const name of Object.keys(PARK)){
     const p = PARK[name];
     if(p.obj) p.obj.visible = locale === 'earth' && (MODEL_NAMES[currentModel] !== name || !!eva) && !(p.weg);

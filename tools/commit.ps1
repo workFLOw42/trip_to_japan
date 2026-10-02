@@ -21,7 +21,7 @@ if($relevant){
   $t = [regex]::Replace($t, 'reise-nach-japan-v\d+', "reise-nach-japan-v$neu")
   [IO.File]::WriteAllText($sw, $t, $utf8)
   # Modell-Cache nur, wenn sich ein Modell (*_glb.js) geaendert hat – sonst bliebe alles geladen
-  if($staged | Where-Object { $_ -match '_glb\.js$' }){
+  if($staged | Where-Object { $_ -match '_(glb|snd)\.js$' }){
     $t = [IO.File]::ReadAllText($sw, $utf8)
     $mAlt = [int]([regex]::Match($headT, 'reise-nach-japan-modelle-v(\d+)').Groups[1].Value)
     $t = [regex]::Replace($t, 'reise-nach-japan-modelle-v\d+', "reise-nach-japan-modelle-v$($mAlt + 1)")

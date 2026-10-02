@@ -5,8 +5,8 @@
      schickt max-age=600, sonst kaeme bis zu 10 min lang die alte Datei in den neuen Cache).
    - MODELLE (gross, > 100 MB *_glb.js): eigene Version, zaehlt nur hoch, wenn sich ein Modell
      aendert. So muss nicht bei jedem Update alles neu geladen werden. */
-const CACHE   = 'reise-nach-japan-v15';
-const MODELLE = 'reise-nach-japan-modelle-v1';
+const CACHE   = 'reise-nach-japan-v16';
+const MODELLE = 'reise-nach-japan-modelle-v2';
 
 /* Kern-Dateien: sofort bei der Installation cachen. */
 const CORE = [
@@ -24,7 +24,7 @@ const CORE = [
   './icon-512.png',
   './icon-maskable-512.png'
 ];
-const istModell = (url) => /_glb\.js$/.test(new URL(url).pathname);
+const istModell = (url) => /_(glb|snd)\.js$/.test(new URL(url).pathname);   // Modelle + grosse Sounds
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

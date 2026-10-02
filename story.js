@@ -482,6 +482,13 @@ function sprich(saetze, fertig){
   return r;
 }
 function hookTon(){
+  // Das grosse Ton-Symbol nicht ueber Filmszene/Globus zeigen (z. B. beim automatischen Einschalten
+  // am Startbildschirm)
+  const showToggleOrig = showToggle;
+  showToggle = function(sym){
+    if(document.body.classList.contains('filmszene') || gl.aktiv || !story.gestartet || story.phase === 'reise') return;
+    return showToggleOrig.call(this, sym);
+  };
   const orig = toggleSound;
   toggleSound = function(){
     const r = orig.apply(this, arguments);
@@ -497,10 +504,16 @@ function startbildschirm(weiter){
     + 'justify-content:center;background:rgba(0,0,0,.55);color:#fff;font-family:system-ui,sans-serif;'
     + 'z-index:30;cursor:pointer;text-align:center;';
   el.innerHTML = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>'
-    + '<div style="font-size:20px;margin-top:18px;opacity:.85">Klicken oder Taste drücken zum Starten</div>';
+    + '<div style="font-size:20px;margin-top:18px;opacity:.85">Klicken oder Taste drücken zum Starten</div>'
+    // TEST: direkt zu einer Etappe springen (Etappe 1 = normaler Start, ab 2 mit Globus-Reise)
+    + '<div id="etappenwahl" style="margin-top:46px;font-size:13px;opacity:.75">Test: direkt zu Etappe'
+    + '<div style="display:flex;gap:8px;justify-content:center;margin-top:8px">'
+    + [1, 2, 3, 4, 5, 6].map(n => '<button data-etappe="' + n + '" style="width:40px;height:34px;border-radius:8px;'
+      + 'border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;font:600 16px system-ui;'
+      + 'cursor:pointer">' + n + '</button>').join('') + '</div></div>';
   document.body.appendChild(el);
   let los = false;
-  function start(e){
+  function start(e, etappe){
     if(e && e.stopPropagation) e.stopPropagation();
     if(los) return; los = true;
     el.remove();
@@ -508,8 +521,12 @@ function startbildschirm(weiter){
     story.ton = true;
     story.gestartet = true;
     if(!soundOn) toggleSound();      // die Geste erlaubt jetzt Audio: Ton an (D-Pad runter / N schaltet um)
+    if(etappe && etappe > 1){ springeZu(etappe); return; }
     weiter();
   }
+  el.querySelectorAll('button[data-etappe]').forEach(b => b.addEventListener('pointerdown', (e) => {
+    e.stopPropagation(); start(e, +b.dataset.etappe);
+  }));
   el.addEventListener('pointerdown', start);
   window.addEventListener('keydown', start, true);
   // Gamepad: jede Taste startet
@@ -521,6 +538,29 @@ function startbildschirm(weiter){
     requestAnimationFrame(pad);
   })();
 }
+
+// ---- TEST: direkt zu Etappe n springen ------------------------------------------------------
+// Etappe 1 laeuft normal. Fuer Etappe n > 1 tut das Spiel so, als waeren die Etappen davor mit dem
+// sicheren Weg (4 Tage) geschafft: Reise und Tage vorbelegt, dann die Globus-Reise nach Etappe n.
+function springeZu(n){
+  intro.phase = 'aus';
+  hudSichtbar(true);
+  if(intro.rede) intro.rede.abbrechen();
+  if(story.schule){ story.schule.visible = false; }
+  story.e1aufraeumen && story.e1aufraeumen();
+  story.reise = [];
+  for(let i = 0; i < n - 1; i++) story.reise.push(i);     // 0 .. n-2 schon besucht
+  story.tage = (n - 2) * 4;                                // die Etappen vor der letzten Reise
+  story.etappe = n - 1;
+  story.phase = 'reise';
+  const text = tageVergangen(4) + ' (Test-Sprung) · noch ' + (42 - story.tage) + ' von 42 Tagen';
+  story.globusReise(n - 1, text, () => {
+    story.etappe = n;
+    if(n === 2 && story.etappe2Start){ hinweis(''); story.etappe2Start(); return; }
+    platzhalter('Etappe ' + n + ' (folgt) – Tag ' + story.tage + ' von 42');
+  });
+}
+story.springeZu = springeZu;
 
 // ---- Schule ----------------------------------------------------------------------------------
 // Einfaches Schulgebaeude (kein Modell vorhanden). Steht mit der Tuer zum Strand.
@@ -1032,6 +1072,7 @@ function globusUpdate(dt){
   }
 }
 story.globusReise = globusReise;
+story.globusAktiv = () => gl.aktiv;
 
 // ---- Hauptschleife ---------------------------------------------------------------------------
 function hookLoop(){
@@ -1777,9 +1818,30 @@ function baueMarke(col){
   pfeil.rotation.x = Math.PI;                    // Spitze nach unten
   saeule.renderOrder = 995; scene.add(saeule); scene.add(pfeil);
   const m = { saeule, pfeil, schild: null, x: 0, y: 0, z: 0, hoehe: 10 };
-  marken.push(m);
+  if(story.etappe === 1) marken.push(m);        // Etappe-1-Marken steuert updateMarken
   return m;
 }
+// Fuer spaetere Etappen: eine Marke (Saeule + Pfeil + Schild) bauen und jedes Bild setzen
+story.baueMarke = function(farbe, text){
+  const m = baueMarke(farbe);
+  m.schild = baueSchild(text, '#' + new THREE.Color(farbe).getHexString());
+  return m;
+};
+story.setzeMarke = function(m, x, y, z, hoehe, zeigen){
+  m.saeule.visible = m.pfeil.visible = zeigen;
+  if(m.schild) m.schild.visible = zeigen;
+  if(!zeigen) return;
+  const t = performance.now() / 1000;
+  m.saeule.position.set(x, y + 150, z);
+  m.pfeil.position.set(x, y + hoehe + Math.sin(t * 2.5) * 0.8, z);
+  m.pfeil.rotation.y = t * 1.5;
+  if(m.schild){
+    const d = Math.hypot(camera.position.x - x, camera.position.z - z);
+    const s = Math.max(1, d / 45);
+    m.schild.scale.set(12 * s, 3.75 * s, 1);
+    m.schild.position.set(x, y + hoehe + 3 + 2.2 * s, z);
+  }
+};
 function setzeMarken(){
   if(!marken.length){
     baueMarke(0xffffff).schild = baueSchild('1 Tag', '#ffffff');
