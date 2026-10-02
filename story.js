@@ -334,38 +334,63 @@ function untertitel(text){
 }
 // Spricht die Saetze nacheinander und zeigt jeweils den aktuellen als Untertitel.
 // fertig() wird genau einmal gerufen.
-// Ton aus (D-Pad runter / N): der laufende Satz bricht ab, der Untertitel laeuft im Ersatz-Takt
-// weiter. Ton an: ab dem gerade angezeigten Satz wird wieder gesprochen.
+// Ton an: die Stimme spricht, OHNE Untertitel. Ton aus: Untertitel, ohne Stimme (D-Pad runter / N).
+// Umschalten faengt nicht von vorne an: die Ansage laeuft weiter und setzt an dem Wort fort, an dem
+// sie gerade ist – gemeldet von der Stimme (onboundary), sonst nach dem Sprechtempo geschaetzt.
 const reden = new Set();
+const ZEICHEN_PRO_S = 14;      // Sprechtempo bei rate 1.0 (fuer Schaetzung und Untertitel-Takt)
+function satzDauer(s){ return 1200 + s.length / ZEICHEN_PRO_S * 1000; }   // ms, Untertitel-Takt
 function sprich(saetze, fertig){
-  let i = 0, done = false, timer = null, utt = null;
+  let i = -1, done = false, timer = null, utt = null;
+  let laut = false, pos0 = 0, t0 = 0, bPos = null;     // aktueller Satz: ab Zeichen pos0 seit t0
   const synth = window.speechSynthesis;
-  const stimme = synth && synth.getVoices().find(v => /^de/i.test(v.lang));
-  const laut = () => !!(synth && story.ton && soundOn);
-  function satz(s){
-    clearTimeout(timer);
-    untertitel(s);
-    const dauer = 1200 + s.split(/\s+/).length * 420;   // Ersatz-Takt ohne Stimme
-    if(laut()){
-      const u = utt = new SpeechSynthesisUtterance(s);
+  const tonAn = () => !!(synth && story.ton && soundOn && synth.getVoices().length);
+
+  // Wo im aktuellen Satz ist die Ansage gerade (Zeichen)?
+  function aktPos(){
+    const s = saetze[i]; if(!s) return 0;
+    const ms = performance.now() - t0;
+    if(laut) return Math.min(s.length, bPos !== null ? bPos : pos0 + ms / 1000 * ZEICHEN_PRO_S);
+    return Math.min(s.length, pos0 + ms * s.length / satzDauer(s));
+  }
+  // Den aktuellen Satz ab Zeichen p fortsetzen – je nach Ton als Stimme oder als Untertitel
+  function weiterAb(p){
+    clearTimeout(timer); utt = null; bPos = null;
+    const s = saetze[i];
+    while(p > 0 && s[p - 1] !== ' ') p--;               // auf den Wortanfang zurueck
+    pos0 = p; t0 = performance.now(); laut = tonAn();
+    const rest = s.slice(p);
+    if(!rest.trim()){ naechster(); return; }
+    if(laut){
+      untertitel('');
+      const u = utt = new SpeechSynthesisUtterance(rest);
+      const stimme = synth.getVoices().find(v => /^de/i.test(v.lang));
       u.lang = 'de-DE'; if(stimme) u.voice = stimme; u.rate = 1.0;
+      u.onboundary = e => { if(utt === u) bPos = p + (e.charIndex || 0); };
       u.onend = u.onerror = () => { if(utt === u) naechster(); };
       synth.speak(u);
-      timer = setTimeout(naechster, dauer * 2.5);       // falls onend nie kommt
+      // falls onend nie kommt
+      timer = setTimeout(() => { if(utt === u) naechster(); }, (rest.length / ZEICHEN_PRO_S * 1000 + 1500) * 2.5);
     } else {
-      utt = null;
-      timer = setTimeout(naechster, dauer);
+      untertitel(s);
+      timer = setTimeout(naechster, satzDauer(s) * (s.length - p) / s.length);
     }
   }
   function naechster(){
     clearTimeout(timer); utt = null;
     if(done) return;
-    if(i >= saetze.length){ done = true; reden.delete(r); untertitel(''); if(fertig) fertig(); return; }
-    satz(saetze[i++]);
+    if(++i >= saetze.length){ done = true; reden.delete(r); untertitel(''); if(fertig) fertig(); return; }
+    weiterAb(0);
   }
   const r = {
     abbrechen(){ done = true; reden.delete(r); clearTimeout(timer); utt = null; if(synth) synth.cancel(); untertitel(''); },
-    tonGeaendert(){ if(done || i === 0) return; utt = null; if(synth) synth.cancel(); satz(saetze[i - 1]); },
+    tonGeaendert(){
+      if(done || i < 0) return;
+      const p = Math.floor(aktPos());
+      utt = null;
+      if(synth) synth.cancel();
+      weiterAb(p);
+    },
   };
   reden.add(r);
   naechster();
@@ -386,7 +411,7 @@ function startbildschirm(weiter){
   el.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;'
     + 'justify-content:center;background:rgba(0,0,0,.55);color:#fff;font-family:system-ui,sans-serif;'
     + 'z-index:30;cursor:pointer;text-align:center;';
-  el.innerHTML = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Trip to Japan</div>'
+  el.innerHTML = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>'
     + '<div style="font-size:20px;margin-top:18px;opacity:.85">Klicken oder Taste drücken zum Starten</div>';
   document.body.appendChild(el);
   let los = false;
@@ -511,7 +536,17 @@ function introPlatz(){
 
 const intro = story.intro = { phase: 'aus', t: 0, rede: null, fertigRede: false };
 
+function hudSichtbar(an){
+  document.body.classList.toggle('filmszene', !an);
+}
 function introVorbereiten(){
+  if(!document.getElementById('filmszene-css')){
+    const st = document.createElement('style'); st.id = 'filmszene-css';
+    st.textContent = 'body.filmszene #hud, body.filmszene #radar, body.filmszene #gyro, '
+      + 'body.filmszene #pad, body.filmszene #big { visibility: hidden; }';
+    document.head.appendChild(st);
+  }
+  hudSichtbar(false);
   const ip = introPlatz();
   baueSchule(ip.schuleX, ip.schuleZ, ip.yaw);
   const g = eva.group;
@@ -534,6 +569,7 @@ function introDt(dt){
 
 function introEnde(){
   intro.phase = 'aus';
+  hudSichtbar(true);
   evaOrbit = 0; evaPitch = 0;
   if(story.onIntroEnde) story.onIntroEnde();
 }
@@ -1145,6 +1181,13 @@ function updateMarken(){
 
 // ---- HUD: zu Fuss "Kenji" statt Fahrzeugname, kein Astronauten-Symbol ------------------------
 function hookHud(){
+  // Das grosse Bestaetigungssymbol in der Bildmitte zeigt beim Aussteigen einen Astronauten –
+  // Kenji ist keiner. Andere Symbole (z. B. U-Boot beim Einsteigen) bleiben.
+  const showBigOrig = showBig;
+  showBig = function(t){
+    if(t && /\u{1F9D1}\u200D\u{1F680}/u.test(t)) t = '';
+    return showBigOrig.call(this, t);
+  };
   const mdlEl = document.getElementById('mdl');
   const statEl = document.getElementById('status');
   const hudOrig = updateHUD;
@@ -1219,7 +1262,7 @@ const ANLEITUNG = [
     ['im Wasser', 'L-Stick schwimmen · RT tauchen · LT auftauchen'],
     ['D-Pad ↑', 'diese Anleitung (Pause)'],
     ['D-Pad ←', 'aktuelle Aufgabe (Pause)'],
-    ['D-Pad ↓', 'Ton an/aus (auch die Stimme)'],
+    ['D-Pad ↓', 'Ton an (Stimme) / aus (Untertitel)'],
   ]],
   ['⌨️ Tastatur', [
     ['↑ ↓ ← →', 'laufen und drehen'],
@@ -1231,7 +1274,7 @@ const ANLEITUNG = [
     ['Y am Fahrzeug', 'einsteigen (U-Boot: im gelben Ring am Strand)'],
     ['im Wasser', 'Pfeile schwimmen · E tauchen · Q auftauchen'],
     ['H / T', 'Anleitung / Aufgabe (Pause)'],
-    ['N', 'Ton an/aus'],
+    ['N', 'Ton an (Stimme) / aus (Untertitel)'],
   ]],
   ['✈️ Im X-Wing', [
     ['L-Stick / Pfeile', 'lenken, Nase hoch/runter'],
@@ -1298,6 +1341,7 @@ function updateAufgabe(){
   if(aufgabeEl._html !== html){ aufgabeEl.innerHTML = html; aufgabeEl._html = html; }
 }
 function hookHilfe(){
+  { const h = hilfeEl(); if(h) h.innerHTML = hilfeHtml(ANLEITUNG); }   // Flugspiel-Text sofort weg
   const st = document.createElement('style');
   st.textContent = '#aufgabe .htitle{font-weight:bold;font-size:14px;margin-bottom:5px;color:#cfe}'
     + '#aufgabe .hrow{display:flex;justify-content:space-between;gap:10px}'
