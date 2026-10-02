@@ -29,6 +29,16 @@ if ! grep -q "reise-nach-japan-v$next" "$sw"; then
   exit 1
 fi
 
-git add "$sw"
+# git add im Hook scheitert im Google-Drive-Ordner gelegentlich am index.lock -> wiederholen,
+# und wenn es gar nicht klappt, den Commit abbrechen (sonst landet die alte Version im Commit).
+ok=0
+for i in 1 2 3 4 5; do
+  if git add "$sw" 2>/dev/null; then ok=1; break; fi
+  sleep 1
+done
+if [ "$ok" != 1 ]; then
+  echo "PWA-Hook: git add sw.js fehlgeschlagen (index.lock?), Commit abgebrochen - bitte erneut committen." >&2
+  exit 1
+fi
 echo "PWA-Cache: reise-nach-japan-v$cur -> reise-nach-japan-v$next"
 exit 0
