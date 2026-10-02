@@ -334,7 +334,9 @@ const FS_TEXT = [
   'Die Kisten fallen mit unserem Schwung nach vorne. Je schneller wir sind, desto früher musst du sie abwerfen.',
   'Merk dir: Schub in Prozent mal fünf gleich Meter vor dem Ziel. Bei sechzig Prozent wirfst du also dreihundert Meter vorher ab, bei hundert Prozent fünfhundert Meter.',
   'Abgeworfen wird mit B. Die Entfernung zur Oase steht in der Anzeige.',
-  'Und zum Landen: Gas auf etwa sechzig Prozent, langsam sinken, die Nase leicht oben halten. Nicht schneller als zweihundert Kilometer pro Stunde, und die Flügel gerade. Kurz vor dem Boden Gas weg, aufsetzen und bremsen.',
+  // gemessen (C:\tmp\sfg\landung.js): 30 % = gleichmaessig ~2 m/s sinken, Gyro-Ring durchgehend gruen;
+  // 60 % haelt die Hoehe
+  'Und zum Landen: Gas auf dreißig Prozent und langsam runter. Halte die Nase und die Flügel gerade. Wird der Ring im Gyroskop rechts grün, bist du im richtigen Winkel. Dann aufsetzen und bremsen.',
 ];
 const fsch = story.flugschule = { schritt: null, rede: null, frageEl: null, symbolEl: null };
 fsch.zurFrage = () => { if(fsch.rede) fsch.rede.abbrechen(); fsSymbol(false); fsFrage(); };   // Erklaerung ueberspringen
