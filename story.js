@@ -722,6 +722,79 @@ function hookSchwimmen(){
   evaEnterDinghy = function(x, z){ if(eva && !eva.boat && !sw.aktiv) schwimmStart(x, z); };
 }
 
+// ---- Warp: Bewegungsstreifen statt Ring ------------------------------------------------------
+// Ab Warp 1 rasen Lichtstreifen von vorn an der Kamera vorbei. Mit dem Warpfaktor (1 -> 10) wachsen
+// LINEAR: Zahl der Streifen, ihre Laenge, Geschwindigkeit und Helligkeit – und sie ruecken naeher an
+// die Flugachse. Die normalen Kometenstreifen der Engine (unter Warp 1) bleiben.
+const WS_N      = 420;       // Streifen insgesamt (bei Warp 10 alle sichtbar)
+const WS_TIEFE  = 1400;      // m: so weit vor der Kamera tauchen sie auf
+const WS_R_MAX  = 520;       // m Abstand zur Flugachse bei Warp 1 ...
+const WS_R_MIN  = 70;        // ... und bei Warp 10
+const WS_V_MIN  = 400;       // m/s scheinbare Geschwindigkeit bei Warp 1 ...
+const WS_V_MAX  = 5200;      // ... und bei Warp 10
+const WS_L_MIN  = 30;        // m Streifenlaenge bei Warp 1 ...
+const WS_L_MAX  = 420;       // ... und bei Warp 10
+const ws = { mesh: null, mat: null, z: null, a: null, r: null };
+const _wsM = new THREE.Matrix4(), _wsQ = new THREE.Quaternion(), _wsP = new THREE.Vector3(),
+      _wsS = new THREE.Vector3(), _wsF = new THREE.Vector3(), _wsU = new THREE.Vector3(),
+      _wsR = new THREE.Vector3(), _wsX = new THREE.Vector3(1, 0, 0);
+
+function wsEnsure(){
+  if(ws.mesh) return;
+  ws.mat = new THREE.MeshBasicMaterial({ map: makeCometTexture(), transparent: true, opacity: 0,
+    depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  ws.mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), ws.mat, WS_N);
+  ws.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  ws.mesh.frustumCulled = false;
+  ws.mesh.renderOrder = 996;
+  ws.z = new Float32Array(WS_N); ws.a = new Float32Array(WS_N); ws.r = new Float32Array(WS_N);
+  for(let i = 0; i < WS_N; i++){ ws.z[i] = Math.random() * WS_TIEFE; wsNeu(i); }
+  scene.add(ws.mesh);
+}
+function wsNeu(i){
+  ws.a[i] = Math.random() * Math.PI * 2;
+  ws.r[i] = 0.25 + Math.random() * 0.75;        // Anteil am Radius (nicht genau auf der Achse)
+}
+function updateWarpStreifen(dt){
+  if(warpRing) warpRing.visible = false;         // der Ring entfaellt
+  const warp = locale === 'space' ? state.vel.length() / SPACE_C : 0;
+  const k = Math.max(0, Math.min(1, (warp - 1) / (WARP_MAX - 1)));   // 0 bei Warp 1, 1 bei Warp 10
+  if(warp < 1){ if(ws.mesh) ws.mesh.visible = false; return; }
+  wsEnsure();
+  ws.mesh.visible = true;
+  const n = Math.round(WS_N * (0.12 + 0.88 * k));
+  const R = WS_R_MAX + (WS_R_MIN - WS_R_MAX) * k;
+  const v = WS_V_MIN + (WS_V_MAX - WS_V_MIN) * k;
+  const L = WS_L_MIN + (WS_L_MAX - WS_L_MIN) * k;
+  ws.mat.opacity = 0.35 + 0.6 * k;
+  // Achsen: vorn = Flugrichtung, dazu zwei Querachsen
+  _wsF.set(0, 0, -1).applyQuaternion(state.quat);
+  _wsU.set(0, 1, 0).applyQuaternion(state.quat);
+  _wsR.crossVectors(_wsF, _wsU);
+  _wsQ.setFromUnitVectors(_wsX, _wsF);           // Streifen (Ebene in X) entlang der Flugrichtung
+  _wsS.set(L, 1.1 + 1.4 * k, 1);
+  const c = camera.position;
+  for(let i = 0; i < WS_N; i++){
+    if(i >= n){ _wsM.makeScale(0, 0, 0); ws.mesh.setMatrixAt(i, _wsM); continue; }
+    ws.z[i] -= v * dt;
+    if(ws.z[i] < -L){ ws.z[i] += WS_TIEFE + L; wsNeu(i); }
+    const rr = R * ws.r[i], a = ws.a[i];
+    _wsP.copy(c).addScaledVector(_wsF, ws.z[i])
+      .addScaledVector(_wsR, Math.cos(a) * rr).addScaledVector(_wsU, Math.sin(a) * rr);
+    _wsM.compose(_wsP, _wsQ, _wsS);
+    ws.mesh.setMatrixAt(i, _wsM);
+  }
+  ws.mesh.instanceMatrix.needsUpdate = true;
+}
+function hookWarp(){
+  const updateWarpOrig = updateWarp;
+  updateWarp = function(dt){
+    const r = updateWarpOrig.apply(this, arguments);
+    updateWarpStreifen(dt);
+    return r;
+  };
+}
+
 // ---- Hauptschleife ---------------------------------------------------------------------------
 function hookLoop(){
   const loopOrig = loop;
@@ -1406,6 +1479,7 @@ window.STORY_HOOK = function(){
   hookHilfe();
   hookTon();
   hookSchwimmen();
+  hookWarp();
   hookLoop();
 };
 window.STORY_START = function(){
