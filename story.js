@@ -28,6 +28,7 @@ function hookWelt(){
   // Auf der Startinsel stehen in Etappe 1 nur X-Wing und U-Boot zur Wahl: kein Vorfeld mit
   // Flugzeugen, kein Feuerwehrboot. Das Jetpack gibt es im ganzen Spiel nicht (Y ins Leere tut nichts).
   _parkLocalCalc = function(){ return null; };
+  harborSubNear = function(){ return imRing() ? { cx: 0, cz: 0 } : null; };
   harborBoatLocal = function(){ return null; };     // Loeschboot am Strand: weder Modell noch Einstieg
   evaStartJet = function(){};
   // Ohne Traeger braucht es auch das Traeger-Modell nicht. Sein Lade-Callback ruft ausserdem
@@ -93,20 +94,22 @@ function hookWracks(){
   _wreckCache.clear();
 }
 
-// Parkplatz des X-Wings: auf dem Land knapp vor dem Sand, ~30 Grad entlang des Strandes neben dem
-// U-Boot-Liegeplatz – so stehen die beiden nicht hintereinander in einer Sichtachse.
-// Gesucht wird in kleinen Schritten, bis kein Gebaeude im Weg steht.
-const XWING_VERSATZ = 0.55;  // rad entlang des Strandes (so passen beide nach dem Intro ins Bild)
+// Parkplatz des X-Wings: auf dem Land knapp vor dem Sand, XWING_NEBEN m entlang des Ufers neben
+// dem U-Boot-Einstieg (Ring). Nah genug, dass man beide zusammen sieht, aber nicht in einer
+// Sichtachse hintereinander (beide stehen am Ufer). Gesucht wird, bis kein Gebaeude im Weg steht.
+const XWING_NEBEN = 70;      // m
 function xwingStrandPlatz(){
   const info = islandInfo(0, 0);
-  const bl = harborSubLocal(0, 0);
-  const a0 = (bl ? Math.atan2(bl.z, bl.x) : -Math.PI/2) + XWING_VERSATZ;
+  const rg = ubootRingPlatz();
+  const a0 = rg ? Math.atan2(rg.z - info.wz, rg.x - info.wx) : -Math.PI/2;
+  const rr = rg ? Math.hypot(rg.x - info.wx, rg.z - info.wz) : info.radius * 0.9;
+  const da = XWING_NEBEN / rr;                                // Winkel fuer ~70 m Bogen
   for(let s = 0; s <= 24; s++){
     for(const v of (s === 0 ? [0] : [1, -1])){
-      const a = a0 + v * s * 0.04;
-      for(const f of [0.9, 0.85, 0.8]){
-        const x = info.wx + Math.cos(a) * info.radius * f;
-        const z = info.wz + Math.sin(a) * info.radius * f;
+      const a = a0 + da + v * s * 0.02;
+      for(const f of [1.0, 0.95, 0.9, 0.85]){
+        const x = info.wx + Math.cos(a) * rr * f;
+        const z = info.wz + Math.sin(a) * rr * f;
         if(!isOnLand(x, z)) continue;
         if(hitsBuilding(x, ISLAND_Y + 2, z, false)) continue;
         // Nase zum Wasser (radial nach aussen): Gesicht -Z  ->  yaw = atan2(-dx, -dz)
@@ -115,6 +118,51 @@ function xwingStrandPlatz(){
     }
   }
   return { x: info.wx, z: info.wz + 110, yaw: 0 };   // Notfall: Landebahn
+}
+
+// ---- U-Boot-Einstieg am Strand ---------------------------------------------------------------
+// Das U-Boot liegt draussen im Wasser. Statt hinzuschwimmen (oder mit dem Schlauchboot zu fahren)
+// steigt man an einem leuchtenden Ring am Strand direkt davor ein: im Ring Y = im U-Boot.
+const RING_R = 6;            // m Radius des Einstiegsrings
+function ubootRingPlatz(){
+  if(story.ring) return story.ring;
+  const info = islandInfo(0, 0), bl = harborSubLocal(0, 0);
+  if(!info || !bl) return null;
+  const sx = info.wx + bl.x, sz = info.wz + bl.z;
+  let dx = info.wx - sx, dz = info.wz - sz; const n = Math.hypot(dx, dz) || 1; dx /= n; dz /= n;
+  // vom U-Boot Richtung Inselmitte: der erste Punkt auf festem Land (Gras), dann noch ein Stueck
+  // weiter. Auf dem Sand hebt die Welle den Boden bis 1,6 m an (evaFootY) und ueberspuelte den Ring.
+  for(let s = 0; s < n; s += 2){
+    const x = sx + dx * s, z = sz + dz * s;
+    if(isOnLand(x, z)){
+      const x2 = x + dx * (RING_R + 3), z2 = z + dz * (RING_R + 3);
+      return (story.ring = { x: x2, z: z2, nx: -dx, nz: -dz });   // n = Richtung zum U-Boot
+    }
+  }
+  return null;
+}
+function imRing(){
+  const r = ubootRingPlatz();
+  if(!eva || !r) return false;
+  return Math.hypot(eva.group.position.x - r.x, eva.group.position.z - r.z) < RING_R;
+}
+let ringMesh = null;
+function updateRing(zeigen){
+  const r = ubootRingPlatz();
+  if(!r) return;
+  if(!ringMesh){
+    ringMesh = new THREE.Mesh(new THREE.RingGeometry(RING_R - 0.7, RING_R, 48),
+      new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.8,
+        side: THREE.DoubleSide, depthWrite: false }));
+    ringMesh.rotation.x = -Math.PI / 2;
+    ringMesh.renderOrder = 996;
+    scene.add(ringMesh);
+  }
+  ringMesh.visible = zeigen;
+  if(!zeigen) return;
+  ringMesh.position.set(r.x, ISLAND_Y + 0.06, r.z);
+  const t = performance.now() / 1000;
+  ringMesh.material.opacity = 0.55 + 0.35 * Math.sin(t * 3);
 }
 
 // ---- Kenji statt Astronaut -------------------------------------------------------------------
@@ -232,7 +280,7 @@ addEventListener('keydown', e => { if(!e.repeat && tippTaste[e.code]) getippt[ti
 
 // Tasten auswerten (Flanken), einmal pro Bild
 function kenjiTasten(){
-  if(!eva || eva.rover || eva.boat || intro.phase !== 'aus' || story.phase){
+  if(!eva || eva.rover || eva.boat || sw.aktiv || intro.phase !== 'aus' || story.phase){
     for(const n in getippt) delete getippt[n];
     return;
   }
@@ -260,6 +308,7 @@ function updateKenji(dt){
     tricks.aktiv = null;
   }
   const a = tricks.ausschlag;
+  if(sw.aktiv){ kenjiAnim('swim'); return; }
   if(!eva.onGround) kenjiAnim('jump');
   else if(tricks.moon) kenjiAnim('moonwalk');
   else if(a > 0.5) kenjiAnim('run');
@@ -424,14 +473,15 @@ function introPlatz(){
   const info = islandInfo(0, 0);
   const bl = harborSubLocal(0, 0);
   const xp = story.xwingPlatz;
-  const sx = bl ? info.wx + bl.x : xp.x + 150, sz = bl ? info.wz + bl.z : xp.z;
+  const rg = ubootRingPlatz();
+  const sx = rg ? rg.x : xp.x + 70, sz = rg ? rg.z : xp.z;   // U-Boot-Seite = Einstiegsring
   const frei = (x, z) => isOnLand(x, z) && !hitsBuilding(x, ISLAND_Y + 1, z, false);
   let best = null, bestWert = Infinity;
   for(let x = info.wx - 250; x <= info.wx + 250; x += 10){
     for(let z = info.wz - 250; z <= info.wz + 250; z += 10){
       if(!frei(x, z)) continue;
       const d1 = Math.hypot(xp.x - x, xp.z - z), d2 = Math.hypot(sx - x, sz - z);
-      if(d1 < 60 || d2 < 60 || d1 > 260 || d2 > 260) continue;
+      if(d1 < 45 || d2 < 45 || d1 > 160 || d2 > 160) continue;
       const a1 = Math.atan2(xp.x - x, xp.z - z), a2 = Math.atan2(sx - x, sz - z);
       let dw = Math.abs(a1 - a2); if(dw > Math.PI) dw = 2 * Math.PI - dw;
       if(dw > 70 * Math.PI / 180) continue;
@@ -499,6 +549,7 @@ function hookIntro(){
       tricks.ausschlag = geht ? 0.3 : 0;                      // Animation: gehen bzw. stehen
       return updateEvaOrig(dt, { pitch: geht ? -INTRO_GEH : 0 });
     }
+    if(sw.aktiv){ schwimmUpdate(dt, inp); return; }
     return updateEvaOrig(dt, kenjiEingabe(inp));
   };
   // Einsteigen (Y) und Reset (R) erst nach dem Intro. Y abseits der Fahrzeuge = Twirl (kenjiTasten).
@@ -515,6 +566,17 @@ function hookIntro(){
   // Kamera: erst vorne (Gesicht), langsam heran, dann 180° nach hinten herum.
   const camOrig = updateCamera;
   updateCamera = function(){
+    if(eva && sw.aktiv && intro.phase === 'aus'){
+      const p = eva.group.position, yaw = eva.yaw + evaOrbit;
+      const tief = seaYAt(p.x, p.z) - p.y;                     // wie weit unter der Oberflaeche
+      const k = Math.min(1, Math.max(0, (tief - 0.5) / 2));    // 0 = an der Oberflaeche, 1 = getaucht
+      const dist = 6 - 2 * k, hoch = 2.2 - 1.8 * k;
+      const soll = new THREE.Vector3(p.x + Math.sin(yaw) * dist, p.y + hoch, p.z + Math.cos(yaw) * dist);
+      camera.position.lerp(soll, Math.min(1, 6 * dtCam));
+      camera.up.set(0, 1, 0);
+      camera.lookAt(p.x, p.y + 0.4, p.z);
+      return;
+    }
     if(!eva || (intro.phase !== 'warten' && intro.phase !== 'laeuft')) return camOrig();
     const p = eva.group.position, yaw = eva.yaw;
     let a, dist, hoch;
@@ -534,6 +596,67 @@ function hookIntro(){
     camera.position.set(p.x + ox * dist, p.y + hoch, p.z + oz * dist);
     camera.lookAt(p.x, p.y + KENJI_H * 0.65, p.z);
   };
+}
+
+// ---- Schwimmen -------------------------------------------------------------------------------
+// Laeuft Kenji ins Meer, schwimmt er (statt im Schlauchboot zu sitzen): linker Stick bewegt und
+// dreht ihn, RT taucht ab, LT taucht auf (Tastatur: E / Q). An Land steht er wieder auf.
+const SCHWIMM_V   = 1.8;     // m/s
+const TAUCH_V     = 1.4;     // m/s auf und ab
+const SCHWIMM_TIEF = 0.9;    // m: so tief liegt der Koerper an der Oberflaeche im Wasser
+const sw = story.schwimm = { aktiv: false };
+
+function schwimmStart(x, z){
+  sw.aktiv = true;
+  const g = eva.group;
+  g.position.set(x, seaYAt(x, z) - SCHWIMM_TIEF, z);
+  eva.vy = 0; eva.onGround = true;
+  evaJumpFrom = null;
+}
+
+function tauchEingabe(){
+  let d = 0;
+  if(keys['KeyE']) d -= 1;
+  if(keys['KeyQ']) d += 1;
+  if(gamepadIndex !== null){
+    const gp = navigator.getGamepads()[gamepadIndex];
+    if(gp){
+      d -= gp.buttons[7] ? gp.buttons[7].value : 0;    // RT = runter
+      d += gp.buttons[6] ? gp.buttons[6].value : 0;    // LT = rauf
+    }
+  }
+  return Math.max(-1, Math.min(1, d));
+}
+
+function schwimmUpdate(dt, inp){
+  const g = eva.group;
+  eva.yaw -= (inp.yaw || 0) * EVA_TURN * dt;
+  g.rotation.y = eva.yaw;
+  const v = -(inp.pitch || 0) * SCHWIMM_V;
+  const nx = g.position.x - Math.sin(eva.yaw) * v * dt;
+  const nz = g.position.z - Math.cos(eva.yaw) * v * dt;
+  tricks.ausschlag = Math.abs(inp.pitch || 0);
+  // Ans Ufer: wieder zu Fuss
+  if(evaSolid(nx, nz) && !isOpenWater(nx, nz) || isOnBeach(nx, nz) || isOnLand(nx, nz)){
+    sw.aktiv = false;
+    g.position.set(nx, evaFootY(nx, nz), nz);
+    eva.vy = 0; eva.onGround = true;
+    return;
+  }
+  g.position.x = nx; g.position.z = nz;
+  const oben = seaYAt(nx, nz, dt) - SCHWIMM_TIEF;
+  const unten = seabedY(nx, nz) + 1.0;
+  let y = g.position.y + tauchEingabe() * TAUCH_V * dt;
+  // ohne Tauch-Eingabe treibt er langsam nach oben
+  if(tauchEingabe() === 0 && y < oben) y = Math.min(oben, y + 0.4 * dt);
+  g.position.y = Math.max(unten, Math.min(oben, y));
+  eva.onGround = true;
+  state.pos.copy(eva.planeAt);
+  evaKmh = Math.abs(v) * 3.6;
+}
+
+function hookSchwimmen(){
+  evaEnterDinghy = function(x, z){ if(eva && !eva.boat && !sw.aktiv) schwimmStart(x, z); };
 }
 
 // ---- Hauptschleife ---------------------------------------------------------------------------
@@ -562,8 +685,8 @@ function hookRadar(){
   footTargets = function(){
     if(story.etappe !== 1 || locale !== 'earth') return footOrig();
     const out = [{ x: eva.planeAt.x, z: eva.planeAt.z, col: COL_XWING }];
-    const info = islandInfo(0, 0), bl = harborSubLocal(0, 0);
-    if(info && bl) out.push({ x: info.wx + bl.x, z: info.wz + bl.z, col: COL_SUB });
+    const rg = ubootRingPlatz();
+    if(rg) out.push({ x: rg.x, z: rg.z, col: COL_SUB });
     return out;
   };
   const activeOrig = activeTarget;
@@ -994,12 +1117,15 @@ function setzeMarken(){
   const xp = story.xwingPlatz;
   const info = islandInfo(0, 0), bl = harborSubLocal(0, 0);
   marken[0].x = xp.x; marken[0].z = xp.z; marken[0].y = ISLAND_Y; marken[0].hoehe = 9;
-  if(info && bl){ marken[1].x = info.wx + bl.x; marken[1].z = info.wz + bl.z; marken[1].y = 0; marken[1].hoehe = 16; }
+  const rg = ubootRingPlatz();
+  if(rg){ marken[1].x = rg.x; marken[1].z = rg.z; marken[1].y = ISLAND_Y; marken[1].hoehe = 6; }
+  else if(info && bl){ marken[1].x = info.wx + bl.x; marken[1].z = info.wz + bl.z; marken[1].y = 0; marken[1].hoehe = 16; }
 }
 function updateMarken(){
   if(!marken.length) return;
   const zeigen = !!eva && story.etappe === 1 && locale === 'earth' && !story.phase
     && intro.phase === 'aus';
+  updateRing(zeigen);
   const t = performance.now() / 1000;
   for(const m of marken){
     m.saeule.visible = m.pfeil.visible = zeigen;
@@ -1026,6 +1152,13 @@ function hookHud(){
     const r = hudOrig.apply(this, arguments);
     if(eva){
       if(mdlEl && mdlEl.textContent !== 'Kenji') mdlEl.textContent = 'Kenji';
+      if(sw.aktiv){
+        const gp = eva.group.position;
+        const t = Math.max(0, Math.round(seaYAt(gp.x, gp.z) - gp.y - SCHWIMM_TIEF));
+        const lbl = document.getElementById('altlbl'), alt = document.getElementById('alt');
+        if(lbl && lbl.textContent !== 'Tiefe') lbl.textContent = 'Tiefe';
+        if(alt && alt.textContent !== String(t)) alt.textContent = String(t);
+      }
       if(statEl){
         const ein = evaCanBoard() || harborSubNear();
         const s = ein ? 'Y: einsteigen' : '';
@@ -1083,6 +1216,7 @@ const ANLEITUNG = [
     ['L3 (halten) + L-Stick', 'Moonwalk'],
     ['X', 'Silly Dance'],
     ['Y', 'Butterfly Twirl · am Fahrzeug: einsteigen'],
+    ['im Wasser', 'L-Stick schwimmen · RT tauchen · LT auftauchen'],
     ['D-Pad ↑', 'diese Anleitung (Pause)'],
     ['D-Pad ←', 'aktuelle Aufgabe (Pause)'],
     ['D-Pad ↓', 'Ton an/aus (auch die Stimme)'],
@@ -1094,7 +1228,8 @@ const ANLEITUNG = [
     ['B', 'Aerial Evade'],
     ['M (halten) + Pfeile', 'Moonwalk'],
     ['X / Y', 'Silly Dance / Butterfly Twirl'],
-    ['Y am Fahrzeug', 'einsteigen'],
+    ['Y am Fahrzeug', 'einsteigen (U-Boot: im gelben Ring am Strand)'],
+    ['im Wasser', 'Pfeile schwimmen · E tauchen · Q auftauchen'],
     ['H / T', 'Anleitung / Aufgabe (Pause)'],
     ['N', 'Ton an/aus'],
   ]],
@@ -1199,6 +1334,7 @@ window.STORY_HOOK = function(){
   hookHud();
   hookHilfe();
   hookTon();
+  hookSchwimmen();
   hookLoop();
 };
 window.STORY_START = function(){
