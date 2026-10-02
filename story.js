@@ -423,9 +423,18 @@ function untertitel(text){
 // Umschalten faengt nicht von vorne an: die Ansage laeuft weiter und setzt an dem Wort fort, an dem
 // sie gerade ist – gemeldet von der Stimme (onboundary), sonst nach dem Sprechtempo geschaetzt.
 const reden = new Set();
-const ZEICHEN_PRO_S = 14;      // Sprechtempo bei rate 1.0 (fuer Schaetzung und Untertitel-Takt)
+const ZEICHEN_PRO_S = 14;
+// Stimme nach Rolle: 'pilot' = maennlich, sonst ('funk') weiblich. Gewaehlt wird nach Namen, weil die
+// Browser kein Geschlecht melden. Edge bringt zusaetzlich natuerliche Online-Stimmen mit.
+const STIMME_M = /Conrad|Killian|Florian|Stefan|Ralf|Kasper|Bernd|Christoph|male|männlich/i;
+const STIMME_W = /Katja|Amala|Seraphina|Louisa|Hedda|Elke|Klarissa|Tanja|Google Deutsch|female|weiblich/i;
+function stimmeFuer(rolle){
+  const de = window.speechSynthesis.getVoices().filter(v => /^de/i.test(v.lang));
+  const bevorzugt = (re) => de.filter(v => re.test(v.name)).sort((a, b) => (a.localService ? 1 : 0) - (b.localService ? 1 : 0))[0];
+  return (rolle === 'pilot' ? bevorzugt(STIMME_M) : bevorzugt(STIMME_W)) || de[0] || null;
+}      // Sprechtempo bei rate 1.0 (fuer Schaetzung und Untertitel-Takt)
 function satzDauer(s){ return 1200 + s.length / ZEICHEN_PRO_S * 1000; }   // ms, Untertitel-Takt
-function sprich(saetze, fertig){
+function sprich(saetze, fertig, rolle){
   let i = -1, done = false, timer = null, utt = null;
   let laut = false, pos0 = 0, t0 = 0, bPos = null;     // aktueller Satz: ab Zeichen pos0 seit t0
   const synth = window.speechSynthesis;
@@ -449,8 +458,10 @@ function sprich(saetze, fertig){
     if(laut){
       untertitel('');
       const u = utt = new SpeechSynthesisUtterance(rest);
-      const stimme = synth.getVoices().find(v => /^de/i.test(v.lang));
+      const stimme = stimmeFuer(rolle);
       u.lang = 'de-DE'; if(stimme) u.voice = stimme; u.rate = 1.0;
+      // ohne maennliche Stimme klingt der Pilot wenigstens tiefer
+      u.pitch = rolle === 'pilot' && !(stimme && STIMME_M.test(stimme.name)) ? 0.75 : 1.0;
       u.onboundary = e => { if(utt === u) bPos = p + (e.charIndex || 0); };
       u.onend = u.onerror = () => { if(utt === u) naechster(); };
       synth.speak(u);
@@ -498,42 +509,73 @@ function hookTon(){
 }
 
 // ---- Startbildschirm -------------------------------------------------------------------------
+// Startbildschirm: Auswahl "Neues Spiel" oder (zum Testen) direkt Etappe 2..6.
+// Linker Stick / Pfeile links-rechts waehlen, A / Enter / Leertaste / Klick startet.
 function startbildschirm(weiter){
   const el = document.createElement('div');
   el.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;'
     + 'justify-content:center;background:rgba(0,0,0,.55);color:#fff;font-family:system-ui,sans-serif;'
-    + 'z-index:30;cursor:pointer;text-align:center;';
+    + 'z-index:30;text-align:center;user-select:none;';
+  const OPT = [{ n: 1, t: 'Neues Spiel' }, { n: 2, t: 'E2' }, { n: 3, t: 'E3' }, { n: 4, t: 'E4' }, { n: 5, t: 'E5' }, { n: 6, t: 'E6' }];
   el.innerHTML = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>'
-    + '<div style="font-size:20px;margin-top:18px;opacity:.85">Klicken oder Taste drücken zum Starten</div>'
-    // TEST: direkt zu einer Etappe springen (Etappe 1 = normaler Start, ab 2 mit Globus-Reise)
-    + '<div id="etappenwahl" style="margin-top:46px;font-size:13px;opacity:.75">Test: direkt zu Etappe'
-    + '<div style="display:flex;gap:8px;justify-content:center;margin-top:8px">'
-    + [1, 2, 3, 4, 5, 6].map(n => '<button data-etappe="' + n + '" style="width:40px;height:34px;border-radius:8px;'
-      + 'border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;font:600 16px system-ui;'
-      + 'cursor:pointer">' + n + '</button>').join('') + '</div></div>';
+    + '<div style="display:flex;gap:10px;justify-content:center;margin-top:34px">'
+    + OPT.map((o, i) => '<button data-i="' + i + '" style="min-width:' + (i ? 54 : 170) + 'px;height:44px;border-radius:10px;'
+      + 'border:2px solid rgba(255,255,255,.45);background:rgba(255,255,255,.1);color:#fff;font:600 18px system-ui;'
+      + 'cursor:pointer;transition:all .12s">' + o.t + '</button>').join('') + '</div>'
+    + '<div style="font-size:14px;margin-top:16px;opacity:.7">Linker Stick / ← → wählen · A / Enter starten'
+    + '<br><span style="font-size:12px;opacity:.8">E2–E6: Test – direkt zur Etappe</span></div>';
   document.body.appendChild(el);
+  const knoepfe = [...el.querySelectorAll('button')];
+  let wahl = 0;
+  function zeige(){
+    knoepfe.forEach((b, i) => {
+      const an = i === wahl;
+      b.style.background = an ? '#ffd23f' : 'rgba(255,255,255,.1)';
+      b.style.color = an ? '#1a1a1a' : '#fff';
+      b.style.borderColor = an ? '#ffd23f' : 'rgba(255,255,255,.45)';
+      b.style.transform = an ? 'scale(1.08)' : 'none';
+    });
+  }
+  zeige();
   let los = false;
-  function start(e, etappe){
-    if(e && e.stopPropagation) e.stopPropagation();
+  function start(){
     if(los) return; los = true;
     el.remove();
-    window.removeEventListener('keydown', start, true);
+    window.removeEventListener('keydown', taste, true);
     story.ton = true;
     story.gestartet = true;
     if(!soundOn) toggleSound();      // die Geste erlaubt jetzt Audio: Ton an (D-Pad runter / N schaltet um)
-    if(etappe && etappe > 1){ springeZu(etappe); return; }
+    const n = OPT[wahl].n;
+    if(n > 1){ springeZu(n); return; }
     weiter();
   }
-  el.querySelectorAll('button[data-etappe]').forEach(b => b.addEventListener('pointerdown', (e) => {
-    e.stopPropagation(); start(e, +b.dataset.etappe);
-  }));
-  el.addEventListener('pointerdown', start);
-  window.addEventListener('keydown', start, true);
-  // Gamepad: jede Taste startet
+  function schritt(d){ wahl = (wahl + d + OPT.length) % OPT.length; zeige(); }
+  function taste(e){
+    if(los) return;
+    if(e.code === 'ArrowRight' || e.code === 'KeyD'){ e.preventDefault(); e.stopPropagation(); schritt(1); return; }
+    if(e.code === 'ArrowLeft'  || e.code === 'KeyA'){ e.preventDefault(); e.stopPropagation(); schritt(-1); return; }
+    if(e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter'){ e.preventDefault(); e.stopPropagation(); start(); }
+  }
+  window.addEventListener('keydown', taste, true);
+  knoepfe.forEach((b, i) => {
+    b.addEventListener('pointerenter', () => { wahl = i; zeige(); });
+    b.addEventListener('pointerdown', (e) => { e.stopPropagation(); wahl = i; zeige(); start(); });
+  });
+  // Gamepad: Stick/D-Pad links-rechts waehlen, A startet (Flanken, damit nichts durchrutscht)
+  let prevA = true, prevL = true, prevR = true;       // erst nach dem Loslassen zaehlen
   (function pad(){
     if(los) return;
     for(const gp of (navigator.getGamepads ? navigator.getGamepads() : [])){
-      if(gp && gp.buttons.some(b => b.pressed)){ start(); return; }
+      if(!gp) continue;
+      const x = gp.axes[0] || 0;
+      const a = !!(gp.buttons[0] && gp.buttons[0].pressed);
+      const l = x < -0.5 || !!(gp.buttons[14] && gp.buttons[14].pressed);
+      const r = x >  0.5 || !!(gp.buttons[15] && gp.buttons[15].pressed);
+      if(l && !prevL) schritt(-1);
+      if(r && !prevR) schritt(1);
+      if(a && !prevA){ start(); return; }
+      prevA = a; prevL = l; prevR = r;
+      break;
     }
     requestAnimationFrame(pad);
   })();
@@ -550,6 +592,7 @@ function springeZu(n){
   story.e1aufraeumen && story.e1aufraeumen();
   story.reise = [];
   for(let i = 0; i < n - 1; i++) story.reise.push(i);     // 0 .. n-2 schon besucht
+  story.e1weg = story.e1weg || 'uboot';
   story.tage = (n - 2) * 4;                                // die Etappen vor der letzten Reise
   story.etappe = n - 1;
   story.phase = 'reise';
@@ -561,6 +604,7 @@ function springeZu(n){
   });
 }
 story.springeZu = springeZu;
+story.sprich = sprich;
 
 // ---- Schule ----------------------------------------------------------------------------------
 // Einfaches Schulgebaeude (kein Modell vorhanden). Steht mit der Tuer zum Strand.
@@ -1414,6 +1458,8 @@ story.e1aufraeumen = function(){
 
 // Etappe 1 geschafft: Globus-Reise nach Etappe 2, dann (vorerst) Platzhalter
 function etappeEnde(tage, wie){
+  if(story.etappe === 1) story.e1weg = story.phase === 'mars' || mars.phase === 'fertig' ? 'mars'
+    : (ub.fotos && Object.keys(ub.fotos).length >= 2 ? 'uboot' : 'xwing');
   story.phase = 'reise';
   story.verdreht = false;                  // Kurzschluss endet mit der Etappe
   const text = tageVergangen(tage) + ' (' + wie + ') · noch ' + (42 - story.tage) + ' von 42 Tagen';
@@ -1436,15 +1482,25 @@ function platzhalter(text){
 // ---- Mars-Trip (Startsequenz verpasst) -------------------------------------------------------
 // Nach dem Autostart: im All, Blick zum Mars. Hinfliegen, landen, aussteigen, den leuchtenden Stein
 // holen (Y), wieder einsteigen (ohne Startsequenz) und zurueck zur Erde -> 7 Tage.
-// Etappe 2 (X-Wing-Falle verpasst): Autopilot zum Mond. Kenji kann inzwischen fliegen -> kurz.
-const MOND_TEXT = [
-  'Da war wohl ein Kurzschluss in der Steuerung. Der Autopilot hat übernommen und bringt dich zum Mond.',
-  'Die Steuerung funktioniert jetzt wieder normal.',
-  'Bring uns ein Stück Mondgestein mit, dann fliegen wir dich weiter. Bis in einer Woche!',
+// Etappe 2 (X-Wing-Falle verpasst): Autopilot zum Mond. Text je nach Etappe 1:
+// - war schon auf dem Mars: kurz ("Du schon wieder ...")
+// - U-Boot oder Startsequenz geschafft: wie der Mars-Text, nur fuer den Mond (mit Flugerklaerung)
+const MOND_KURZ = [
+  'Du schon wieder. Wohl immer noch ein wenig nervös, was?',
+  'Diesmal war es aber nicht deine Schuld. Der Flieger hatte einen Kurzschluss, deshalb war die Startsequenz nicht wie gewohnt.',
+  'Wir haben das wieder automatisch geregelt. Alles andere kennst du schon.',
+  'Der Unterschied ist: Diesmal fliegst du zum Mond und holst von dort einen Stein. Bis in einer Woche dann!',
 ];
+function mondLang(){
+  return [
+    'Hallo. Da hatte der Flieger wohl einen Kurzschluss, deshalb war die Startsequenz nicht wie gewohnt.',
+    'Aber keine Sorge, wir haben die Startsequenz und den Start automatisch durchgeführt.',
+    'Zur Erinnerung: Du hast dich freiwillig gemeldet, als erster Mensch zum Mond zu fliegen und als Beweis einen Stein mitzubringen.',
+  ].concat(MARS_TEXT.slice(3, 9)).concat([MARS_TEXT[9]]);   // Flugerklaerung + Schluss wie beim Mars
+}
 const TRIP = {
   mars: { text: () => MARS_TEXT, ziel: 'Mars', stein: 'Stein', farbe: 0xff7a2a, glanz: 0xff4400 },
-  moon: { text: () => MOND_TEXT, ziel: 'Mond', stein: 'Mondgestein', farbe: 0xd8d8e6, glanz: 0x8888aa },
+  moon: { text: () => story.e1weg === 'mars' ? MOND_KURZ : mondLang(), ziel: 'Mond', stein: 'Stein', farbe: 0xd8d8e6, glanz: 0x8888aa },
 };
 function tripOrt(){ return story.etappe >= 2 ? 'moon' : 'mars'; }
 const MARS_TEXT = [
