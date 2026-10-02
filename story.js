@@ -1227,7 +1227,7 @@ function hookRadar(){
   };
   const activeOrig = activeTarget;
   activeTarget = function(){
-    if(story.etappe === 1 && !eva && locale === 'earth')      // keine Brandherde o. Ae. aus der Engine
+    if(story.etappe <= 2 && !eva && locale === 'earth')       // keine Brandherde o. Ae. aus der Engine
       return story.ziel ? { x: story.ziel.x, z: story.ziel.z, col: COL_ZIEL } : null;
     return activeOrig();
   };
@@ -1384,20 +1384,25 @@ function pfHud(){
     + (pf.kurzschluss ? '<span title="" style="margin-left:8px;padding:0 6px;border-radius:4px;background:#e03c31;'
         + 'box-shadow:0 0 10px #e03c31;font-size:15px">⇄</span>' : '')
     + '<span style="margin-left:auto;font-family:monospace;font-size:20px">'
-    + Math.max(0, PF_ZEIT - pf.t).toFixed(1) + '</span></div>';
+    + (pf.ohneZeit ? '' : Math.max(0, PF_ZEIT - pf.t).toFixed(1)) + '</span></div>';
   // Keine Anleitung: wer die Startsequenz nicht kennt, soll scheitern (Etappe 1). Nur Leuchte + Zeit.
   pf.el.innerHTML = h;
   pf.el.style.display = pf.aktiv || pf.gruen ? '' : 'none';
 }
 
-function pfStart(){
-  pf.kurzschluss = story.etappe >= 2;          // Etappe 2: die X-Wing-Falle
+// opts: { kurzschluss, ohneZeit, still, danach(ok) } – ohne opts wie im X-Wing (Etappe 2 = Kurzschluss)
+function pfStart(opts){
+  opts = opts || {};
+  pf.kurzschluss = opts.kurzschluss !== undefined ? opts.kurzschluss : story.etappe >= 2;   // Etappe 2: X-Wing-Falle
+  pf.ohneZeit = !!opts.ohneZeit;
+  pf.danach = opts.danach || null;
   pf.aktiv = true; pf.t = 0; pf.schritt = 0; pf.gruen = false;
   gesehen(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz');
   hinweis('');
-  sprich(['Bitte Startsequenz durchführen!']);
+  if(!opts.still) sprich(['Bitte Startsequenz durchführen!']);
   pfHud();
 }
+story.pfStart = pfStart;
 
 // Eingaben roh lesen (unabhaengig davon, was die Engine daraus macht)
 function pfEingabe(inp){
@@ -1439,12 +1444,19 @@ function pfUpdate(dt, inp){
   } else pfSchritt(e);
   pfHud();
   if(pf.gruen){ pfFertig(true); return; }
-  if(pf.t >= PF_ZEIT) pfFertig(false);
+  if(!pf.ohneZeit && pf.t >= PF_ZEIT) pfFertig(false);
 }
 
 function pfFertig(ok){
   pf.aktiv = false;
   story.preflightZeit = ok ? pf.t : null;
+  if(pf.danach){                                   // eigener Ablauf (z. B. Transall-Flugschule)
+    const f = pf.danach; pf.danach = null;
+    if(ok) neueZeit(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz', pf.t);
+    setTimeout(() => { pf.gruen = false; pfHud(); }, 2500);
+    f(ok);
+    return;
+  }
   if(ok){
     neueZeit(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz', pf.t);   // still speichern
     sprich(['Startsequenz abgeschlossen. Guten Flug!']);
@@ -1508,7 +1520,8 @@ function absturzEnde(){
   if(mars.phase) mars.phase = 'fertig';
   hinweis('');
   state.vel.set(0, 0, 0);
-  etappeEnde(7, story.phase === 'mars' ? 'Absturz auf dem ' + TRIP[mars.ort || 'mars'].ziel + '-Trip' : 'nach Absturz');
+  etappeEnde(7, story.phase === 'mars' ? 'Absturz auf dem ' + TRIP[mars.ort || 'mars'].ziel + '-Trip'
+    : (story.phase === 'flugschule' ? 'Absturz mit der Transall' : 'nach Absturz'));
 }
 
 story.e1aufraeumen = function(){
@@ -1918,7 +1931,7 @@ function hookEinsteigen(){
   const resetOrig = resetPlane;
   resetPlane = function(){
     if(pf.aktiv || auto.aktiv || story.phase === 'platzhalter' || story.phase === 'reise') return;
-    if(story.etappe <= 2 && (story.phase === 'mars' || story.phase === 'freiflug') && state.crashed){
+    if(story.etappe <= 2 && (story.phase === 'mars' || story.phase === 'freiflug' || story.phase === 'flugschule') && state.crashed){
       absturzEnde();
       return;
     }

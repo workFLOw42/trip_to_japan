@@ -317,21 +317,27 @@ function updateE2Marken(){
 
 // ---- Transall-Flugschule ---------------------------------------------------------------------
 // Ablauf (story.phase = 'flugschule', fs.schritt):
-//   erklaeren  – am Boden: Pilot erklaert Startsequenz, Kurzschluss-Symbol, Abwurf-Physik
+//   erklaeren  – am Boden: Pilot erklaert Startsequenz, Kurzschluss-Symbol, Start, Hoehe, Abwurf, Landung
 //   frage      – am Boden: "Du kannst doch fliegen?" [JA] / [NEIN] (Auswahl wie im Startmenue)
 //                NEIN -> "Fuer Anfaenger ist das nichts, steig aus" -> 7 Tage -> Etappe 3
-//   reise      – JA: Autopilot startet, steigt auf 300 m, fliegt erst einen Bogen weg von der Oase
-//   (folgt: uebernehmen, abwurf)
+//   sequenz    – JA: Startsequenz OHNE Zeitlimit und ohne Kurzschluss (sicherer Weg, kein Scheitern)
+//   flug       – Kenji fliegt selbst zur Oase (Radar), Hoehenband 270-330 m, B = Kiste abwerfen
+//   abwurf     – Kiste faellt (voller Schwung, kurz frei, dann Schirm); Treffer +-50 m -> 4 Tage, sonst 7
+// Landen muss man nicht – der Pilot erklaert es nur.
 const FS_HOEHE = 300;          // m ueber Grund
 const FS_TEXT = [
   'Hallo, willkommen an Bord! Ich bin dein Pilot. Wir bringen Hilfsgüter zu einer Oase in der Wüste. Pass gut auf, dann lernst du was.',
   'Vor jedem Flug machen wir die Startsequenz: Bremse halten, Ruder links und rechts, Nase hoch und runter, Bremse los, Gas geben.',
   'Leuchtet dabei dieses rote Symbol mit den zwei Pfeilen, hat der Flieger einen Kurzschluss. Dann ist alles vertauscht, und du musst umgekehrt steuern.',
+  'Zum Starten gibst du nach der Startsequenz Vollgas. Ab etwa hundertfünfzig Kilometern pro Stunde ziehst du die Nase sanft hoch.',
   'Wir fliegen auf dreihundert Metern. Halte die Höhe zwischen zweihundertsiebzig und dreihundertdreißig.',
   'Die Kisten fallen mit unserem Schwung nach vorne. Je schneller wir sind, desto früher musst du sie abwerfen.',
   'Merk dir: Schub in Prozent mal fünf gleich Meter vor dem Ziel. Bei sechzig Prozent wirfst du also dreihundert Meter vorher ab, bei hundert Prozent fünfhundert Meter.',
+  'Abgeworfen wird mit B. Die Entfernung zur Oase steht in der Anzeige.',
+  'Und zum Landen: Gas auf etwa sechzig Prozent, langsam sinken, die Nase leicht oben halten. Nicht schneller als zweihundert Kilometer pro Stunde, und die Flügel gerade. Kurz vor dem Boden Gas weg, aufsetzen und bremsen.',
 ];
 const fsch = story.flugschule = { schritt: null, rede: null, frageEl: null, symbolEl: null };
+fsch.zurFrage = () => { if(fsch.rede) fsch.rede.abbrechen(); fsSymbol(false); fsFrage(); };   // Erklaerung ueberspringen
 
 function fsEinsteigen(){
   story.phase = 'flugschule';
@@ -350,10 +356,11 @@ function fsEinsteigen(){
   tp.weg = true;
   snapCamera();
   if(story.hinweis) story.hinweis('');
+  kiste = null;
   fsch.rede = story.sprich(FS_TEXT, () => fsFrage(), 'pilot');
   // waehrend der Kurzschluss-Erklaerung das Symbol kurz zeigen
-  setTimeout(() => fsSymbol(true), 9000);
-  setTimeout(() => fsSymbol(false), 17000);
+  setTimeout(() => { if(fsch.schritt === 'erklaeren') fsSymbol(true); }, 11000);
+  setTimeout(() => fsSymbol(false), 20000);
 }
 
 function fsSymbol(an){
@@ -404,9 +411,13 @@ function fsAntwort(){
     }, 'pilot');
     return;
   }
-  fsch.schritt = 'reise';
-  fsch.startT = performance.now();
-  story.sprich(['Super, dann los!'], null, 'pilot');
+  fsch.schritt = 'sequenz';
+  story.sprich(['Super! Dann zeig mal, was du kannst. Erst die Startsequenz.'], null, 'pilot');
+  story.pfStart({ kurzschluss: false, ohneZeit: true, still: true, danach: () => {
+    fsch.schritt = 'flug';
+    story.ziel = { x: OASE.x, z: OASE.z };              // roter Punkt im Radar
+    story.sprich(['Sehr gut! Jetzt Vollgas und ab zur Oase. Der rote Punkt im Radar zeigt dir den Weg.'], null, 'pilot');
+  }});
 }
 // Eingaben fuer die Frage: Pfeile/Stick links-rechts, A/Enter/Leertaste – als Tastendruck-Ereignis
 // (Capture-Phase, stoppt die Weitergabe), damit nichts in die Flugsteuerung durchrutscht.
@@ -433,35 +444,99 @@ function fsFrageEingabe(){
   fsPrev = { l, r, a };
 }
 
-// Autopilot: Start, Steigflug auf FS_HOEHE, Kurs auf die Oase. Ersetzt die Spielereingabe.
-function fsAutopilot(dt){
-  const v = state.vel.length();
-  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);
-  const agl = state.pos.y - duene(state.pos.x, state.pos.z);
-  const e = new THREE.Euler().setFromQuaternion(state.quat, 'YXZ');
-  state.throttle = agl < FS_HOEHE - 40 ? 1.0 : 0.75;
-  // Nase: bis 45 m/s am Boden waagerecht, dann Steigwinkel nach Hoehenfehler (max ~12 Grad)
-  let sollPitch = 0;
-  if(v > 45 || !state.onGround) sollPitch = Math.max(-0.12, Math.min(0.2, (FS_HOEHE - agl) * 0.004));
-  const pitchIn = Math.max(-1, Math.min(1, (sollPitch - e.x) * 3));
-  // Kurs: erst ~40 s einen Bogen nach Osten (weg von der Oase, Zeit fuer die Uebernahme), dann zur
-  // Oase drehen (erst ab 60 m Hoehe), Schraeglage begrenzt
-  let rollIn = 0;
-  if(agl > 60){
-    const weg = (performance.now() - (fsch.startT || 0)) / 1000 < 40;
-    const zielX = weg ? 4000 : OASE.x, zielZ = weg ? 600 : OASE.z;
-    const zx = zielX - state.pos.x, zz = zielZ - state.pos.z;
-    const soll = Math.atan2(-zx, -zz);
-    let d = soll - e.y; while(d > Math.PI) d -= 2 * Math.PI; while(d < -Math.PI) d += 2 * Math.PI;
-    // gemessen: roll +1 -> Schraeglage z negativ, Kurs (yaw) sinkt = Rechtskurve.
-    // d > 0 heisst "yaw muss steigen" (links) -> Schraeglage z positiv -> roll negativ.
-    const sollZ = Math.max(-0.45, Math.min(0.45, d * 1.2));
-    rollIn = Math.max(-1, Math.min(1, -(sollZ - e.z) * 2.5));
+// ---- Flug-HUD: Hoehe im Band 270-330 m, Entfernung zur Oase, Schub und Abwurfpunkt ---------
+const FS_BAND = [270, 330];
+const FS_TREFFER = 50;         // m Toleranz um die Oasenmitte
+let fsHudEl = null;
+function fsHud(){
+  if(!fsHudEl){
+    fsHudEl = document.createElement('div');
+    fsHudEl.style.cssText = 'position:absolute;left:16px;top:62%;transform:translateY(-50%);padding:10px 14px;'
+      + 'border-radius:10px;background:rgba(0,0,0,.55);color:#fff;font:15px/1.6 system-ui,sans-serif;min-width:200px;z-index:20;';
+    document.body.appendChild(fsHudEl);
   }
-  return { pitch: pitchIn, roll: rollIn, yaw: 0 };
+  const agl = state.pos.y - duene(state.pos.x, state.pos.z);
+  const imBand = agl >= FS_BAND[0] && agl <= FS_BAND[1];
+  const dist = Math.hypot(OASE.x - state.pos.x, OASE.z - state.pos.z);
+  const schub = Math.round(Math.max(0, state.throttle) * 100);
+  const farbe = imBand ? '#2ecc40' : (Math.abs(agl - 300) < 60 ? '#ffb000' : '#e03c31');
+  fsHudEl.innerHTML = '<div style="font-weight:700;margin-bottom:4px">📦 Abwurf Oase</div>'
+    + '<div>Höhe <b style="color:' + farbe + '">' + Math.round(agl) + ' m</b> <span style="opacity:.7">(270–330)</span></div>'
+    + '<div>Oase <b>' + Math.round(dist) + ' m</b></div>'
+    + '<div>Schub <b>' + schub + ' %</b></div>'
+    + '<div style="opacity:.75;font-size:13px;margin-top:4px">' + (fsch.schritt === 'flug' ? 'B: Kiste abwerfen' : 'Kiste fällt …') + '</div>';
+  fsHudEl.style.display = '';
+}
+function fsHudAus(){ if(fsHudEl) fsHudEl.style.display = 'none'; }
+
+// ---- Kiste: voller Schwung, kurz freier Fall, dann Schirm (von 300 m ~7 s) -------------------
+// Abgestimmt mit C:\tmp\sfg\abwurf_sim.js: Weite ~ Schub% * 5 m, Rand des Hoehenbands bei Vollgas
+// ~50 m daneben – Hoehe halten zaehlt.
+const KISTE_FREI = 1.6, KISTE_SINK = 52;
+let kiste = null;
+function kisteAbwerfen(){
+  if(fsch.schritt !== 'flug') return;
+  fsch.schritt = 'abwurf';
+  const back = new THREE.Vector3(0, 0, 1).applyQuaternion(state.quat);
+  const g = makeCrate();
+  g.position.set(state.pos.x + back.x * 6, state.pos.y - 2, state.pos.z + back.z * 6);
+  g.children.forEach((o, i) => { if(i > 0) o.visible = false; });     // Schirm erst nach dem freien Fall
+  scene.add(g);
+  kiste = { g, vx: state.vel.x, vz: state.vel.z, vy: Math.min(0, state.vel.y), t: 0, gelandet: false };
+  story.ziel = null;
+}
+function updateKiste(dt){
+  if(!kiste) return;
+  const k = kiste;
+  if(k.gelandet){
+    k.liegt += dt;
+    if(k.liegt > 3.5 && !k.fertig){ k.fertig = true; fsErgebnis(k.abstand); }
+    return;
+  }
+  k.t += dt;
+  if(k.t < KISTE_FREI) k.vy -= 9.81 * dt;
+  else {
+    k.g.children.forEach(o => { o.visible = true; });
+    k.vy += ((-KISTE_SINK) - k.vy) * Math.min(1, 3 * dt);
+  }
+  k.g.position.x += k.vx * dt; k.g.position.z += k.vz * dt; k.g.position.y += k.vy * dt;
+  const boden = duene(k.g.position.x, k.g.position.z);
+  if(k.g.position.y <= boden + 1.5){
+    k.g.position.y = boden + 1.5;
+    k.gelandet = true; k.liegt = 0;
+    k.abstand = Math.hypot(k.g.position.x - OASE.x, k.g.position.z - OASE.z);
+    story.hinweis && story.hinweis('📦 ' + Math.round(k.abstand) + ' m von der Oasenmitte');
+  }
+}
+function fsErgebnis(abstand){
+  fsHudAus();
+  const treffer = abstand <= FS_TREFFER;
+  story.sprich([treffer ? (abstand < 20 ? 'Perfekt! Mitten in die Oase!' : 'Gut gemacht! Die Kiste ist angekommen.')
+                        : 'Oh, daneben. Die Leute müssen die Kiste jetzt suchen.'], null, 'pilot');
+  setTimeout(() => {
+    if(story.hinweis) story.hinweis('');
+    story.etappeEnde(treffer ? 4 : 7, treffer ? 'Kiste getroffen' : 'Kiste daneben');
+  }, 4000);
+}
+function fsFlug(dt){
+  fsHud();
+  updateKiste(dt);
+}
+// B = Abwurf (Tastatur B per Tastendruck-Ereignis – ein kurzer Tipp liegt sonst evtl. zwischen zwei
+// Bildern –, Controller B per Flanke)
+addEventListener('keydown', (e) => { if(e.code === 'KeyB' && !e.repeat && e2() && story.phase === 'flugschule') kisteAbwerfen(); });
+let fsPrevB = true;
+function fsAbwurfEingabe(){
+  if(fsch.schritt !== 'flug') { fsPrevB = true; return; }
+  const gp = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
+  const b = !!(gp && gp.buttons[1] && gp.buttons[1].pressed);
+  if(b && !fsPrevB) kisteAbwerfen();
+  fsPrevB = b;
 }
 
 function hookFlugschule(){
+  const dropOrig = dropCrate;
+  dropCrate = function(){ if(e2() && story.phase === 'flugschule') return; return dropOrig.apply(this, arguments); };
   // Y an der Transall: einsteigen in die Flugschule
   const boardYOrig = evaBoardY;
   evaBoardY = function(){
@@ -476,10 +551,9 @@ function hookFlugschule(){
       state.vel.set(0, 0, 0); state.throttle = 0;
       return;
     }
-    if(e2() && story.phase === 'flugschule' && fsch.schritt === 'reise'){
-      return physOrig.call(this, dt, fsAutopilot(dt));
-    }
-    return physOrig.apply(this, arguments);
+    const r = physOrig.apply(this, arguments);
+    if(e2() && story.phase === 'flugschule' && (fsch.schritt === 'flug' || fsch.schritt === 'abwurf')) fsFlug(dt);
+    return r;
   };
 }
 function transallNah(){
@@ -493,7 +567,7 @@ story.transallNah = transallNah;
 function updateE2(dt){
   updateWuesteSound(dt || 0);
   if(!e2()) return;
-  if(story.phase === 'flugschule') fsFrageEingabe();
+  if(story.phase === 'flugschule'){ fsFrageEingabe(); fsAbwurfEingabe(); }
   updateE2Marken();
   for(const name of Object.keys(PARK)){
     const p = PARK[name];
