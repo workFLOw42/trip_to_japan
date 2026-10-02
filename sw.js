@@ -1,7 +1,12 @@
 /* Reise nach Japan – Service Worker (Offline-Cache)
-   Die Version zaehlt der pre-commit-Hook (tools/pre-commit) automatisch hoch, sobald sich eine
-   gecachte Datei aendert. Neue Version -> alter Cache wird verworfen, alles frisch geladen. */
-const CACHE = 'reise-nach-japan-v12';
+   Zwei Caches:
+   - CACHE (Code, klein): Version zaehlt tools/commit.ps1 bei jeder Aenderung am Spiel hoch. Bei einer
+     neuen Version wird der Code frisch geholt – am HTTP-Cache des Browsers vorbei (GitHub Pages
+     schickt max-age=600, sonst kaeme bis zu 10 min lang die alte Datei in den neuen Cache).
+   - MODELLE (gross, > 100 MB *_glb.js): eigene Version, zaehlt nur hoch, wenn sich ein Modell
+     aendert. So muss nicht bei jedem Update alles neu geladen werden. */
+const CACHE   = 'reise-nach-japan-v13';
+const MODELLE = 'reise-nach-japan-modelle-v1';
 
 /* Kern-Dateien: sofort bei der Installation cachen. */
 const CORE = [
@@ -18,14 +23,13 @@ const CORE = [
   './icon-512.png',
   './icon-maskable-512.png'
 ];
-
-/* Grosse Modelle (*_glb.js, zusammen > 100 MB) NICHT vorab, sondern beim ersten Laden cachen.
-   Nach einem kompletten Durchlauf mit Netz ist das Spiel damit offline spielbar. */
+const istModell = (url) => /_glb\.js$/.test(new URL(url).pathname);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
-      .then((c) => c.addAll(CORE))
+      // cache:'reload' = am HTTP-Cache vorbei, wirklich die neue Datei vom Server
+      .then((c) => c.addAll(CORE.map((u) => new Request(u, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });
@@ -33,22 +37,23 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== MODELLE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
-/* Cache-first mit Nachfuellen. */
+/* Cache-first mit Nachfuellen (Modelle in ihren eigenen Cache). */
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
+  const ziel = istModell(req.url) ? MODELLE : CACHE;
   event.respondWith(
-    caches.match(req).then((cached) => {
+    caches.open(ziel).then((c) => c.match(req, { ignoreSearch: true })).then((cached) => {
       if (cached) return cached;
       return fetch(req).then((res) => {
         if (res && res.ok && res.type === 'basic') {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
+          caches.open(ziel).then((c) => c.put(req, copy));
         }
         return res;
       }).catch(() => cached);

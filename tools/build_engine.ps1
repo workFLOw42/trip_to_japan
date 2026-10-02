@@ -54,7 +54,6 @@ $out = ($head -join "`n") + "`n" +
   '<script src="kenji_glb.js"></script>' + "`n" +
   '<script src="story.js"></script>' + "`n" +
   '<script src="engine/engine.js"></script>' + "`n" +
-  "<script>if('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service Worker:', e)));</script>`n" +
   "</body>`n</html>`n"
 [IO.File]::WriteAllText((Join-Path $root 'index.html'), $out, $utf8)
 "engine.js: $([math]::Round($engine.Length/1KB)) KB, $($assets.Count) Assets kopiert, index.html erzeugt"

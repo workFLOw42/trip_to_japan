@@ -13,6 +13,72 @@ const story = window.STORY = {
   tage: 0,          // vergangene Tage (6 Wochen = 42 Tage Budget)
 };
 
+// ---- Neue Version erkennen (Service Worker) --------------------------------------------------
+// Der Browser fragt sw.js am HTTP-Cache vorbei ab (updateViaCache 'none'), beim Start und dann jede
+// Minute. Liegt eine neue Version bereit, laedt die Seite am Startbildschirm sofort neu; mitten im
+// Spiel nur ein Hinweis – ein laufendes Spiel wird nicht abgebrochen.
+let neueVersion = false;
+function versionNeuLaden(){
+  if(story.gestartet){ zeigeUpdateHinweis(); return; }
+  location.reload();
+}
+function zeigeUpdateHinweis(){
+  if(document.getElementById('updatehinweis')) return;
+  const el = document.createElement('div'); el.id = 'updatehinweis';
+  el.style.cssText = 'position:absolute;right:16px;bottom:40px;padding:6px 12px;border-radius:8px;'
+    + 'background:rgba(0,0,0,.55);color:#cfe;font:13px system-ui,sans-serif;z-index:40;pointer-events:none;';
+  el.textContent = 'Neue Version bereit – wird beim nächsten Start geladen';
+  document.body.appendChild(el);
+}
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    // Erste Installation: der SW uebernimmt die Seite per clients.claim() – das ist kein Update.
+    // Jede weitere Uebernahme schon.
+    let warSchonGesteuert = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      setInterval(() => reg.update().catch(() => {}), 60000);
+    }).catch((e) => console.warn('Service Worker:', e));
+    // ein neuer SW hat die Seite uebernommen -> neue Version ist aktiv
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if(!warSchonGesteuert){ warSchonGesteuert = true; return; }   // erste Installation: nicht neu laden
+      if(neueVersion) return;
+      neueVersion = true;
+      versionNeuLaden();
+    });
+  });
+}
+
+// ---- Highscores (bleiben im Browser, am Datei-Cache vorbei) ----------------------------------
+// VORBEREITUNG – im Spiel noch nirgends angezeigt oder erwaehnt. Erst wenn das Spiel fertig ist,
+// kommt eine Anzeige dazu, und zwar nur fuer das, was der Spieler schon kennt: wer zum ersten Mal
+// spielt, soll nicht wissen, dass es eine Startsequenz gibt (und von der mit Kurzschluss erst, wenn
+// er so weit war). Dafuer merkt story.gesehen(name), was schon einmal vorkam.
+// localStorage gehoert zur Seite, nicht zum Service-Worker-Cache: es ueberlebt jedes Update und
+// funktioniert offline (gilt pro Geraet/Browser). Gespeichert wird jeweils die beste Zeit.
+const HS_KEY = 'reise-nach-japan-highscores';
+function highscores(){
+  try { return JSON.parse(localStorage.getItem(HS_KEY)) || {}; } catch(e){ return {}; }
+}
+// neueZeit(name, sekunden) -> true, wenn neuer Rekord
+function neueZeit(name, s){
+  const hs = highscores();
+  const alt = hs[name];
+  if(alt !== undefined && alt <= s) return false;
+  hs[name] = Math.round(s * 100) / 100;
+  try { localStorage.setItem(HS_KEY, JSON.stringify(hs)); } catch(e){ return false; }
+  return true;
+}
+story.highscores = highscores;
+const GESEHEN_KEY = 'reise-nach-japan-gesehen';
+function gesehen(name){
+  try {
+    const g = JSON.parse(localStorage.getItem(GESEHEN_KEY)) || {};
+    if(!g[name]){ g[name] = Date.now(); localStorage.setItem(GESEHEN_KEY, JSON.stringify(g)); }
+  } catch(e){}
+}
+story.gesehen = gesehen;
+story.wasGesehen = () => { try { return JSON.parse(localStorage.getItem(GESEHEN_KEY)) || {}; } catch(e){ return {}; } };
+
 // ---- Welt fuer Etappe 1 ----------------------------------------------------------------------
 // Nur die Startinsel. Keine Flugzeugtraeger. Der X-Wing parkt am Strand neben dem U-Boot
 // (statt im Todesstern-Hangar zu starten, so gewuenscht).
@@ -440,6 +506,7 @@ function startbildschirm(weiter){
     el.remove();
     window.removeEventListener('keydown', start, true);
     story.ton = true;
+    story.gestartet = true;
     if(!soundOn) toggleSound();      // die Geste erlaubt jetzt Audio: Ton an (D-Pad runter / N schaltet um)
     weiter();
   }
@@ -1171,6 +1238,7 @@ function pfHud(){
 
 function pfStart(){
   pf.aktiv = true; pf.t = 0; pf.schritt = 0; pf.gruen = false;
+  gesehen(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz');
   hinweis('');
   sprich(['Bitte Startsequenz durchführen!']);
   pfHud();
@@ -1220,6 +1288,7 @@ function pfFertig(ok){
   pf.aktiv = false;
   story.preflightZeit = ok ? pf.t : null;
   if(ok){
+    neueZeit(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz', pf.t);   // still speichern
     sprich(['Startsequenz abgeschlossen. Guten Flug!']);
     setTimeout(() => { pf.gruen = false; pfHud(); }, 2500);
     story.phase = 'freiflug';
