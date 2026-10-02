@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reise nach Japan</title>
+<meta name="theme-color" content="#87b8e8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Reise nach Japan">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #87b8e8; font-family: Arial, sans-serif; }
+  canvas { display: block; }
+  #hud {
+    position: absolute; top: 10px; left: 12px; color: #fff;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.7); font-size: 18px; line-height: 1.5;
+    pointer-events: none; user-select: none;
+  }
+  #big {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    color: #fff; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); font-size: 42px; font-weight: bold;
+    pointer-events: none; user-select: none; text-align: center; opacity: 0; transition: opacity 0.4s;
+  }
+  #hint {
+    position: absolute; bottom: 12px; left: 12px; color: #fff;
+    display: none; gap: 26px;
+    background: rgba(10,25,40,0.72); border-radius: 10px; padding: 12px 16px;
+    font-size: 13px; line-height: 1.55; pointer-events: none; user-select: none;
+  }
+  #hint.show { display: flex; }
+  #hint .hcol { min-width: 210px; }
+  #hint .htitle { font-weight: bold; font-size: 14px; margin-bottom: 5px; color: #cfe; }
+  #hint .hrow { display: flex; justify-content: space-between; gap: 10px; }
+  #hint .hrow span { color: #9cf; white-space: nowrap; }
+  #hint .hrow b { text-align: right; }
+  /* Symbolzeile (Wasser, Pakete, Menschen, Verkehr, X-Wing-Schubphase, Ort) — deutlich groesser */
+  #status { font-size: 30px; line-height: 1.25; letter-spacing: 2px; }
+  #pad { position: absolute; bottom: 12px; left: 12px; color: #cfe;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.7); font-size: 14px; pointer-events: none; user-select: none; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div>Modell: <span id="mdl">XWing</span></div>
+  <div id="altrow"><span id="altlbl">Höhe</span>: <span id="alt">0</span> m</div>
+  <div>Speed: <span id="spd">0</span><span id="spdu"> km/h</span></div>
+  <div><span id="thrlbl">Schub</span>: <span id="thr">0</span><span id="thru"> %</span></div>
+  <div id="status" style="color:#ffd">am Boden</div>
+</div>
+<div id="big"></div>
+<canvas id="radar" width="130" height="130" style="position:absolute;top:12px;right:12px;pointer-events:none;"></canvas>
+<canvas id="gyro" width="130" height="130" style="position:absolute;top:150px;right:12px;pointer-events:none;"></canvas>
+
+<div id="pad">Controller: verbinde & drücke eine Taste …</div>
+<div id="hint">
+  <div class="hcol">
+    <div class="htitle">🎮 Controller</div>
+    <div class="hrow"><span>L-Stick ←→</span><b>Lenken</b></div>
+    <div class="hrow"><span>L-Stick ↕</span><b>Nase hoch/runter</b></div>
+    <div class="hrow"><span>LT / RT</span><b>Rollen — loslassen richtet wieder auf</b></div>
+    <div class="hrow"><span>R-Stick ↕</span><b>Schub 0–100 % (auch im Schlauchboot) · zu Fuß: <b>umsehen</b> (↕ hoch/runter, ←→ herum)</b></div>
+    <div class="hrow"><span>A (halten)</span><b>Bremse / Motor aus</b></div>
+    <div class="hrow"><span>Y</span><b><b>ein- und aussteigen</b> — gelandet aus dem Flieger heraus, draußen wieder hinein · vor einem geparkten Flugzeug, am Rover oder am eigenen Flieger: <b>umsteigen</b></b></div>
+    <div class="hrow"><span>B</span><b>nur noch <b>Aktion</b>: Wasser abwerfen · löschen · Kiste abwerfen · Schleudersitz · im U-Boot getaucht <b>Sonar-Ping</b> · im Weltall Laser · draußen zu Fuß <b>hüpfen</b></b></div>
+    <div class="hrow"><span>D-Pad →</span><b>Modell wechseln</b></div>
+    <div class="hrow"><span>X (halten)</span><b>Boost (100 % Schub)</b></div>
+    <div class="hrow"><span>LB / RB (halten)</span><b>Ansicht von links/rechts</b></div>
+    <div class="hrow"><span>D-Pad ↑</span><b>diese Hilfe an-aus</b></div>
+    <div class="hrow"><span>D-Pad ↓</span><b>Ton an/aus</b></div>
+    <div class="hrow"><span>Start</span><b>Reset</b></div>
+  </div>
+  <div class="hcol">
+    <div class="htitle">⌨️ Tastatur</div>
+    <div class="hrow"><span>← →</span><b>Lenken</b></div>
+    <div class="hrow"><span>↑ ↓</span><b>Nase hoch/runter</b></div>
+    <div class="hrow"><span>Q / E</span><b>Rollen — loslassen richtet wieder auf</b></div>
+    <div class="hrow"><span>W / S</span><b>Schub ±10 %</b></div>
+    <div class="hrow"><span>Leertaste</span><b>Vollgas</b></div>
+    <div class="hrow"><span>C (halten)</span><b>Bremse</b> · <span>X</span> Motor aus</div>
+    <div class="hrow"><span>Shift (halten)</span><b>Boost (100 % Schub)</b></div>
+    <div class="hrow"><span>Y</span><b>ein- und aussteigen</b> · <span>B</span> <b>Aktion / Laser / hüpfen</b></div>
+    <div class="hrow"><span>M</span>Modell wechseln · <span>V</span> Kamera · <span>N</span> Ton</div>
+    <div class="hrow"><span>R</span><b>Reset</b> · <span>H</span> diese Hilfe aus</div>
+  </div>
+  <div class="hcol">
+    <div class="htitle">🎯 Was man machen kann</div>
+    <div class="hrow"><span>🔥 Canadair</span><b>tief übers Wasser = Tank füllen, über dem Feuer B. Sie landet <b>überall</b>: Wasser, Landebahn, Trägerdeck und <b>Wiese</b> — und rollt dort auch</b></div>
+    <div class="hrow"><span>🚤 Feuerwehrboot</span><b>fährt auf dem Meer, liegt im Wasser und nickt mit den Wellen · B = Wasserstrahl nach vorn (bis 160 m), löscht Feuer und brennende Wracks · braucht keinen Tank · Land und Strand sind eine Wand, schräg fährt man daran entlang</b></div>
+    <div class="hrow"><span>🛥️ U-Boot</span><b>liegt am <b>Strand jeder Insel</b> neben dem Feuerwehrboot (und steht als letztes in der Modellauswahl). <b>Y</b> = einsteigen. Pfeil <b>↑ taucht ab</b>, <b>↓ wieder auf</b> — es braucht dazu <b>Fahrt</b>, wie ein Flugzeug. Unten liegen <b>Schiffswracks</b>, Seegras, Korallen und <b>Fischschwärme</b>; bis rund <b>100 m</b> tief. Getaucht <b>B</b> = <b>Sonar-Ping</b>: je näher das nächste Wrack, desto lauter kommt er zurück — und die Periskop-Scheibe zeigt die Wracks als rote Punkte. Es hält die Tiefe von allein und setzt sich nicht auf den Grund. <b>Aussteigen</b>: auftauchen und <b>Y</b> — du sitzt dann im <b>Schlauchboot</b> und kannst herumfahren. Wieder <b>hin</b>? Einfach mit dem Schlauchboot ans U-Boot fahren und es <b>berühren</b></b></div>
+    <div class="hrow"><span>📦 Transall</span><b>auf der <b>Landebahn</b> oder auf dem <b>Trägerdeck</b> laden (📦 zeigt es an), mit <b>B</b> abwerfen — wo man mag</b></div>
+    <div class="hrow"><span>🧍 Airbus</span><b>auf Bahn landen &amp; stehen = Leute steigen um · dann weiterfliegen und wieder landen</b></div>
+    <div class="hrow"><span>🚀 X-Wing</span><b>10 % senkrecht landen · 20 % abheben &amp; schweben · ab 30 % waagerecht vorwärts · 0 % = Antrieb aus</b></div>
+    <div class="hrow"><span>🌍 ins Weltall</span><b>X-Wing mit 80–100 % steil steigen: ab 3 km dunkelt der Himmel, ab 4 km Weltall · zurück unter 2,2 km</b></div>
+    <div class="hrow"><span>⚡ Hyperraum</span><b>im Weltall 100 % halten: Warp 1 → Warp 10 · beim Anflug auf einen Himmelskörper bremst er selbst (dann 90 % Schub) · angekommen geht es mit 30 % weiter</b></div>
+    <div class="hrow"><span>🌙 Mond &amp; 🔴 Mars</span><b>anfliegen und mit 10 % landen · auf dem Mond zeigt ein dünner blauer Lichtstrahl die Mondbasis · dort starten und landen auch andere Schiffe — die <b>Ariane 6</b> senkrecht, wie es sich für eine Rakete gehört · das Fahrzeug steht immer 30 m rechts neben dem X-Wing, es braucht keinen Strahl mehr</b></div>
+    <div class="hrow"><span>☀️ Sonne</span><b>nur umkreisen — eine unsichtbare Grenze lässt einen seitlich vorbeiziehen</b></div>
+    <div class="hrow"><span>🛰️ Hangar</span><b>Todesstern, Star Destroyer und ISS anfliegen = Landung im Hangar · dort schwebt man mittig, mit 10 % aufsetzen · hinausfliegen = zurück ins All · hier startet der X-Wing</b></div>
+    <div class="hrow"><span>🛸 Weltall</span><b>ISS in Erdnähe (anfliegbar) · Shuttle, Razor Crest, Serenity, Voyager und Enterprise ziehen ihre Bahnen · manche fliegen die Star Destroyer an · rammen geht nicht</b></div>
+    <div class="hrow"><span>💥 Asteroiden</span><b>im Weltall <b>B</b> = oranger Laser (Einzelschuss) · nur unter Warp 1 · fremde X-Wings schießen mit</b></div>
+    <div class="hrow"><span>🌙 suchen</span><b>oben links steht das angeflogene Ziel mit Entfernung · über dem Flieger blitzt es kurz auf, wenn sich etwas ändert · das Radar zeigt die Richtung</b></div>
+    <div class="hrow"><span>📡 Radar</span><b>über der Insel: die nächste brennende Stelle · im Weltall: 🌙 Mond, 🔴 Mars, 🌍 Erde, 🛰️ ISS und Todesstern, jedes in eigener Farbe</b></div>
+    <div class="hrow"><span>🧭 Gyro</span><b>künstl. Horizont; Ring grün = gut zum Landen</b></div>
+    <div class="hrow"><span>🔄 im Weltall</span><b>die Kamera dreht sich mit — der Flieger bleibt oben, die Sterne kippen. So sieht man immer, wie er liegt · Schräglage richtet sich auch hier von allein auf, damit der Kurs zum Planeten hält</b></div>
+    <div class="hrow"><span>🚤 Einsatz</span><b>mit dem Boot fallen manchmal Jets übers Meer aus — das Wrack brennt auf dem Wasser und wartet auf dich. Das Radar zeigt, wo</b></div>
+    <div class="hrow"><span>🛳️ Schiffe</span><b>auf dem Meer fahren <b>Kreuzfahrtschiff</b> (250 m), <b>Containerschiff</b> (300 m), <b>Liberty-Frachter</b> (135 m) und ein <b>Großsegler</b> (90 m) — langsam und gemächlich, richtig groß zueinander. Sie sind <b>feste Hindernisse</b>: hineinfliegen = Absturz, drüber weg geht. Auch die anderen Flieger weichen ihnen aus. Mit dem Boot fährt man um sie herum — kommt eines zu nah, schiebt sein Rumpf dich beiseite</b></div>
+    <div class="hrow"><span>🌊 Wellen</span><b>die Dünung ist deutlich höher geworden. <b>Kleine Boote reiten darauf</b> und wackeln sichtbar, der <b>Großsegler</b> schwingt noch mit, und bei den <b>großen Frachtern</b> läuft das Wasser am Rumpf hoch und runter, während sie ruhig liegen — je länger ein Schiff, desto gelassener</b></div>
+    <div class="hrow"><span>🧑‍🚀 Aussteigen</span><b>gelandet auf Insel, Bahn, Deck, Mond oder Mars: <b>Y</b> = raus und zu Fuß los · linker Stick läuft und dreht · <b>B</b> = hüpfen — auf dem Mond 6× so hoch wie auf der Erde, auf dem Mars 3× · <b>LB/RB</b> = von der Seite schauen · das Radar zeigt, wo dein Flieger steht · zurück am Flieger <b>Y</b> = einsteigen</b></div>
+    <div class="hrow"><span>&#128747;&#65039; Parkplatz</span><b>neben der Landebahn jeder Insel (au&szlig;er den St&auml;dten) liegt ein <b>Vorfeld</b> mit <b>10 Stellpl&auml;tzen</b>: dort stehen <b>alle sechs Flugzeuge</b> &mdash; X-Wing, Canadair, Alpha Jet, Airbus, Transall und Mustang &mdash; in zwei Reihen, Nasen zueinander. Zu Fu&szlig; hinlaufen, vor eines stellen und <b>Y</b> dr&uuml;cken: du sitzt drin und stehst startklar am Anfang der <b>Landebahn dieser Insel</b>. Ein Rollweg verbindet Vorfeld und Bahn. Der Platz des Flugzeugs, das du gerade fliegst, bleibt leer</b></div>
+    <div class="hrow"><span>&#128640; Jetpack</span><b>im <b>Hangar</b> aussteigen (<b>Y</b>) und einfach <b>hinauslaufen</b>: an der Hallenkante z&uuml;ndet das <b>Jetpack</b> und du bist <b>im Weltall</b> &mdash; mit Erde, Mond, Mars, Sonne, Raumschiffen und Asteroiden, genau wie im X-Wing. Geflogen wird auch <b>wie im X-Wing</b>: rechter Stick &#8597; gibt Schub (bis <b>162 km/h</b>), linker Stick dreht und hebt die Nase, Gas weg = die Bremsd&uuml;sen halten dich an. Es ist schwerelos, du f&auml;llst also nicht</b></div>
+    <div class="hrow"><span>&#128756;&#65039; zur&uuml;ck vom Jetpack</span><b>einfach den <b>Todesstern anfliegen</b> &mdash; du dockst an und stehst wieder im Hangar neben deinem X-Wing (<b>Y</b> = einsteigen). Das <b>Radar</b> zeigt dir alle Ziele in ihren Farben, wie im Flieger. Auf <b>Mond</b> oder <b>Mars</b> zu setzt du dort auf und l&auml;ufst weiter. In die <b>Sonne</b> und in die <b>Erde</b> kommst du nicht &mdash; dort zieht dich eine Grenze seitlich vorbei</b></div>
+    <div class="hrow"><span>🚙 Rover fahren</span><b>auf <b>Mond</b> und <b>Mars</b> steht 30 m rechts neben dem gelandeten X-Wing ein Fahrzeug: der <b>Lunar Rover</b> bzw. der <b>Mars-Rover</b>. <b>Y</b> = einsteigen, <b>Y</b> = wieder aussteigen. Gefahren wird wie beim Boot: linker Stick lenkt, rechter Stick ↕ gibt Gas, A fährt rückwärts — bis <b>100 km/h</b>. Der X-Wing bleibt stehen, wo er ist, und das <b>weiße Blip</b> führt zurück</b></div>
+    <div class="hrow"><span>📡 Radar zu Fuß</span><b>auf Mond und Mars zeigt es beides: <b>weiß</b> = X-Wing, <b>orange</b> = Mars-Rover, <b>blau</b> = Lunar Rover. Sitzt du im Rover, bleibt nur der weiße X-Wing übrig</b></div>
+    <div class="hrow"><span>🛟 ins Wasser</span><b>zu Fuß ins Meer laufen oder vom Flugzeugträger springen: du landest im <b>Schlauchboot</b>. Gefahren wird <b>genau wie beim Feuerwehrboot</b>: linker Stick lenkt, rechter Stick ↕ gibt Schub, A bremst und fährt rückwärts · fährst du an Land, steigst du von allein aus · gehüpft wird im Boot nicht — es ist ein Fahrzeug</b></div>
+    <div class="hrow"><span>🪂 Wasserlandung</span><b>jeder Fallschirmspringer, der aufs Meer herunterkommt, wird auf einem Schlauchboot gerettet — der Schirm ist dann weg. Gilt auch für die KI-Piloten</b></div>
+    <div class="hrow"><span>🏖️ Strand</span><b>zu Fuß kann man auch über den Sand laufen, bis ins Wasser hinein</b></div>
+    <div class="hrow"><span>👀 umsehen</span><b>zu Fuß schwenkt der <b>rechte Stick</b> den Blick: ←→ herum, ↕ in den Himmel hinauf oder auf den Boden hinunter · loslassen = alles gleitet von allein zurück · Tastatur: <b>I J K L</b></b></div>
+    <div class="hrow"><span>📊 zu Fuß</span><b>oben links stehen deine <b>Höhe</b>, dein <b>Lauftempo</b> und die <b>Sprungweite</b> — vom Dach der Mondbasis kommt man richtig weit</b></div>
+    <div class="hrow"><span>Absturz</span><b>Berg/Haus/zu langsam → Feuerwehr kommt · im Weltall, auf Mond und Mars und im Hangar gibt es keine: dort geht es nach dem Absturz auf der Erde weiter</b></div>
+    <div style="margin-top:8px;opacity:0.85;">⏸ Solange diese Hilfe offen ist, pausiert das Spiel.</div>
+  </div>
+</div>
+<script src="engine/three.min.js"></script>
+<script src="engine/GLTFLoader.js"></script>
+<script src="engine/sounds.js"></script>
+<script src="engine/ambient.js"></script>
+<script src="engine/canadair_glb.js"></script>
+<script src="engine/alphajet_glb.js"></script>
+<script src="engine/airbus_glb.js"></script>
+<script src="engine/transall_glb.js"></script>
+<script src="engine/parachute_glb.js"></script>
+<script src="engine/chute2_glb.js"></script>
+<script src="engine/falcon_glb.js"></script>
+<script src="engine/astronaut_glb.js"></script>
+<script src="engine/boat_glb.js"></script>
+<script src="engine/dinghy_glb.js"></script>
+<script src="engine/cruise_glb.js"></script>
+<script src="engine/liberty_glb.js"></script>
+<script src="engine/container_glb.js"></script>
+<script src="engine/empty_glb.js"></script>
+<script src="engine/submarine_glb.js"></script>
+<script src="engine/firetruck_glb.js"></script>
+<script src="engine/mustang_glb.js"></script>
+<script src="engine/ford_glb.js"></script>
+<script src="engine/harbor_glb.js"></script>
+<script src="engine/xwing_glb.js"></script>
+<script src="engine/stars_glb.js"></script>
+<script src="engine/milkyway_glb.js"></script>
+<script src="engine/earth_glb.js"></script>
+<script src="engine/moon_glb.js"></script>
+<script src="engine/crater_glb.js"></script>
+<script src="engine/mars_glb.js"></script>
+<script src="engine/sun_glb.js"></script>
+<script src="engine/spacedrive_glb.js"></script>
+<script src="engine/asteroid_glb.js"></script>
+<script src="engine/marsground_glb.js"></script>
+<script src="engine/moonbase_glb.js"></script>
+<script src="engine/iss_glb.js"></script>
+<script src="engine/shuttle_glb.js"></script>
+<script src="engine/razor_glb.js"></script>
+<script src="engine/serenity_glb.js"></script>
+<script src="engine/rover_glb.js"></script>
+<script src="engine/lunar_glb.js"></script>
+<script src="engine/deathstar_glb.js"></script>
+<script src="engine/hangar_glb.js"></script>
+<script src="engine/destroyer_glb.js"></script>
+<script src="engine/voyager_glb.js"></script>
+<script src="engine/enterprise_glb.js"></script>
+<script src="engine/rocket_glb.js"></script>
+<script src="engine/pad_glb.js"></script>
+<script src="engine/orca_glb.js"></script>
+<script src="kenji_glb.js"></script>
+<script src="story.js"></script>
+<script src="engine/engine.js"></script>
+<script>if('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service Worker:', e)));</script>
+</body>
+</html>

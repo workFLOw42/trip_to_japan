@@ -9,3 +9,8 @@ _intern/
 /*.3mf
 /*.png
 /*.zip
+# ausser den App-Icons (PWA)
+!/icon-*.png
+
+# Arbeitsnotizen
+/todo.md
