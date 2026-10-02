@@ -15,7 +15,9 @@ Technische Basis ist die Engine des **[Flugspiel](https://github.com/workFLOw42/
 
 Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar ist der **Beginn von Etappe 1**:
 Startbildschirm, Intro (Kenji kommt aus der Schule, Kamerafahrt, Erzählstimme mit Untertitel),
-danach freies Laufen auf der Startinsel. Der X-Wing parkt am Strand (Einsteigen mit **Y**), das U-Boot liegt am Ufer.
+danach freies Laufen auf der Startinsel mit Tricks (A Sprung, B Moonwalk, X Silly Dance, Y Butterfly Twirl).
+X-Wing und U-Boot stehen am Strand (Einsteigen mit **Y**). Im X-Wing: **Startsequenz** in 10 s, sonst Autostart.
+Mars-Trip, U-Boot-Aufgabe und Etappe 2 folgen.
 
 ## Aufbau
 
@@ -29,9 +31,12 @@ danach freies Laufen auf der Startinsel. Der X-Wing parkt am Strand (Einsteigen 
 
 Engine aktualisieren: `powershell -File tools/build_engine.ps1` (Flugspiel-Repo muss daneben liegen).
 
-**Version / Offline:** Die Cache-Version in `sw.js` zählt der pre-commit-Hook automatisch hoch, sobald sich
-eine gecachte Datei ändert – installierte Geräte laden dann die neue Version. Hook einmalig installieren:
-`cp tools/pre-commit .git/hooks/pre-commit`
+**Version / Offline:** Committen mit `powershell -File tools/commit.ps1 "Nachricht"` – das zählt die Cache-Version
+in `sw.js` hoch, sobald sich eine gecachte Datei ändert; installierte Geräte laden dann die neue Version.
+Der pre-commit-Hook (`cp tools/pre-commit .git/hooks/pre-commit`) ist das Sicherheitsnetz: er bricht ab,
+wenn die Version vergessen wurde (`git add` im Hook scheitert im Google-Drive-Ordner).
+
+**Diagnose:** `index.html?debug` zeigt unten links den Zustand der Spielfigur.
 
 Fertig sind bisher die Modelle in `models/`:
 
