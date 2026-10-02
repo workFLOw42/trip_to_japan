@@ -1230,6 +1230,8 @@ function pfHud(){
   let h = '<div style="display:flex;align-items:center;gap:10px;font-weight:700;margin-bottom:6px">'
     + '<span style="width:16px;height:16px;border-radius:50%;background:' + lamp
     + ';box-shadow:0 0 10px ' + lamp + '"></span>STARTSEQUENZ'
+    + (pf.kurzschluss ? '<span title="" style="margin-left:8px;padding:0 6px;border-radius:4px;background:#e03c31;'
+        + 'box-shadow:0 0 10px #e03c31;font-size:15px">⇄</span>' : '')
     + '<span style="margin-left:auto;font-family:monospace;font-size:20px">'
     + Math.max(0, PF_ZEIT - pf.t).toFixed(1) + '</span></div>';
   // Keine Anleitung: wer die Startsequenz nicht kennt, soll scheitern (Etappe 1). Nur Leuchte + Zeit.
@@ -1238,6 +1240,7 @@ function pfHud(){
 }
 
 function pfStart(){
+  pf.kurzschluss = story.etappe >= 2;          // Etappe 2: die X-Wing-Falle
   pf.aktiv = true; pf.t = 0; pf.schritt = 0; pf.gruen = false;
   gesehen(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz');
   hinweis('');
@@ -1257,7 +1260,10 @@ function pfEingabe(inp){
     }
   }
   const lr = (inp.yaw || 0) + (inp.roll || 0);   // links/rechts: Stick, Pfeile oder LT/RT, Q/E
-  return { bremse, gas, links: lr < -0.6, rechts: lr > 0.6, hoch: inp.pitch > 0.6, runter: inp.pitch < -0.6 };
+  const e = { bremse, gas, links: lr < -0.6, rechts: lr > 0.6, hoch: inp.pitch > 0.6, runter: inp.pitch < -0.6 };
+  if(!pf.kurzschluss) return e;
+  // Kurzschluss: alle Eingaben vertauscht – Bremse <-> Gas, links <-> rechts, hoch <-> runter
+  return { bremse: e.gas, gas: e.bremse, links: e.rechts, rechts: e.links, hoch: e.runter, runter: e.hoch };
 }
 
 function pfSchritt(e){
@@ -1293,7 +1299,8 @@ function pfFertig(ok){
     sprich(['Startsequenz abgeschlossen. Guten Flug!']);
     setTimeout(() => { pf.gruen = false; pfHud(); }, 2500);
     story.phase = 'freiflug';
-    story.ziel = { x: 0, z: -9000 };     // Richtung Etappe 2 (Radarpunkt)
+    story.ziel = story.zielFuer ? story.zielFuer(story.etappe) : { x: 0, z: -9000 };   // Radarpunkt
+    story.verdreht = pf.kurzschluss;     // Kurzschluss gilt weiter, bis man am Ziel ist
     hinweis('Folge dem roten Punkt im Radar – Start: X / Shift halten');
     setTimeout(() => hinweis(''), 8000);
   } else {
@@ -1350,7 +1357,7 @@ function absturzEnde(){
   if(mars.phase) mars.phase = 'fertig';
   hinweis('');
   state.vel.set(0, 0, 0);
-  etappeEnde(7, story.phase === 'mars' ? 'Absturz auf dem Mars-Trip' : 'nach Absturz');
+  etappeEnde(7, story.phase === 'mars' ? 'Absturz auf dem ' + TRIP[mars.ort || 'mars'].ziel + '-Trip' : 'nach Absturz');
 }
 
 story.e1aufraeumen = function(){
@@ -1367,6 +1374,7 @@ story.e1aufraeumen = function(){
 // Etappe 1 geschafft: Globus-Reise nach Etappe 2, dann (vorerst) Platzhalter
 function etappeEnde(tage, wie){
   story.phase = 'reise';
+  story.verdreht = false;                  // Kurzschluss endet mit der Etappe
   const text = tageVergangen(tage) + ' (' + wie + ') · noch ' + (42 - story.tage) + ' von 42 Tagen';
   story.globusReise(story.etappe, text, () => {
     story.etappe++;
@@ -1387,6 +1395,17 @@ function platzhalter(text){
 // ---- Mars-Trip (Startsequenz verpasst) -------------------------------------------------------
 // Nach dem Autostart: im All, Blick zum Mars. Hinfliegen, landen, aussteigen, den leuchtenden Stein
 // holen (Y), wieder einsteigen (ohne Startsequenz) und zurueck zur Erde -> 7 Tage.
+// Etappe 2 (X-Wing-Falle verpasst): Autopilot zum Mond. Kenji kann inzwischen fliegen -> kurz.
+const MOND_TEXT = [
+  'Da war wohl ein Kurzschluss in der Steuerung. Der Autopilot hat übernommen und bringt dich zum Mond.',
+  'Die Steuerung funktioniert jetzt wieder normal.',
+  'Bring uns ein Stück Mondgestein mit, dann fliegen wir dich weiter. Bis in einer Woche!',
+];
+const TRIP = {
+  mars: { text: () => MARS_TEXT, ziel: 'Mars', stein: 'Stein', farbe: 0xff7a2a, glanz: 0xff4400 },
+  moon: { text: () => MOND_TEXT, ziel: 'Mond', stein: 'Mondgestein', farbe: 0xd8d8e6, glanz: 0x8888aa },
+};
+function tripOrt(){ return story.etappe >= 2 ? 'moon' : 'mars'; }
 const MARS_TEXT = [
   'Hallo. Du bist wohl etwas nervös gewesen.',
   'Aber keine Sorge, wir haben die Startsequenz und den Start automatisch durchgeführt.',
@@ -1409,7 +1428,8 @@ function marsStart(){
   state.pos.set(state.pos.x, SPACE_Y + 2000, state.pos.z);
   state.onGround = false; state.crashed = false;
   enterSpace();
-  const m = bodyOf('mars');
+  mars.ort = tripOrt();
+  const m = bodyOf(mars.ort);
   if(m){
     const d = m.center.clone().sub(state.pos).normalize();
     state.quat.setFromUnitVectors(new THREE.Vector3(0, 0, -1), d);
@@ -1417,8 +1437,9 @@ function marsStart(){
   state.vel.set(0, 0, 0); state.throttle = 0.3;
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
   snapCamera();
-  mars.rede = sprich(MARS_TEXT, () => {
-    hinweis('Flieg zum Mars (roter Punkt) und hol einen Stein');
+  story.verdreht = false;                 // der Autopilot hat uebernommen: Steuerung normal
+  mars.rede = sprich(TRIP[mars.ort].text(), () => {
+    hinweis('Flieg zum ' + TRIP[mars.ort].ziel + ' und hol ' + (mars.ort === 'moon' ? 'Mondgestein' : 'einen Stein'));
     setTimeout(() => { if(mars.phase === 'hin') hinweis(''); }, 9000);
   });
 }
@@ -1430,7 +1451,7 @@ function marsStein(){
   const y = surfaceY(x, z);
   const g = new THREE.Group();
   const stein = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3, 0),   // ein Brocken zum Mitnehmen
-    new THREE.MeshLambertMaterial({ color: 0xff7a2a, emissive: 0xff4400, emissiveIntensity: 0.9 }));
+    new THREE.MeshLambertMaterial({ color: TRIP[mars.ort || 'mars'].farbe, emissive: TRIP[mars.ort || 'mars'].glanz, emissiveIntensity: 0.9 }));
   stein.position.y = 0.28; stein.rotation.set(0.4, 0.7, 0.2);
   g.add(stein);
   const saeule = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 200, 10, 1, true),
@@ -1446,18 +1467,18 @@ function marsStein(){
 function marsUpdate(dt){
   if(!mars.phase) return;
   if(mars.steinObj) mars.steinObj.children[0].rotation.y += dt * 1.5;
-  if(locale === 'mars'){
-    if(mars.phase === 'hin'){ mars.phase = 'gelandet'; hinweis('Lande mit 10 % Schub, steig mit Y aus und hol den Stein'); }
+  if(locale === (mars.ort || 'mars')){
+    if(mars.phase === 'hin'){ mars.phase = 'gelandet'; hinweis('Lande mit 10 % Schub, steig mit Y aus und hol das ' + TRIP[mars.ort || 'mars'].stein); }
     if(state.onGround || eva) marsStein();
     if(eva && mars.phase === 'gelandet' && !mars.hinweisWeg){ mars.hinweisWeg = true; hinweis('Hol den leuchtenden Stein'); setTimeout(() => { if(mars.phase === 'gelandet') hinweis(''); }, 6000); }
-  } else if(mars.steinObj && locale !== 'mars'){
+  } else if(mars.steinObj && locale !== (mars.ort || 'mars')){
     scene.remove(mars.steinObj); mars.steinObj = null;
   }
 }
 
 // Y zu Fuss am Stein
 function marsSteinNah(){
-  if(!eva || !mars.stein || mars.stein === 'geholt' || locale !== 'mars') return false;
+  if(!eva || !mars.stein || mars.stein === 'geholt' || locale !== (mars.ort || 'mars')) return false;
   const p = eva.group.position;
   return Math.hypot(p.x - mars.stein.x, p.z - mars.stein.z) < STEIN_R;
 }
@@ -1466,8 +1487,9 @@ function marsSteinHolen(){
   if(mars.steinObj){ scene.remove(mars.steinObj); mars.steinObj = null; }
   mars.phase = 'zurueck';
   blitz();
-  sprich(['Super, du hast den Stein! Jetzt zurück zur Erde.']);
-  hinweis('🪨 Stein an Bord – zurück zur Erde (blauer Punkt)');
+  const st = TRIP[mars.ort || 'mars'].stein;
+  sprich(['Super, du hast das ' + st + '! Jetzt zurück zur Erde.']);
+  hinweis('🪨 ' + st + ' an Bord – zurück zur Erde (blauer Punkt)');
   setTimeout(() => { if(mars.phase === 'zurueck') hinweis(''); }, 9000);
 }
 
@@ -1475,7 +1497,7 @@ function marsSteinHolen(){
 function marsErde(){
   if(mars.phase === 'zurueck'){
     mars.phase = 'fertig';
-    etappeEnde(7, 'mit dem Mars-Trip');
+    etappeEnde(7, 'mit dem ' + TRIP[mars.ort || 'mars'].ziel + '-Trip');
     return true;
   }
   return false;
@@ -1485,7 +1507,7 @@ function hookMars(){
   story.onWeltall = marsStart;
   // Rover gibt es in Etappe 1 nicht (der Stein liegt nah genug)
   const roverObjOrig = roverObjFor;
-  roverObjFor = function(){ return story.etappe === 1 ? null : roverObjOrig.apply(this, arguments); };
+  roverObjFor = function(){ return story.etappe <= 2 ? null : roverObjOrig.apply(this, arguments); };
   // Y am Stein
   const boardYOrig = evaBoardY;
   evaBoardY = function(){
@@ -1495,7 +1517,7 @@ function hookMars(){
   // Zur Erde: mit Stein -> Ende; ohne Stein darf man nicht zurueck (wird ins All zurueckgeschoben)
   const enterEarthOrig = enterEarth;
   enterEarth = function(){
-    if(story.etappe === 1 && mars.phase && mars.phase !== 'fertig'){
+    if(story.etappe <= 2 && mars.phase && mars.phase !== 'fertig'){
       if(marsErde()) return enterEarthOrig.apply(this, arguments);
       // noch kein Stein: ein Stueck von der Erde weg zurueck ins All
       const n = state.pos.clone().sub(earthHome).normalize();
@@ -1506,6 +1528,26 @@ function hookMars(){
       return;
     }
     return enterEarthOrig.apply(this, arguments);
+  };
+}
+
+// ---- Kurzschluss im Flug (X-Wing-Falle gemeistert) --------------------------------------------
+// Nach geschaffter Startsequenz mit Kurzschluss bleibt die Steuerung vertauscht, bis man am Ziel ist:
+// links <-> rechts, hoch <-> runter, rollen gespiegelt; Bremse <-> Gas (C/A <-> Shift/X).
+function hookVerdreht(){
+  const readInputOrig = readInput;
+  readInput = function(){
+    const inp = readInputOrig.apply(this, arguments);
+    if(!story.verdreht || eva || pf.aktiv) return inp;
+    // Bremse (C / A) gibt jetzt Gas
+    const gp = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
+    if(keys['KeyC'] || (gp && gp.buttons[0] && gp.buttons[0].pressed)) state.throttle = 1;
+    return { pitch: -inp.pitch, roll: -inp.roll, yaw: -inp.yaw };
+  };
+  const boostOrig = boostDruck;
+  boostDruck = function(){
+    if(story.verdreht && !eva){ state.throttle = -0.2; return; }      // "Gas" bremst
+    return boostOrig.apply(this, arguments);
   };
 }
 
@@ -1658,7 +1700,7 @@ function hookEinsteigen(){
   const boardOrig = evaBoard;
   evaBoard = function(){
     const r = boardOrig.apply(this, arguments);
-    if(story.etappe === 1 && !story.phase && isXWing()) pfStart();
+    if(story.etappe <= 2 && !story.phase && isXWing()) pfStart();
     return r;
   };
   // Waehrend Startsequenz und Autostart: Flieger steht bzw. fliegt allein (keine Physik/Eingabe)
@@ -1687,7 +1729,7 @@ function hookEinsteigen(){
   const resetOrig = resetPlane;
   resetPlane = function(){
     if(pf.aktiv || auto.aktiv || story.phase === 'platzhalter' || story.phase === 'reise') return;
-    if(story.etappe === 1 && (story.phase === 'mars' || story.phase === 'freiflug') && state.crashed){
+    if(story.etappe <= 2 && (story.phase === 'mars' || story.phase === 'freiflug') && state.crashed){
       absturzEnde();
       return;
     }
@@ -1797,7 +1839,7 @@ function hookHud(){
       }
       if(statEl){
         const ein = evaCanBoard() || harborSubNear();
-        const s = marsSteinNah() ? 'Y: Stein aufheben' : (ein ? 'Y: einsteigen' : '');
+        const s = marsSteinNah() ? 'Y: ' + TRIP[mars.ort || 'mars'].stein + ' aufheben' : (ein ? 'Y: einsteigen' : '');
         if(statEl.textContent !== s) statEl.textContent = s;
       }
     } else if(mdlEl && mdlEl.textContent !== MODEL_NAMES[currentModel]){
@@ -1881,8 +1923,8 @@ function aufgabeText(){
   if(pf.aktiv) return ['Startsequenz', [
     ['Zeit', '10 Sekunden'],
   ]];
-  if(story.phase === 'mars') return ['Mars-Trip', [
-    ['Ziel', mars.phase === 'zurueck' ? 'zurück zur Erde (blauer Punkt im Radar)' : 'Mars (roter Punkt im Radar), Stein holen'],
+  if(story.phase === 'mars') return [TRIP[mars.ort || 'mars'].ziel + '-Trip', [
+    ['Ziel', mars.phase === 'zurueck' ? 'zurück zur Erde (blauer Punkt im Radar)' : TRIP[mars.ort || 'mars'].ziel + ' im Radar, ' + TRIP[mars.ort || 'mars'].stein + ' holen'],
     ['Warp', '100 % Schub halten'],
     ['Landen', '10 % Schub, senkrecht aufsetzen'],
     ['Stein', 'aussteigen (Y), hinlaufen, Y'],
@@ -1977,6 +2019,7 @@ window.STORY_HOOK = function(){
   hookSchwimmen();
   hookWarp();
   hookMars();
+  hookVerdreht();
   hookLoop();
 };
 window.STORY_START = function(){

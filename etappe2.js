@@ -240,6 +240,10 @@ function wuesteStart(){
 }
 story.etappe2Start = wuesteStart;
 
+// Ziel des Freiflugs pro Etappe (Radarpunkt): Etappe 2 = weiter Richtung Etappe 3 (Sueden)
+const zielVorher = story.zielFuer;
+story.zielFuer = function(et){ return et === 2 ? { x: 2500, z: 9000 } : (zielVorher ? zielVorher(et) : { x: 0, z: -9000 }); };
+
 // Kulisse jedes Bild nachfuehren (Fahrzeug-Kulisse ein-/ausblenden)
 function updateE2(){
   if(!e2()) return;
