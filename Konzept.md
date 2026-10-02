@@ -4,7 +4,46 @@ Ein 3D-Abenteuerspiel im Browser auf Basis der WebGL/Three.js-Engine des „Flug
 
 ---
 
-## 📌 Arbeitsstand (01.10.2026)
+## 📌 Arbeitsstand (02.10.2026)
+
+**Gebaut und spielbar:** Etappe 1 (alle Wege inkl. Mars-Trip) und Etappe 2 (X-Wing-Falle mit Kurzschluss,
+Mond-Trip, Transall-Flugschule) · Startmenü mit Etappen-Sprung (Test) · Globus-Reise zwischen den Etappen ·
+Tageszähler · Stimmen (Pilot männlich) · Offline-PWA · Highscores still gespeichert (noch ohne Anzeige).
+Details zum Gebauten in der [README](README.md); Stolperstellen der Engine in [ENGINE_RISIKEN.md](ENGINE_RISIKEN.md).
+
+**Als Nächstes:** Etappe 3 (Indischer Ozean).
+
+### 🔧 Beim Bauen entschieden (weicht vom Text unten ab oder ergänzt ihn)
+
+- **„Startsequenz“ statt „Preflight-Check“** – die Sprachausgabe kann das englische Wort nicht aussprechen.
+  Im X-Wing gibt es **keine Anleitung** (nur Leuchte + Zeit): wer sie nicht kennt, soll scheitern.
+  Die Transall-Flugschule erklärt sie; dort läuft sie **ohne Zeitlimit und ohne Kurzschluss**.
+- **Ziel ist Fukuoka** (dort wohnt Kenjis Freund), nicht der Fuji. Start auf dem Globus: München.
+  Etappenorte auf dem Globus: Saudi-Arabien (Wüste), Malediven, Malaysia, Hongkong, Fukuoka.
+- **Absturz** auf einem Flugweg (Freiflug, Mars/Mond, Erde, All, Transall) = **7 Tage**.
+- **Etappe 1:** X-Wing und U-Boot stehen am Strand, das U-Boot wird über einen **Ring am Strand** bestiegen
+  (kein Schlauchboot). Unterwasser gibt es **genau 5 Wracks** (2 Segler, 3 Liberty), keine kleinen.
+  Aufgabe: **zwei unterschiedliche Wracks fotografieren** (Riffe nachbauen). Der Code 14 02 wird **nicht
+  gesprochen**, nur im Ziffernfeld gezeigt, das nach der Ansage verschwindet. Das **Periskop** zeigt nur nach
+  einem Sonar-Ping ein Bild (verblasst über 10 s).
+- **Etappe 2 ist reine Wüste** (kein Wasser), Abwurfziel ist eine **Oase**.
+  Mond-Text je nach Etappe 1: war man auf dem Mars, kurz („Du schon wieder …“), sonst wie der Mars-Text.
+  Der Mondstein liegt auf der Plattform der Mondbasis. Man ist **nicht der erste Mensch** auf dem Mond.
+- **Transall-Flugschule ohne Autopilot:** Erklärung am Boden (Startsequenz, Kurzschluss, Start, Abwurf, Landung),
+  dann *„Du kannst doch fliegen?“* – **NEIN** → „Für Anfänger ist das leider nichts. Bitte steige wieder aus.“
+  → 7 Tage. **JA** → Kenji fliegt selbst von Anfang an (kein „Pilot wird schlecht“). Nach dem Abwurf ist die
+  Mission vorbei; **landen muss man nicht** (erst später mit dem Alpha Jet), aber es wird erklärt:
+  30 % Schub, langsam runter, grüner Gyro-Ring.
+- **Kenji zu Fuß:** A Sprung, B Aerial Evade, X Silly Dance, Y Butterfly Twirl, L3 + Stick Moonwalk;
+  schwimmen (RT tauchen, LT auf). Auf Mond und Mars springt er dank geringer Schwerkraft höher.
+- **Ton:** an = Stimme ohne Untertitel, aus = Untertitel; Umschalten setzt am aktuellen Wort fort.
+  Alles blendet mit der Schwarzblende zum Globus aus.
+- **Aufgeräumt** gegenüber dem Flugspiel: kein Jetpack, kein Modellwechsel, kein Steg, keine Zufallsfeuer,
+  keine Hangar-Landung (ISS/Todesstern/Sternenzerstörer bleiben als Objekte), Warp mit Streifen statt Ring.
+- **Hilfe:** D-Pad ↑ = Anleitung (pausiert), D-Pad ← = aktuelle Aufgabe (pausiert **nicht**, sonst gewönne man
+  Bedenkzeit).
+
+### Ursprünglicher Stand (01.10.2026)
 
 **Fertig ausgearbeitet:** Tage-Regel & Finale-Grenzen · Fehlschläge aller Etappen · Etappen-Wahl (hinlaufen, „1 Tag“/„4 Tage“ im Mario-Stil) · Preflight-Check inkl. Kurzschluss & Bestenliste · Abwurf-Physik Transall · Kran in Etappe 4 (Wind-Zyklen, 4 Lücken, 6 min, 2 Fehler, HUD + Ladeplan) · Schlucht-Baukasten · Modell-Liste.
 
