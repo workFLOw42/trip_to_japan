@@ -1273,6 +1273,16 @@ function autoUpdate(dt){
   }
 }
 
+// Absturz im Flugzweig von Etappe 1 (Freiflug oder Mars-Trip, egal wo): 7 Tage
+function absturzEnde(){
+  if(story.ende) return;
+  story.ende = true;
+  if(mars.phase) mars.phase = 'fertig';
+  hinweis('');
+  state.vel.set(0, 0, 0);
+  etappeEnde(7, story.phase === 'mars' ? 'Absturz auf dem Mars-Trip' : 'nach Absturz');
+}
+
 // Etappe 1 geschafft: Globus-Reise nach Etappe 2, dann (vorerst) Platzhalter
 function etappeEnde(tage, wie){
   story.phase = 'reise';
@@ -1421,11 +1431,7 @@ function hookMars(){
 const ZIEL_R = 250;   // m: so nah (waagerecht) muss man ueber den Radarpunkt
 function freiflugUpdate(){
   if(locale !== 'earth' || !story.ziel) return;
-  if(state.crashed && !story.ende){
-    story.ende = true;
-    etappeEnde(7, 'nach Absturz');
-    return;
-  }
+  if(state.crashed) return;                 // Absturz: nach der Loeschsequenz ueber resetPlane
   const d = Math.hypot(state.pos.x - story.ziel.x, state.pos.z - story.ziel.z);
   if(d < ZIEL_R && !story.ende){
     story.ende = true;
@@ -1582,7 +1588,7 @@ function hookEinsteigen(){
       return;
     }
     if(auto.aktiv){ autoUpdate(dt); return; }
-    if(story.phase === 'platzhalter'){ state.vel.set(0, 0, 0); return; }   // Spiel steht hinter dem Schild
+    if(story.phase === 'platzhalter' || story.phase === 'reise'){ state.vel.set(0, 0, 0); return; }   // Spiel steht hinter Schild/Globus
     const r = physOrig.apply(this, arguments);
     if(story.phase === 'freiflug') freiflugUpdate();
     if(story.phase === 'mars') marsUpdate(dt);
@@ -1598,7 +1604,11 @@ function hookEinsteigen(){
   // Reset (R) nur gesperrt, solange Story-Sequenzen laufen
   const resetOrig = resetPlane;
   resetPlane = function(){
-    if(pf.aktiv || auto.aktiv || story.phase === 'platzhalter') return;
+    if(pf.aktiv || auto.aktiv || story.phase === 'platzhalter' || story.phase === 'reise') return;
+    if(story.etappe === 1 && (story.phase === 'mars' || story.phase === 'freiflug') && state.crashed){
+      absturzEnde();
+      return;
+    }
     return resetOrig.apply(this, arguments);
   };
   // Kamera beim Autostart: bleibt am Boden und schaut dem X-Wing nach
