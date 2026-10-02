@@ -297,7 +297,9 @@ addEventListener('keydown', e => { if(!e.repeat && tippTaste[e.code]) getippt[ti
 
 // Tasten auswerten (Flanken), einmal pro Bild
 function kenjiTasten(){
-  if(!eva || eva.rover || eva.boat || sw.aktiv || !steuerbar() || story.phase){
+  // Tricks ueberall, wo Kenji zu Fuss ist – auch auf Mond und Mars (dort springt er dank geringer
+  // Schwerkraft viel hoeher). Gesperrt nur hinter dem Platzhalter-Schild und waehrend des Globus.
+  if(!eva || eva.rover || eva.boat || sw.aktiv || !steuerbar() || story.phase === 'platzhalter' || story.phase === 'reise'){
     for(const n in getippt) delete getippt[n];
     return;
   }
@@ -809,7 +811,7 @@ const ORTE = [
   { name: 'Etappe 3: Der Indische Ozean',lat:  8.0, lon:  73.0 },
   { name: 'Etappe 4: Südostasien',       lat:  3.0, lon: 101.0 },
   { name: 'Etappe 5: Chinesisches Meer', lat: 22.3, lon: 114.2 },
-  { name: 'Etappe 6: Japan',             lat: 35.4, lon: 138.7 },   // Ziel (Fuji)
+  { name: 'Etappe 6: Japan – Fukuoka',   lat: 33.59, lon: 130.40 },  // Ziel: dort wohnt Kenjis Freund
 ];
 story.reise = [0];                 // besuchte Orte (Index in ORTE), Start ist immer dabei
 const GLOBUS_R = 1;
