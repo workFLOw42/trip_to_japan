@@ -168,7 +168,7 @@ function stelleFahrzeuge(){
 // Lautstaerke wie das Meeresrauschen (AMB_OCEAN_VOL) und zu Beginn ganz leise arabische Musik,
 // bis sie zu Ende ist oder man einsteigt. Beide Dateien werden wie die Engine-Kulisse auf denselben
 // Spitzenwert normiert (normalizePeak), die Lautstaerke steuert allein der Gain.
-const MUSIK_VOL = 0.06;
+const MUSIK_VOL = 0.12;           // knapp unter dem Wind (AMB_OCEAN_VOL 0,13), sonst ging sie unter
 const snd = { wind: null, windGain: null, musik: null, musikGain: null, musikAus: false, laedt: false };
 function sndStart(url, loop, fertig){
   if(!audioCtx || !url) return;
