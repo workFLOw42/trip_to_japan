@@ -1,44 +1,28 @@
 #!/bin/sh
-# Reise nach Japan (PWA): Cache-Version in sw.js automatisch hochzaehlen.
-# Nur wenn sich eine GECACHTE Datei aendert (nicht bei reinen Doku-/Tool-Commits), damit
-# installierte Geraete nicht unnoetig > 100 MB neu laden.
-# Ersetzung via PowerShell (WriteAllText), da sed -i im Google-Drive-Ordner scheitert.
+# Reise nach Japan (PWA): Sicherheitsnetz fuer die Cache-Version in sw.js.
+# Normal committen mit:  powershell -File tools/commit.ps1 "Nachricht"   (zaehlt selbst hoch)
+#
+# Aendert ein Commit eine gecachte Datei, muss die Version in sw.js hoeher sein als in HEAD –
+# sonst laden installierte Geraete die Aenderung nie. Ein "git add" HIER drin scheitert im
+# Google-Drive-Ordner (index.lock: No such file or directory), deshalb zaehlt der Hook nur in der
+# Datei hoch, bricht ab und bittet um einen zweiten Versuch.
 # Installieren:  cp tools/pre-commit .git/hooks/pre-commit
 
 sw="sw.js"
 [ -f "$sw" ] || exit 0
-
 staged=$(git diff --cached --name-only)
 [ -z "$staged" ] && exit 0
-
 relevant=$(printf '%s\n' "$staged" | grep -vE '^(README\.md|Konzept\.md|\.gitignore|\.nojekyll|sw\.js|tools/.*|models/.*)$')
 [ -z "$relevant" ] && exit 0
 
-cur=$(grep -oE "reise-nach-japan-v[0-9]+" "$sw" | head -1 | grep -oE "[0-9]+$")
-[ -z "$cur" ] && exit 0
-next=$((cur + 1))
+ver(){ grep -oE "reise-nach-japan-v[0-9]+" | head -1 | grep -oE "[0-9]+$"; }
+head_v=$(git show HEAD:"$sw" 2>/dev/null | ver); [ -z "$head_v" ] && head_v=0
+idx_v=$(git show :"$sw" 2>/dev/null | ver);      [ -z "$idx_v" ] && idx_v=0
+[ "$idx_v" -gt "$head_v" ] && exit 0
 
+next=$((head_v + 1))
 swwin=$(cygpath -w "$(pwd)/$sw" 2>/dev/null || echo "$(pwd)/$sw")
-powershell.exe -NoProfile -Command "\$p='$swwin'; \$e=New-Object System.Text.UTF8Encoding(\$false); \$t=[IO.File]::ReadAllText(\$p,\$e); \$t=\$t -replace 'reise-nach-japan-v[0-9]+','reise-nach-japan-v$next'; [IO.File]::WriteAllText(\$p,\$t,\$e)" || {
-  echo "PWA-Hook: PowerShell-Ersetzung fehlgeschlagen, Commit abgebrochen." >&2
-  exit 1
-}
-
-if ! grep -q "reise-nach-japan-v$next" "$sw"; then
-  echo "PWA-Hook: Bump nicht verifizierbar, Commit abgebrochen." >&2
-  exit 1
-fi
-
-# git add im Hook scheitert im Google-Drive-Ordner gelegentlich am index.lock -> wiederholen,
-# und wenn es gar nicht klappt, den Commit abbrechen (sonst landet die alte Version im Commit).
-ok=0
-for i in 1 2 3 4 5; do
-  if git add "$sw" 2>/dev/null; then ok=1; break; fi
-  sleep 1
-done
-if [ "$ok" != 1 ]; then
-  echo "PWA-Hook: git add sw.js fehlgeschlagen (index.lock?), Commit abgebrochen - bitte erneut committen." >&2
-  exit 1
-fi
-echo "PWA-Cache: reise-nach-japan-v$cur -> reise-nach-japan-v$next"
-exit 0
+powershell.exe -NoProfile -Command "\$p='$swwin'; \$e=New-Object System.Text.UTF8Encoding(\$false); \$t=[IO.File]::ReadAllText(\$p,\$e); \$t=\$t -replace 'reise-nach-japan-v[0-9]+','reise-nach-japan-v$next'; [IO.File]::WriteAllText(\$p,\$t,\$e)"
+echo "PWA-Hook: sw.js auf v$next gesetzt, aber noch nicht gestaged. Bitte 'git add sw.js' und erneut committen" >&2
+echo "          (oder kuenftig: powershell -File tools/commit.ps1 \"Nachricht\")." >&2
+exit 1

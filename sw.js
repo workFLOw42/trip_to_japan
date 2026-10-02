@@ -1,7 +1,7 @@
 /* Reise nach Japan – Service Worker (Offline-Cache)
    Die Version zaehlt der pre-commit-Hook (tools/pre-commit) automatisch hoch, sobald sich eine
    gecachte Datei aendert. Neue Version -> alter Cache wird verworfen, alles frisch geladen. */
-const CACHE = 'reise-nach-japan-v1';
+const CACHE = 'reise-nach-japan-v2';
 
 /* Kern-Dateien: sofort bei der Installation cachen. */
 const CORE = [
