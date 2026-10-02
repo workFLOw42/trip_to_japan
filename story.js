@@ -1055,6 +1055,7 @@ function hookLoop(){
     kenjiTasten();
     updateAufgabe();
     if(eva && story.phase === 'mars') marsUpdate(dt);
+    if(story.updateE2) story.updateE2(dt);
     introDt(dt);
     updateMarken();
     return loopOrig.apply(this, arguments);
@@ -1352,13 +1353,25 @@ function absturzEnde(){
   etappeEnde(7, story.phase === 'mars' ? 'Absturz auf dem Mars-Trip' : 'nach Absturz');
 }
 
+story.e1aufraeumen = function(){
+  for(const m of marken){ m.saeule.visible = m.pfeil.visible = false; if(m.schild) m.schild.visible = false; }
+  if(ringMesh) ringMesh.visible = false;
+  if(mars.steinObj){ scene.remove(mars.steinObj); mars.steinObj = null; }
+  if(ub.padEl) ub.padEl.style.display = 'none';
+  if(ub.fotoEl) ub.fotoEl.style.display = 'none';
+  if(pf.el) pf.el.style.display = 'none';
+  ub.aktiv = false; mars.phase = null; pf.aktiv = false; auto.aktiv = false;
+  story.ziel = null;
+};
+
 // Etappe 1 geschafft: Globus-Reise nach Etappe 2, dann (vorerst) Platzhalter
 function etappeEnde(tage, wie){
   story.phase = 'reise';
   const text = tageVergangen(tage) + ' (' + wie + ') · noch ' + (42 - story.tage) + ' von 42 Tagen';
   story.globusReise(story.etappe, text, () => {
     story.etappe++;
-    platzhalter('Etappe 2 (folgt) – Tag ' + story.tage + ' von 42');
+    if(story.etappe === 2 && story.etappe2Start){ hinweis(''); story.etappe2Start(); return; }
+    platzhalter('Etappe ' + story.etappe + ' (folgt) – Tag ' + story.tage + ' von 42');
   });
 }
 

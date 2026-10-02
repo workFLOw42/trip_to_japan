@@ -53,6 +53,7 @@ $kb = [IO.File]::ReadAllBytes((Join-Path $root 'models\kenji.glb'))
 $out = ($head -join "`n") + "`n" +
   '<script src="kenji_glb.js"></script>' + "`n" +
   '<script src="story.js"></script>' + "`n" +
+  '<script src="etappe2.js"></script>' + "`n" +
   '<script src="engine/engine.js"></script>' + "`n" +
   "</body>`n</html>`n"
 [IO.File]::WriteAllText((Join-Path $root 'index.html'), $out, $utf8)
