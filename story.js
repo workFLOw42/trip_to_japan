@@ -250,7 +250,7 @@ const GEH_MAX = 0.3;          // Anteil von EVA_SPEED bei 50 % Stick (≈ 1,8 m/
 const TRICK_CLIP = { tanz: 'dance_silly', twirl: 'butterfly_twirl', evade: 'aerial_evade' };
 const tricks = story.tricks = { aktiv: null, t: 0, moon: false, ausschlag: 0, prev: {} };
 
-function amFahrzeug(){ return !!eva && (evaCanBoard() || !!harborSubNear()); }
+function amFahrzeug(){ return !!eva && (evaCanBoard() || !!harborSubNear() || marsSteinNah()); }
 
 // Rohzustand der vier Tasten (Controller + Tastatur)
 function trickTasten(){
@@ -635,6 +635,11 @@ function hookIntro(){
       const k = Math.min(1, Math.max(0, (tief - 0.5) / 2));    // 0 = an der Oberflaeche, 1 = getaucht
       const dist = 6 - 2 * k, hoch = 2.2 - 1.8 * k;
       const soll = new THREE.Vector3(p.x + Math.sin(yaw) * dist, p.y + hoch, p.z + Math.cos(yaw) * dist);
+      if(sideView !== 0){
+        // von links / rechts: quer zur Blickrichtung, auf Hoehe von Kenji
+        const qx = Math.cos(eva.yaw), qz = -Math.sin(eva.yaw);
+        soll.set(p.x + qx * 6 * sideView, p.y + 0.6 + 0.6 * (1 - k), p.z + qz * 6 * sideView);
+      }
       camera.position.lerp(soll, Math.min(1, 6 * dtCam));
       camera.up.set(0, 1, 0);
       camera.lookAt(p.x, p.y + 0.4, p.z);
@@ -807,6 +812,7 @@ function hookLoop(){
     kenjiWache(dt);
     kenjiTasten();
     updateAufgabe();
+    if(eva && story.phase === 'mars') marsUpdate(dt);
     introDt(dt);
     updateMarken();
     return loopOrig.apply(this, arguments);
@@ -830,6 +836,64 @@ function hookRadar(){
     if(story.etappe === 1 && !eva && locale === 'earth')      // keine Brandherde o. Ae. aus der Engine
       return story.ziel ? { x: story.ziel.x, z: story.ziel.z, col: COL_ZIEL } : null;
     return activeOrig();
+  };
+}
+
+// Radar-Anzeige: die SPITZE des Dreiecks ist der eigene Standort. Ist man am Ziel, sitzt der Punkt
+// genau auf der Spitze (vorher hielt die Engine 8-10 px Mindestabstand zur Mitte, man musste das
+// Ziel "ins Dreieck" bringen). Sonst wie in der Engine; das Periskop (U-Boot) bleibt unveraendert.
+function hookRadarAnzeige(){
+  // Periskop: die Engine malt ihr Dreieck mittig (Spitze 7 px ueber der Mitte). Danach das alte
+  // Dreieck mit Wasserfarbe abdecken (unter dem U-Boot ist nie Land) und das neue mit der Spitze auf
+  // der Mitte malen – gleiches Prinzip wie beim Radar.
+  const periOrig = updatePeriscope;
+  updatePeriscope = function(dt){
+    const r = periOrig.apply(this, arguments);
+    if(!r) return r;
+    const W = radarCv.width, H = radarCv.height, cx = W/2, cy = H/2, g = radarCtx;
+    g.fillStyle = 'rgb(20,70,90)';
+    g.beginPath(); g.moveTo(cx, cy - 8); g.lineTo(cx - 6.5, cy + 7); g.lineTo(cx + 6.5, cy + 7); g.closePath(); g.fill();
+    // Wracks, die unter dem alten Dreieck lagen, sind direkt unter dem Boot: nichts Wichtiges verloren
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx - 5, cy + 13); g.lineTo(cx + 5, cy + 13); g.closePath(); g.fill();
+    return r;
+  };
+  updateRadar = function(){
+    if(updatePeriscope(dtCam)) return;
+    const W = radarCv.width, H = radarCv.height, cx = W/2, cy = H/2, R = W/2 - 6;
+    const g = radarCtx;
+    g.clearRect(0, 0, W, H);
+    g.fillStyle = 'rgba(10,25,40,0.55)';
+    g.beginPath(); g.arc(cx, cy, R, 0, Math.PI*2); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2;
+    g.beginPath(); g.arc(cx, cy, R, 0, Math.PI*2); g.stroke();
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx - 5, cy + 13); g.lineTo(cx + 5, cy + 13);
+    g.closePath(); g.fill();
+    const blips = (locale === 'space') ? spaceTargets()
+                : eva ? footTargets()
+                : (() => { const a = activeTarget(); return a ? [a] : []; })();
+    if(!blips.length) return;
+    const selfX = eva ? eva.group.position.x : state.pos.x;
+    const selfZ = eva ? eva.group.position.z : state.pos.z;
+    const head = eva ? eva.yaw + Math.PI
+               : (() => { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat); return Math.atan2(f.x, f.z); })();
+    const RMAX = R - 8;
+    const radiusFor = (dist) => {
+      if(eva) return Math.min(RMAX, dist/500*RMAX);
+      if(locale !== 'space') return Math.min(RMAX, dist/2500*RMAX);
+      const NEAR = 1000, FAR = 900000;
+      const d = Math.max(NEAR, Math.min(FAR, dist));
+      return 12 + Math.log(d/NEAR) / Math.log(FAR/NEAR) * (RMAX - 12);
+    };
+    for(const t of blips){
+      const dx = t.x - selfX, dz = t.z - selfZ;
+      const rel = head - Math.atan2(dx, dz);
+      const rr = radiusFor(Math.hypot(dx, dz));
+      g.fillStyle = t.col;
+      g.beginPath(); g.arc(cx + Math.sin(rel)*rr, cy - Math.cos(rel)*rr, 5, 0, Math.PI*2); g.fill();
+      g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 1; g.stroke();
+    }
   };
 }
 
@@ -894,13 +958,7 @@ function pfHud(){
     + ';box-shadow:0 0 10px ' + lamp + '"></span>STARTSEQUENZ'
     + '<span style="margin-left:auto;font-family:monospace;font-size:20px">'
     + Math.max(0, PF_ZEIT - pf.t).toFixed(1) + '</span></div>';
-  PF_SCHRITTE.forEach((s, i) => {
-    const ok = pf.gruen || i < pf.schritt;
-    h += '<div style="opacity:' + (ok || i === pf.schritt ? 1 : .55) + '">'
-      + (ok ? '✅ ' : (i === pf.schritt ? '▶️ ' : '▫️ ')) + s + '</div>';
-  });
-  h += '<div style="font-size:12px;opacity:.7;margin-top:6px">Bremse: A / C · Gas: X / Shift / W<br>'
-    + 'Lenken: Stick / Pfeiltasten</div>';
+  // Keine Anleitung: wer die Startsequenz nicht kennt, soll scheitern (Etappe 1). Nur Leuchte + Zeit.
   pf.el.innerHTML = h;
   pf.el.style.display = pf.aktiv || pf.gruen ? '' : 'none';
 }
@@ -1018,6 +1076,131 @@ function platzhalter(text){
   window.addEventListener('keydown', e => { if(e.code === 'KeyR') location.reload(); });
 }
 
+// ---- Mars-Trip (Startsequenz verpasst) -------------------------------------------------------
+// Nach dem Autostart: im All, Blick zum Mars. Hinfliegen, landen, aussteigen, den leuchtenden Stein
+// holen (Y), wieder einsteigen (ohne Startsequenz) und zurueck zur Erde -> 7 Tage.
+const MARS_TEXT = [
+  'Hallo. Du bist wohl etwas nervös gewesen.',
+  'Aber keine Sorge, wir haben die Startsequenz und den Start automatisch durchgeführt.',
+  'Zur Erinnerung: Du hast dich freiwillig gemeldet, als erster Mensch zum Mars zu fliegen und als Beweis einen Stein mitzubringen.',
+  'Falls du vergessen hast, wie man fliegt, erklären wir es noch einmal kurz.',
+  'Mit dem linken Stick lenkst du und hebst oder senkst die Nase. Mit L T und R T rollst du.',
+  'Mit dem rechten Stick stellst du den Schub ein. Bei vollem Schub springt der Warp-Antrieb an, so kommst du schnell zum Mars.',
+  'Der rote Punkt im Radar zeigt dir den Weg. Kurz vor dem Mars bremst der Antrieb von selbst ab.',
+  'Zum Landen gehst du auf zehn Prozent Schub, dann sinkt der X-Wing langsam und setzt senkrecht auf.',
+  'Mit Y steigst du aus und wieder ein. Zum Starten gibst du zwanzig Prozent Schub, dann steigst du senkrecht auf.',
+  'Du kommst schon klar. Wir sehen und hören uns dann in einer Woche wieder. Viel Spaß!',
+];
+const STEIN_R = 4;           // m: so nah muss Kenji fuer Y heran
+const mars = story.mars = { phase: null, stein: null, steinObj: null, steinSaeule: null, rede: null };
+
+function marsStart(){
+  story.phase = 'mars';
+  mars.phase = 'hin';
+  // ins All: hoch ueber die Insel, Weltall betreten, dann die Nase auf den Mars richten
+  state.pos.set(state.pos.x, SPACE_Y + 2000, state.pos.z);
+  state.onGround = false; state.crashed = false;
+  enterSpace();
+  const m = bodyOf('mars');
+  if(m){
+    const d = m.center.clone().sub(state.pos).normalize();
+    state.quat.setFromUnitVectors(new THREE.Vector3(0, 0, -1), d);
+  }
+  state.vel.set(0, 0, 0); state.throttle = 0.3;
+  planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
+  snapCamera();
+  mars.rede = sprich(MARS_TEXT, () => {
+    hinweis('Flieg zum Mars (roter Punkt) und hol einen Stein');
+    setTimeout(() => { if(mars.phase === 'hin') hinweis(''); }, 9000);
+  });
+}
+
+// Stein neben dem Landeplatz: leuchtend orange, mit Lichtsaeule
+function marsStein(){
+  if(mars.steinObj || mars.stein === 'geholt') return;
+  const x = state.pos.x + 22, z = state.pos.z + 10;
+  const y = surfaceY(x, z);
+  const g = new THREE.Group();
+  const stein = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3, 0),   // ein Brocken zum Mitnehmen
+    new THREE.MeshLambertMaterial({ color: 0xff7a2a, emissive: 0xff4400, emissiveIntensity: 0.9 }));
+  stein.position.y = 0.28; stein.rotation.set(0.4, 0.7, 0.2);
+  g.add(stein);
+  const saeule = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 200, 10, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xff8844, transparent: true, opacity: 0.2,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  saeule.position.y = 100; saeule.renderOrder = 995;
+  g.add(saeule);
+  g.position.set(x, y, z);
+  scene.add(g);
+  mars.steinObj = g; mars.stein = { x, z };
+}
+
+function marsUpdate(dt){
+  if(!mars.phase) return;
+  if(mars.steinObj) mars.steinObj.children[0].rotation.y += dt * 1.5;
+  if(locale === 'mars'){
+    if(mars.phase === 'hin'){ mars.phase = 'gelandet'; hinweis('Lande mit 10 % Schub, steig mit Y aus und hol den Stein'); }
+    if(state.onGround || eva) marsStein();
+    if(eva && mars.phase === 'gelandet' && !mars.hinweisWeg){ mars.hinweisWeg = true; hinweis('Hol den leuchtenden Stein'); setTimeout(() => { if(mars.phase === 'gelandet') hinweis(''); }, 6000); }
+  } else if(mars.steinObj && locale !== 'mars'){
+    scene.remove(mars.steinObj); mars.steinObj = null;
+  }
+}
+
+// Y zu Fuss am Stein
+function marsSteinNah(){
+  if(!eva || !mars.stein || mars.stein === 'geholt' || locale !== 'mars') return false;
+  const p = eva.group.position;
+  return Math.hypot(p.x - mars.stein.x, p.z - mars.stein.z) < STEIN_R;
+}
+function marsSteinHolen(){
+  mars.stein = 'geholt';
+  if(mars.steinObj){ scene.remove(mars.steinObj); mars.steinObj = null; }
+  mars.phase = 'zurueck';
+  blitz();
+  sprich(['Super, du hast den Stein! Jetzt zurück zur Erde.']);
+  hinweis('🪨 Stein an Bord – zurück zur Erde (blauer Punkt)');
+  setTimeout(() => { if(mars.phase === 'zurueck') hinweis(''); }, 9000);
+}
+
+// Erde erreicht: mit Stein -> 7 Tage; ohne Stein -> zurueck ins All
+function marsErde(){
+  if(mars.phase === 'zurueck'){
+    mars.phase = 'fertig';
+    schwarz(tageVergangen(7), 3, () => platzhalter('Etappe 2 (folgt) – Mars-Trip: 7 Tage vergangen'));
+    return true;
+  }
+  return false;
+}
+
+function hookMars(){
+  story.onWeltall = marsStart;
+  // Rover gibt es in Etappe 1 nicht (der Stein liegt nah genug)
+  const roverObjOrig = roverObjFor;
+  roverObjFor = function(){ return story.etappe === 1 ? null : roverObjOrig.apply(this, arguments); };
+  // Y am Stein
+  const boardYOrig = evaBoardY;
+  evaBoardY = function(){
+    if(marsSteinNah()){ marsSteinHolen(); return; }
+    return boardYOrig.apply(this, arguments);
+  };
+  // Zur Erde: mit Stein -> Ende; ohne Stein darf man nicht zurueck (wird ins All zurueckgeschoben)
+  const enterEarthOrig = enterEarth;
+  enterEarth = function(){
+    if(story.etappe === 1 && mars.phase && mars.phase !== 'fertig'){
+      if(marsErde()) return enterEarthOrig.apply(this, arguments);
+      // noch kein Stein: ein Stueck von der Erde weg zurueck ins All
+      const n = state.pos.clone().sub(earthHome).normalize();
+      state.pos.copy(earthHome).addScaledVector(n, EARTH_R + EARTH_Y + 3000);
+      state.vel.multiplyScalar(-0.3);
+      hinweis('Ohne Stein vom Mars geht es nicht zurück!');
+      setTimeout(() => hinweis(''), 4000);
+      return;
+    }
+    return enterEarthOrig.apply(this, arguments);
+  };
+}
+
 // ---- Freiflug zum Radarpunkt ----------------------------------------------------------------
 const ZIEL_R = 250;   // m: so nah (waagerecht) muss man ueber den Radarpunkt
 function freiflugUpdate(){
@@ -1037,10 +1220,10 @@ function freiflugUpdate(){
 // ---- U-Boot-Weg ------------------------------------------------------------------------------
 // Stimme + Ziffernfeld (Code 14 02 – kommt in Etappe 6 wieder!), dann frei tauchen. Zwei
 // UNTERSCHIEDLICHE Wracks fotografieren (X / F) -> 4 Tage. Scheitern kann man hier nicht.
-const UBOOT_TEXT = [
+const UBOOT_TEXT = [   // den Code NICHT aussprechen – er steht gross genug im Ziffernfeld
   'Hallo, danke für deine Hilfe.',
   'Du siehst jung aus, und als würdest du zum ersten Mal ein U-Boot fahren. Wir helfen dir.',
-  'Wir haben schon mal den universellen Code für U-Boote eingegeben: vierzehn – null zwei.',
+  'Wir haben den universellen Code für U-Boote für dich eingegeben.',
   'Jetzt erklären wir dir kurz die Steuerung.',
   'Mit dem rechten Stick oder W und S gibst du Fahrt. Ohne Fahrt kann das U-Boot nicht tauchen.',
   'Linker Stick nach vorn oder Pfeil hoch taucht ab, nach hinten taucht wieder auf. Gelenkt wird nach links und rechts.',
@@ -1076,6 +1259,7 @@ function ubootStart(){
   hinweis('');
   ziffernfeld('14 02');
   ub.rede = sprich(UBOOT_TEXT, () => {
+    if(ub.padEl) ub.padEl.style.display = 'none';        // Code-Anzeige nach der Ansage weg
     hinweis('Finde zwei unterschiedliche Wracks und fotografiere sie (X / F)');
     setTimeout(() => { if(ub.aktiv) hinweis(''); }, 9000);
   });
@@ -1185,13 +1369,14 @@ function hookEinsteigen(){
     if(story.phase === 'platzhalter'){ state.vel.set(0, 0, 0); return; }   // Spiel steht hinter dem Schild
     const r = physOrig.apply(this, arguments);
     if(story.phase === 'freiflug') freiflugUpdate();
+    if(story.phase === 'mars') marsUpdate(dt);
     if(ub.aktiv){ ubootUpdate(); boosting = false; }      // X ist im U-Boot das Foto, kein Boost
     return r;
   };
   // Aussteigen (Y) waehrend Startsequenz/Autostart/danach nicht erlaubt
   const buttonYOrig = buttonY;
   buttonY = function(){
-    if(!eva && (story.phase || pf.aktiv)) return;
+    if(!eva && (pf.aktiv || (story.phase && !(story.phase === 'mars' && GROUNDS[locale])))) return;
     return buttonYOrig.apply(this, arguments);
   };
   // Reset (R) nur gesperrt, solange Story-Sequenzen laufen
@@ -1304,7 +1489,7 @@ function hookHud(){
       }
       if(statEl){
         const ein = evaCanBoard() || harborSubNear();
-        const s = ein ? 'Y: einsteigen' : '';
+        const s = marsSteinNah() ? 'Y: Stein aufheben' : (ein ? 'Y: einsteigen' : '');
         if(statEl.textContent !== s) statEl.textContent = s;
       }
     } else if(mdlEl && mdlEl.textContent !== MODEL_NAMES[currentModel]){
@@ -1386,12 +1571,14 @@ const ANLEITUNG = [
 ];
 function aufgabeText(){
   if(pf.aktiv) return ['Startsequenz', [
-    ['1', 'Bremse halten (A / C)'],
-    ['2', 'links, dann rechts lenken'],
-    ['3', 'Nase hoch, dann runter'],
-    ['4', 'Bremse loslassen'],
-    ['5', 'Gas geben (X / Shift / W)'],
-    ['Zeit', '10 Sekunden · beliebig oft neu beginnen'],
+    ['Zeit', '10 Sekunden'],
+  ]];
+  if(story.phase === 'mars') return ['Mars-Trip', [
+    ['Ziel', mars.phase === 'zurueck' ? 'zurück zur Erde (blauer Punkt im Radar)' : 'Mars (roter Punkt im Radar), Stein holen'],
+    ['Warp', '100 % Schub halten'],
+    ['Landen', '10 % Schub, senkrecht aufsetzen'],
+    ['Stein', 'aussteigen (Y), hinlaufen, Y'],
+    ['Starten', '20 % Schub: senkrecht hoch'],
   ]];
   if(story.phase === 'freiflug') return ['Ziel', [
     ['Radar', 'fliege zum roten Punkt'],
@@ -1474,12 +1661,14 @@ window.STORY_HOOK = function(){
   hookKenji();
   hookIntro();
   hookRadar();
+  hookRadarAnzeige();
   hookEinsteigen();
   hookHud();
   hookHilfe();
   hookTon();
   hookSchwimmen();
   hookWarp();
+  hookMars();
   hookLoop();
 };
 window.STORY_START = function(){
