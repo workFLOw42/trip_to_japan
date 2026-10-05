@@ -378,7 +378,7 @@ const GEH_MAX = 0.3;          // Anteil von EVA_SPEED bei 50 % Stick (≈ 1,8 m/
 const TRICK_CLIP = { tanz: 'dance_silly', twirl: 'butterfly_twirl', evade: 'aerial_evade' };
 const tricks = story.tricks = { aktiv: null, t: 0, moon: false, ausschlag: 0, prev: {} };
 
-function amFahrzeug(){ return !!eva && (evaCanBoard() || !!harborSubNear() || marsSteinNah() || !!(story.transallNah && story.transallNah()) || !!(story.bootNah && story.bootNah())); }
+function amFahrzeug(){ return !!eva && (evaCanBoard() || !!harborSubNear() || marsSteinNah() || !!(story.transallNah && story.transallNah()) || !!(story.bootNah && story.bootNah()) || !!(story.kranNah && story.kranNah()) || !!(story.bootNah4 && story.bootNah4())); }
 
 // Rohzustand der vier Tasten (Controller + Tastatur)
 function trickTasten(){
@@ -543,6 +543,8 @@ function sprich(saetze, fertig, rolle){
   }
   const r = {
     abbrechen(){ done = true; reden.delete(r); clearTimeout(timer); utt = null; if(synth) synth.cancel(); untertitel(''); },
+    // Test: zum Ende springen, der fertig-Rueckruf laeuft (anders als bei abbrechen)
+    ueberspringen(){ if(done) return; clearTimeout(timer); utt = null; if(synth) synth.cancel(); i = saetze.length - 1; naechster(); },
     tonGeaendert(){
       if(done || i < 0 || pausePos >= 0) return;         // angehalten: fortsetzen nimmt den neuen Ton
       if(laut === tonAn() && (laut ? !!utt : true)) return;   // nichts zu tun (z. B. voiceschanged bei laufender Stimme)
@@ -563,6 +565,18 @@ function sprich(saetze, fertig, rolle){
   naechster();
   return r;
 }
+// ---- TEST (undokumentiert): X 3 s halten springt ans Ende jeder laufenden Erklaerung ---------
+// Nur solange eine Ansage laeuft – ein kurzer Druck bleibt Tanz/Boost wie gehabt. Steht bewusst in
+// keiner Anleitung.
+let skipT = 0;
+function skipTick(dt){
+  if(!reden.size){ skipT = 0; return; }
+  const gp = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
+  const x = !!keys['KeyX'] || !!(gp && gp.buttons[2] && gp.buttons[2].pressed);
+  skipT = x ? skipT + dt : 0;
+  if(skipT >= 3){ skipT = 0; for(const rd of [...reden]) rd.ueberspringen(); }
+}
+story.skipTick = skipTick;
 // Die Browser laden ihre Stimmen spaet (Chrome: getVoices() ist anfangs leer). Eine Ansage, die
 // davor beginnt, liefe sonst komplett als Untertitel, obwohl der Ton an ist – erst Ton aus/an holte
 // die Stimme. Kommen die Stimmen nach, schaltet jede laufende Ansage an der aktuellen Stelle um.
@@ -678,6 +692,7 @@ function springeZu(n){
     story.etappe = n;
     if(n === 2 && story.etappe2Start){ hinweis(''); story.etappe2Start(); return; }
     if(n === 3 && story.etappe3Start){ hinweis(''); story.etappe3Start(); return; }
+    if(n === 4 && story.etappe4Start){ hinweis(''); story.etappe4Start(); return; }
     platzhalter('Etappe ' + n + ' (folgt) – Tag ' + story.tage + ' von 42');
   });
 }
@@ -1043,6 +1058,7 @@ function hookSchatten(){
   updateOvalShadow = function(){
     const r = ovalOrig.apply(this, arguments);
     if(!ovalShadow.visible) return r;
+    if(story.kenjiVersteckt){ ovalShadow.visible = false; return r; }
     if(eva && !eva.boat){
       const px = eva.group.position.x, pz = eva.group.position.z;
       ovalShadow.scale.x *= KENJI_SCHATTEN; ovalShadow.scale.y *= KENJI_SCHATTEN;
@@ -1297,6 +1313,7 @@ function hookLoop(){
       return;
     }
     timerTick(dt);                            // nach Pause und Globus: dort stehen die Timer
+    skipTick(dt);
     updateKenji(dt);
     kenjiWache(dt);
     weltenSichtbar();                         // nur die Welt der aktuellen Etappe, nur auf der Erde
@@ -1305,6 +1322,7 @@ function hookLoop(){
     if(eva && story.phase === 'mars') marsUpdate(dt);
     if(story.updateE2) story.updateE2(dt);
     if(story.updateE3) story.updateE3(dt);
+    if(story.updateE4) story.updateE4(dt);
     introDt(dt);
     updateMarken();
     return loopOrig.apply(this, arguments);
@@ -1325,7 +1343,7 @@ function hookRadar(){
   };
   const activeOrig = activeTarget;
   activeTarget = function(){
-    if(story.etappe <= 3 && !eva && locale === 'earth')       // keine Brandherde o. Ae. aus der Engine
+    if(story.etappe <= 4 && !eva && locale === 'earth')       // keine Brandherde o. Ae. aus der Engine
       return story.ziel ? { x: story.ziel.x, z: story.ziel.z, col: COL_ZIEL } : null;
     return activeOrig();
   };
@@ -1652,6 +1670,7 @@ function etappeEnde(tage, wie){
     story.etappe++;
     if(story.etappe === 2 && story.etappe2Start){ hinweis(''); story.etappe2Start(); return; }
     if(story.etappe === 3 && story.etappe3Start){ hinweis(''); story.etappe3Start(); return; }
+    if(story.etappe === 4 && story.etappe4Start){ hinweis(''); story.etappe4Start(); return; }
     platzhalter('Etappe ' + story.etappe + ' (folgt) – Tag ' + story.tage + ' von 42');
   });
 }
@@ -1841,7 +1860,7 @@ function hookMars(){
   story.onWeltall = marsStart;
   // Rover gibt es in Etappe 1 nicht (der Stein liegt nah genug)
   const roverObjOrig = roverObjFor;
-  roverObjFor = function(){ return story.etappe <= 3 ? null : roverObjOrig.apply(this, arguments); };
+  roverObjFor = function(){ return story.etappe <= 4 ? null : roverObjOrig.apply(this, arguments); };
   // Y am Stein
   const boardYOrig = evaBoardY;
   evaBoardY = function(){
@@ -2230,7 +2249,7 @@ function hookHud(){
         if(alt && alt.textContent !== String(t)) alt.textContent = String(t);
       }
       if(statEl){
-        const ein = evaCanBoard() || harborSubNear() || (story.transallNah && story.transallNah()) || (story.bootNah && story.bootNah());
+        const ein = evaCanBoard() || harborSubNear() || (story.transallNah && story.transallNah()) || (story.bootNah && story.bootNah()) || (story.kranNah && story.kranNah()) || (story.bootNah4 && story.bootNah4());
         const s = marsSteinNah() ? 'Y: ' + TRIP[mars.ort || 'mars'].stein + ' aufheben' : (ein ? 'Y: einsteigen' : '');
         if(statEl.textContent !== s) statEl.textContent = s;
       }
@@ -2249,6 +2268,8 @@ const DEBUG = /[?&]debug\b/.test(location.search);
 let dbgEl = null, dbgT = 0;
 function kenjiWache(dt){
   if(!kenji.obj || !eva || !eva.group || eva.rover || eva.boat) return;
+  // Bewusst versteckt (Etappe 4: Kenji sitzt im Kran) – nicht wieder einblenden
+  if(story.kenjiVersteckt){ eva.group.visible = false; return; }
   if(kenji.obj.parent !== eva.group){
     eva.group.clear(); eva.group.add(kenji.obj); kenji.last = null;
     story.kenjiRepariert = (story.kenjiRepariert || 0) + 1;
@@ -2327,11 +2348,17 @@ function aufgabeText(){
     ['Foto', fotoTaste() + ' (getaucht, Wrack vor dir)'],
     ['Sonar', 'B'],
   ]];
-  const a3 = story.aufgabeE3 && story.aufgabeE3();
+  const a3 = (story.aufgabeE3 && story.aufgabeE3()) || (story.aufgabeE4 && story.aufgabeE4());
   if(a3) return a3;
   if(story.phase === 'freiflug') return ['Ziel', [
     ['Radar', 'fliege zum roten Punkt'],
     ['Zeit', 'Fliegen kostet keine Zeit – erst über dem Ziel geht es weiter'],
+  ]];
+  if(story.etappe === 4) return ['Etappe 4: Der Hafen', [
+    ['Schnellboot (weiß)', '1 Tag, riskant (folgt)'],
+    ['Container-Kran (gelb)', '4 Tage, Geduld im Wind'],
+    ['Einsteigen', 'in den gelben Ring, Y'],
+    ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],
   ]];
   if(story.etappe === 3) return ['Etappe 3: Der Fluss', [
     ['X-Wing (weiß)', '1 Tag Reisedauer, aber riskant'],

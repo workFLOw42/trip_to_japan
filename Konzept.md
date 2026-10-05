@@ -11,7 +11,13 @@ Mond-Trip, Transall-Flugschule) und Etappe 3 (Fluss mit Feuerwehrboot, X-Wing oh
 Tageszähler · Stimmen (Pilot männlich) · Offline-PWA · Highscores still gespeichert (noch ohne Anzeige).
 Details zum Gebauten in der [README](README.md); Stolperstellen der Engine in [ENGINE_RISIKEN.md](ENGINE_RISIKEN.md).
 
-**Als Nächstes:** Etappe 4 (Südostasien).
+**Als Nächstes:** Etappe 4 – Schnellboot-Flucht (der Kran ist gebaut).
+
+- **Etappe 4 Kran gebaut, live abgestimmt (weicht vom Text unten ab):** Steuerung in **Stufen** (5° je Druck, Laufkatze
+  einen Marker je Druck auf **LT/RT**), Ladung als **Fächer** um den Kran, damit Lücken, Winkel und Marker genau
+  übereinander liegen. Marker sind die Bögen (0 = Lager am Kai, 1–4 auf dem Schiff); keine Tafeln am Ausleger, dafür
+  Draufsicht im Ladeplan. Ohne Last kein Pendeln, ganz oben hängt die Last fest. Lücke 3 liegt **seitlich** außerhalb
+  des Drehbereichs (der Wind weht längs des Kais). Fallen lassen in Lücke 3 = 1 Fehler, der Container sitzt.
 
 - **Etappe 3 gebaut als Fluss** (nicht Meer): gewundener Fluss mit Strömung, Felsen, 3 Uferfeuer. Einstieg ins
   Feuerwehrboot über den gelben Ring wie beim U-Boot. X-Wing in Etappe 3 **ohne Kurzschluss**. Ergebnis des
@@ -270,7 +276,7 @@ Kenji muss diesen Check in den Risiko-Szenarien innerhalb des **10-Sekunden-Coun
 - **Der Präzisions-Container (Gegenstück):** Eine Lücke ist **minimal** – kaum breiter als der Container. Er passt nur bei **Flaute (0 Wind)** und **null horizontaler Bewegung**: Ausleger und Laufkatze stehen still, das Pendeln ist komplett ausgeschwungen, erst dann senkrecht absenken.
   - Die beiden Sonder-Container bilden die Extreme des Zyklus: einer braucht den **stärksten** Wind, der andere **gar keinen**.
 - **Die Lektion:** Abwarten, beobachten, die richtige Gelegenheit erkennen – und dann ruhig zugreifen.
-- **Steuerung (wie Fliegen):** L-Stick ←→ / ← → = Ausleger drehen · L-Stick ↕ / ↑ ↓ = **Laufkatze vor/zurück** (bewegt das Seil auf dem Ausleger nach außen/innen) · R-Stick ↕ / W S = Haken heben/senken · **B** = greifen/lösen · **Y** = ein-/aussteigen.
+- **Steuerung (gebaut, in Stufen):** L-Stick ←→ / ← → = Ausleger drehen (5° je Druck) · **LT/RT** bzw. Q/E = Laufkatze einen Marker nach innen/außen · R-Stick ↕ / W S = Haken heben/senken · **B** = greifen/lösen · **P** = Ladeplan.
 - **Marker am Ausleger:** Am Ausleger sind **Markierungen** (Skala) angebracht, an denen Kenji sieht, wo die Laufkatze steht – und damit, wo der Container abgelassen wird. Zusammen mit dem Drehwinkel des Auslegers lässt sich so jede Position **auch blind** anfahren.
 - **Aufbau:** Das Frachtschiff liegt **längsseits am Kai**, der Kran steht auf dem Kai. Das Deck ist voll beladen bis auf **4 Lücken**:
   1. **Doppel-Lücke, erster Container:** Zwei Lücken liegen **recht mittig** direkt nebeneinander. Der erste muss **präzise** sitzen – steht er schief oder versetzt, passt der zweite nicht mehr.

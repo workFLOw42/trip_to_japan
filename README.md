@@ -14,7 +14,7 @@ Technische Basis ist die Engine des **[Flugspiel](https://github.com/workFLOw42/
 
 ## Stand
 
-Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 3**, danach folgt
+Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 3** und in Etappe 4 der **Container-Kran**, danach folgt
 vorerst ein Platzhalter.
 
 **Startmenü:** *Neues Spiel* oder – zum Testen – direkt **E2 … E6** (linker Stick / ← → wählen, A / Enter starten).
@@ -60,6 +60,24 @@ Wüstenwind wie in Etappe 2 (ohne Musik).
   Geschafft → *„Du bist ein echter Held!“*; Felsen zählen weiter, bis der Satz zu Ende ist → **4 Tage**
   (+ Boots-Wissen). 3. Felskontakt oder Zeit um → **7 Tage**. Live abgestimmt: ~16 s Rest bei 2 Kontakten.
 
+### Etappe 4 – Der Hafen
+Hafenbecken mit Kai, Frachtschiff längsseits (Ladung als Fächer um den Kran) und Container-Kran.
+- **Schnellboot („1 Tag“):** folgt im nächsten Schritt.
+- **Container-Kran („4 Tage“):** im gelben Ring am Kranfuß einsteigen. Vier Container vom Kai in vier Lücken, **6 Minuten**,
+  höchstens **2 Fehler**. Der Container hängt wie ein Pendel; Wind kommt abwechselnd von links und rechts, baut sich
+  langsam auf und fällt ruckartig ab (nicht angesagt).
+  - **Steuerung in Stufen:** L-Stick / ← → dreht den Ausleger um **5°** je Druck, **LT/RT** bzw. **Q/E** fährt die
+    Laufkatze einen **Marker** nach innen/außen, R-Stick / W S hebt und senkt, **B** hängt an und löst, **P** Ladeplan.
+  - Ohne Last hängt der Haken senkrecht, ganz oben hängt die Last fest unter der Katze – dort beruhigt sie sich sofort.
+  - **HUD:** Pendelpunkt (grün = ruhig), Winkel und Marker groß, Seil, Abstand zu dem, was darunter liegt
+    (grün = aufgesetzt), Wind, Container, Fehler, Zeit. Über einem Lager-Container „▼ tiefer“ / „B: anhängen“.
+  - **Ladeplan:** Draufsicht mit Fächer, Lücken, Drehbereich, Ausleger und Haken; je Lücke Winkel und Marker, dazu
+    Seil-Richtwerte (greifen 31 m · über der Ladung bis 24 m · in der Lücke 26,5 m). Wie man eine Lücke schafft,
+    steht bewusst nicht drin.
+  - Lücke 1 und 2 liegen hintereinander in der Mitte (2 nur bei Flaute und ruhig), Lücke 3 außerhalb des
+    Drehbereichs (nur mit vollem Seitenwind, dann fallen lassen = 1 Fehler, aber er sitzt), Lücke 4 hinten außen.
+  - Geschafft → **4 Tage**, Zeit um oder 3. Fehler → **7 Tage**.
+
 Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, gelb = Etappen, lila = Fukuoka).
 
 ## Steuerung zu Fuß
@@ -86,12 +104,14 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `story.js` | Spiellogik und Etappe 1 – hängt sich per Wrapper in die Engine ein |
 | `etappe2.js` | Etappe 2 (Wüste, X-Wing-Falle, Transall-Flugschule) |
 | `etappe3.js` | Etappe 3 (Fluss, Feuerwehrboot, X-Wing ohne Kurzschluss) |
+| `etappe4.js` | Etappe 4 (Hafen, Container-Kran; Schnellboot folgt) |
+| `hafen_glb.js` | Frachtschiff (verkleinert), Container und Kran als Base64 |
 | `kenji_glb.js` | Kenji als eingebettetes GLB (aus `models/kenji.glb`) |
 | `wueste_snd.js` | Wüsten-Sounds (Musik, Wind) als Base64 |
 | `sw.js`, `manifest.json` | Offline-Cache und App-Installation (PWA) |
 | `ENGINE_RISIKEN.md` | bekannte Stolperstellen der Engine-Übernahme |
 
-Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `etappe2.js` → `etappe3.js` → `engine/engine.js`. Die Engine ruft am Ende
+Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `etappe2.js` → `etappe3.js` → `hafen_glb.js` → `etappe4.js` → `engine/engine.js`. Die Engine ruft am Ende
 ihres Boot-Blocks `STORY_HOOK` (Wrapper setzen) und `STORY_START` (Startszene) auf – die zwei Zeilen fügt das Build-Skript ein.
 
 **Welten:** Jede Etappe baut ihre Kulisse in eine eigene Gruppe – `story.welt(n).add(obj)`, nie `scene.add(obj)`.
@@ -137,6 +157,9 @@ Dieses Spiel wäre ohne die großartige Arbeit vieler Künstlerinnen und Künstl
 | [Intermediate Advanced Snowboard](https://sketchfab.com/3d-models/intermediate-advanced-snowboard-267e04a025434d7d8587ec2ee60ad62e) | **Final Render Animation Studio** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – skaliert, Material auf PBR umgestellt |
 | Arabic Islamic Music (46 s) | **bombinsound** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
 | Desert Wind 2 | **tanweraman** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
+| [Building crane low poly](https://sketchfab.com/3d-models/building-crane-low-poly-52d3ffdc37f844a892bebbd7e76f1939) | **Mostafa Hamed** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – Haken und Laufkatze ersetzt |
+| [Cargo Ship 06 without containers](https://sketchfab.com/3d-models/cargo-ship-06-without-containers-c73ae6cc314941069a0e3a7ca6acc26d) | **gogiart** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – verkleinert (Dreiecke, Texturen) |
+| [Container](https://sketchfab.com/3d-models/container-92bd84031ebc4ddcbf3b3d3689c4bf31) | **H.A.K_Niazi** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – skaliert, eingefärbt |
 
 Rigging und Animationen der Spielfigur: **[Mixamo](https://www.mixamo.com)** (Adobe).
 
