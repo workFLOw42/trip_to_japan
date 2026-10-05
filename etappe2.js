@@ -36,8 +36,20 @@ const SAND_HELL  = new THREE.Color(0xc9a46a);   // dunkel gewaehlt: das Licht (h
 const SAND_DUNKEL = new THREE.Color(0x7e5a30);
 const _c2 = new THREE.Color();
 let sandFertig = false;
-function updateSand(){
+// Neu gerechnet wird nur, wenn das Gitter eine Rasterzelle weiterwandert (R12): die Duenen stehen
+// still, und eine volle Rechnung kostet 5,3 ms. Dafuer rastet das Gitter in der Wueste auf SEA_STEP
+// (62,5 m) ein (siehe sandRaster in hookWelt2) – die Engine schiebt es stufenlos mit (recycleWorld),
+// dann waere jedes Bild neu. Unbedenklich in der Wueste: keine Wellen, kein Boot fragt seaSurfaceY ab.
+let sandX = NaN, sandZ = NaN;
+function sandRaster(){
+  ground.position.x = Math.round(ground.position.x / SEA_STEP) * SEA_STEP;
+  ground.position.z = Math.round(ground.position.z / SEA_STEP) * SEA_STEP;
+}
+function updateSand(erzwingen){
+  sandRaster();
   const ox = ground.position.x, oz = ground.position.z;
+  if(!erzwingen && ox === sandX && oz === sandZ) return;
+  sandX = ox; sandZ = oz;
   for(let i = 0; i < seaPos.count; i++){
     const wx = seaBaseX[i] + ox, wz = seaBaseZ[i] + oz;
     const y = duene(wx, wz);
@@ -251,6 +263,14 @@ function hookWelt2(){
     if(!(e2() && locale === 'earth')) return updateSeaOrig.apply(this, arguments);
     updateSand();
   };
+  // recycleWorld laeuft NACH updateSea und direkt vor dem Rendern: dort einrasten, sonst wanderte
+  // der Sand zwischen zwei Rechnungen bis zu 31 m mit dem Spieler mit.
+  const recycleOrig = recycleWorld;
+  recycleWorld = function(){
+    const r = recycleOrig.apply(this, arguments);
+    if(e2() && locale === 'earth') sandRaster();
+    return r;
+  };
 }
 
 // Beim Wechsel nach Etappe 2: Insel-Welt leeren, Wueste aufbauen, Ankunft am Flugfeld
@@ -282,7 +302,7 @@ function wuesteStart(){
   state.vel.set(0, 0, 0); state.throttle = 0; state.onGround = true; state.crashed = false;
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
   ground.position.set(0, 0, 0);
-  updateSand();
+  updateSand(true);
   evaExit();
   eva.group.position.set(ANKUNFT.x, duene(ANKUNFT.x, ANKUNFT.z), ANKUNFT.z);
   // Blick genau auf die Mitte zwischen beiden Flugzeugen (Gesicht -Z: yaw = atan2(-dx, -dz))
@@ -361,8 +381,8 @@ function fsEinsteigen(){
   kiste = null;
   fsch.rede = story.sprich(FS_TEXT, () => fsFrage(), 'pilot');
   // waehrend der Kurzschluss-Erklaerung das Symbol kurz zeigen
-  setTimeout(() => { if(fsch.schritt === 'erklaeren') fsSymbol(true); }, 11000);
-  setTimeout(() => fsSymbol(false), 20000);
+  story.spaeter(11, () => { if(fsch.schritt === 'erklaeren') fsSymbol(true); });
+  story.spaeter(20, () => fsSymbol(false));
 }
 
 function fsSymbol(an){
@@ -515,10 +535,10 @@ function fsErgebnis(abstand){
   const treffer = abstand <= FS_TREFFER;
   story.sprich([treffer ? (abstand < 20 ? 'Perfekt! Mitten in die Oase!' : 'Gut gemacht! Die Kiste ist angekommen.')
                         : 'Oh, daneben. Die Leute müssen die Kiste jetzt suchen.'], null, 'pilot');
-  setTimeout(() => {
+  story.spaeter(4, () => {
     if(story.hinweis) story.hinweis('');
     story.etappeEnde(treffer ? 4 : 7, treffer ? 'Kiste getroffen' : 'Kiste daneben');
-  }, 4000);
+  });
 }
 function fsFlug(dt){
   fsHud();

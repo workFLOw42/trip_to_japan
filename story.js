@@ -440,6 +440,7 @@ function satzDauer(s){ return 1200 + s.length / ZEICHEN_PRO_S * 1000; }   // ms,
 function sprich(saetze, fertig, rolle){
   let i = -1, done = false, timer = null, utt = null;
   let laut = false, pos0 = 0, t0 = 0, bPos = null;     // aktueller Satz: ab Zeichen pos0 seit t0
+  let pausePos = -1;                                   // >= 0: angehalten an diesem Zeichen
   const synth = window.speechSynthesis;
   const tonAn = () => !!(synth && story.ton && soundOn && synth.getVoices().length);
 
@@ -484,11 +485,18 @@ function sprich(saetze, fertig, rolle){
   const r = {
     abbrechen(){ done = true; reden.delete(r); clearTimeout(timer); utt = null; if(synth) synth.cancel(); untertitel(''); },
     tonGeaendert(){
-      if(done || i < 0) return;
+      if(done || i < 0 || pausePos >= 0) return;         // angehalten: fortsetzen nimmt den neuen Ton
       const p = Math.floor(aktPos());
       utt = null;
       if(synth) synth.cancel();
       weiterAb(p);
+    },
+    // Anhalten (Anleitung oder Aufgabe offen) und am selben Wort fortsetzen â€“ wie beim Tonwechsel.
+    // speechSynthesis.pause() nicht: das haelt nicht in jedem Browser verlaesslich an.
+    pause(an){
+      if(done || i < 0 || an === (pausePos >= 0)) return;
+      if(an){ pausePos = Math.floor(aktPos()); clearTimeout(timer); utt = null; if(synth) synth.cancel(); untertitel(''); }
+      else { const p = pausePos; pausePos = -1; weiterAb(p); }
     },
   };
   reden.add(r);
@@ -1152,6 +1160,9 @@ function globusReise(nach, tageText, fertig){
     if(typeof clearBoatSpray === 'function') clearBoatSpray();
     if(typeof clearFire === 'function') clearFire();
     state.crashed = false; state.crashTimer = 0;
+    // Der Globus laeuft allein: Ansagen und Story-Timer der alten Etappe enden hier
+    for(const rd of [...reden]) rd.abbrechen();
+    timerListe.length = 0;
     gl.von = story.reise[story.reise.length - 1];
     gl.nach = nach;
     story.reise.push(nach);
@@ -1184,6 +1195,22 @@ function globusUpdate(dt){
 story.globusReise = globusReise;
 story.globusAktiv = () => gl.aktiv;
 
+// ---- Story-Timer (R7) ------------------------------------------------------------------------
+// Laufen ueber die Spielzeit statt setTimeout: sie stehen, solange die Anleitung offen ist (Pause)
+// und waehrend des Globus. Beim Start einer Globus-Reise werden alle verworfen â€“ sie gehoeren zur
+// alten Etappe. Schwarzblende und Untertitel-Takt bleiben bei setTimeout (echte Zeit).
+const timerListe = [];
+function spaeter(sek, fn){ timerListe.push({ t: sek, fn }); }
+story.spaeter = spaeter;
+function timerTick(dt){
+  if(!timerListe.length) return;
+  const faellig = [];
+  for(let i = timerListe.length - 1; i >= 0; i--){
+    if((timerListe[i].t -= dt) <= 0){ faellig.unshift(timerListe[i].fn); timerListe.splice(i, 1); }
+  }
+  for(const f of faellig) f();
+}
+
 // ---- Hauptschleife ---------------------------------------------------------------------------
 function hookLoop(){
   const loopOrig = loop;
@@ -1191,7 +1218,9 @@ function hookLoop(){
   loop = function(){
     const now = performance.now();
     const dt = Math.min(0.1, (now - tPrev) / 1000); tPrev = now;
-    if(hilfeOffen()) return loopOrig.apply(this, arguments);   // Pause (Anleitung offen)
+    // Anleitung (Pause) und Aufgabe (keine Pause) halten beide eine laufende Ansage an
+    for(const rd of reden) rd.pause(hilfeOffen() || aufgabeAuf);
+    if(hilfeOffen()) return loopOrig.apply(this, arguments);   // Pause (Anleitung offen), auch die Story-Timer
     if(gl.aktiv){
       globusUpdate(dt);
       gl.kam.aspect = innerWidth / innerHeight; gl.kam.updateProjectionMatrix();
@@ -1199,6 +1228,7 @@ function hookLoop(){
       requestAnimationFrame(loop);
       return;
     }
+    timerTick(dt);                            // nach Pause und Globus: dort stehen die Timer
     updateKenji(dt);
     kenjiWache(dt);
     // Die Schule steht in Weltkoordinaten – Mond/Mars nutzen denselben Raum, dort darf sie nicht stehen
@@ -1453,19 +1483,19 @@ function pfFertig(ok){
   if(pf.danach){                                   // eigener Ablauf (z. B. Transall-Flugschule)
     const f = pf.danach; pf.danach = null;
     if(ok) neueZeit(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz', pf.t);
-    setTimeout(() => { pf.gruen = false; pfHud(); }, 2500);
+    spaeter(2.5, () => { pf.gruen = false; pfHud(); });
     f(ok);
     return;
   }
   if(ok){
     neueZeit(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz', pf.t);   // still speichern
     sprich(['Startsequenz abgeschlossen. Guten Flug!']);
-    setTimeout(() => { pf.gruen = false; pfHud(); }, 2500);
+    spaeter(2.5, () => { pf.gruen = false; pfHud(); });
     story.phase = 'freiflug';
     story.ziel = story.zielFuer ? story.zielFuer(story.etappe) : { x: 0, z: -9000 };   // Radarpunkt
     story.verdreht = pf.kurzschluss;     // Kurzschluss gilt weiter, bis man am Ziel ist
     hinweis('Folge dem roten Punkt im Radar – Start: X / Shift halten');
-    setTimeout(() => hinweis(''), 8000);
+    spaeter(8, () => hinweis(''));
   } else {
     pfHud();
     autostart();
@@ -1621,7 +1651,7 @@ function marsStart(){
   story.verdreht = false;                 // der Autopilot hat uebernommen: Steuerung normal
   mars.rede = sprich(TRIP[mars.ort].text(), () => {
     hinweis('Flieg zum ' + TRIP[mars.ort].ziel + ' und hol ' + (mars.ort === 'moon' ? 'Mondgestein' : 'einen Stein'));
-    setTimeout(() => { if(mars.phase === 'hin') hinweis(''); }, 9000);
+    spaeter(9, () => { if(mars.phase === 'hin') hinweis(''); });
   });
 }
 
@@ -1672,7 +1702,7 @@ function marsUpdate(dt){
   if(locale === (mars.ort || 'mars')){
     if(mars.phase === 'hin'){ mars.phase = 'gelandet'; hinweis('Lande mit 10 % Schub, steig mit Y aus und hol das ' + TRIP[mars.ort || 'mars'].stein); }
     if(state.onGround || eva) marsStein();
-    if(eva && mars.phase === 'gelandet' && !mars.hinweisWeg){ mars.hinweisWeg = true; hinweis('Hol den leuchtenden Stein'); setTimeout(() => { if(mars.phase === 'gelandet') hinweis(''); }, 6000); }
+    if(eva && mars.phase === 'gelandet' && !mars.hinweisWeg){ mars.hinweisWeg = true; hinweis('Hol den leuchtenden Stein'); spaeter(6, () => { if(mars.phase === 'gelandet') hinweis(''); }); }
   } else if(mars.steinObj && locale !== (mars.ort || 'mars')){
     scene.remove(mars.steinObj); mars.steinObj = null;
   }
@@ -1692,7 +1722,7 @@ function marsSteinHolen(){
   const st = TRIP[mars.ort || 'mars'].stein;
   sprich(['Super, du hast das ' + st + '! Jetzt zurück zur Erde.']);
   hinweis('🪨 ' + st + ' an Bord – zurück zur Erde (blauer Punkt)');
-  setTimeout(() => { if(mars.phase === 'zurueck') hinweis(''); }, 9000);
+  spaeter(9, () => { if(mars.phase === 'zurueck') hinweis(''); });
 }
 
 // Erde erreicht: mit Stein -> 7 Tage; ohne Stein -> zurueck ins All
@@ -1726,7 +1756,7 @@ function hookMars(){
       state.pos.copy(earthHome).addScaledVector(n, EARTH_R + EARTH_Y + 3000);
       state.vel.multiplyScalar(-0.3);
       hinweis('Ohne Stein vom Mars geht es nicht zurück!');
-      setTimeout(() => hinweis(''), 4000);
+      spaeter(4, () => hinweis(''));
       return;
     }
     return enterEarthOrig.apply(this, arguments);
@@ -1811,7 +1841,7 @@ function ubootStart(){
   ub.rede = sprich(UBOOT_TEXT.concat(['Fotografiert wird mit ' + fotoTaste() + ', wenn du nah genug dran bist. Viel Spaß!']), () => {
     if(ub.padEl) ub.padEl.style.display = 'none';        // Code-Anzeige nach der Ansage weg
     hinweis('Finde zwei unterschiedliche Wracks und fotografiere sie (' + fotoTaste() + ')');
-    setTimeout(() => { if(ub.aktiv) hinweis(''); }, 9000);
+    spaeter(9, () => { if(ub.aktiv) hinweis(''); });
   });
 }
 
@@ -1874,10 +1904,10 @@ function fotoMachen(){
     sprich(['Toll gemacht! Mit beiden Fotos können wir die Riffe bauen. Danke!']);
     ub.aktiv = false; story.phase = 'uboot-fertig';
     ub.nah = null; fotoAnzeige();
-    setTimeout(() => {
+    spaeter(3.5, () => {
       ub.fotoEl.style.display = 'none'; ub.padEl.style.display = 'none';
       etappeEnde(4, 'mit dem U-Boot');
-    }, 3500);
+    });
   }
 }
 
@@ -2283,6 +2313,6 @@ window.STORY_START = function(){
 };
 story.onIntroEnde = function(){
   hinweis('Zwei Wege: X-Wing (weiß) oder U-Boot (gelb) – hinlaufen und Y drücken');
-  setTimeout(() => { if(eva) hinweis(''); }, 12000);
+  spaeter(12, () => { if(eva) hinweis(''); });
 };
 })();
