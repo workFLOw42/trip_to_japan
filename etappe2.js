@@ -588,6 +588,9 @@ story.transallNah = transallNah;
 function updateE2(dt){
   updateWuesteSound(dt || 0);
   if(!e2()) return;
+  // Die Wuestenkulisse steht in Weltkoordinaten: auf Mond und Mars (selber Raum) schwebten sonst
+  // ihre Felsen und Kakteen in der Luft
+  if(kulisse.gruppe) kulisse.gruppe.visible = locale === 'earth';
   if(story.phase === 'flugschule'){ fsFrageEingabe(); fsAbwurfEingabe(); }
   updateE2Marken();
   for(const name of Object.keys(PARK)){

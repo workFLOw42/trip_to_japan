@@ -1715,7 +1715,7 @@ function marsUpdate(dt){
     mars.steinObj.position.y = steinHoehe(mars.steinObj.position.x, mars.steinObj.position.z);
   }
   if(locale === (mars.ort || 'mars')){
-    if(mars.phase === 'hin'){ mars.phase = 'gelandet'; hinweis('Lande mit 10 % Schub, steig mit Y aus und hol das ' + TRIP[mars.ort || 'mars'].stein); }
+    if(mars.phase === 'hin'){ mars.phase = 'gelandet'; hinweis('Lande mit 10 % Schub, steig mit Y aus und hol den ' + TRIP[mars.ort || 'mars'].stein); }
     if(state.onGround || eva) marsStein();
     if(eva && mars.phase === 'gelandet' && !mars.hinweisWeg){ mars.hinweisWeg = true; hinweis('Hol den leuchtenden Stein'); spaeter(6, () => { if(mars.phase === 'gelandet') hinweis(''); }); }
   } else if(mars.steinObj && locale !== (mars.ort || 'mars')){
@@ -1735,7 +1735,7 @@ function marsSteinHolen(){
   mars.phase = 'zurueck';
   blitz();
   const st = TRIP[mars.ort || 'mars'].stein;
-  sprich(['Super, du hast das ' + st + '! Jetzt zurück zur Erde.']);
+  sprich(['Super, du hast den ' + st + '! Jetzt zurück zur Erde.']);
   hinweis('🪨 ' + st + ' an Bord – zurück zur Erde (blauer Punkt)');
   spaeter(9, () => { if(mars.phase === 'zurueck') hinweis(''); });
 }
@@ -1783,12 +1783,23 @@ function hookMars(){
 // links <-> rechts, hoch <-> runter, rollen gespiegelt; Bremse <-> Gas (C/A <-> Shift/X).
 function hookVerdreht(){
   const readInputOrig = readInput;
+  let gasWar = false;
+  let bremseWar = false;
   readInput = function(){
     const inp = readInputOrig.apply(this, arguments);
-    if(!story.verdreht || eva || pf.aktiv) return inp;
-    // Bremse (C / A) gibt jetzt Gas
+    if(!story.verdreht || eva || pf.aktiv){ gasWar = bremseWar = false; return inp; }
+    // Bremse (C / A) gibt jetzt Gas – genau wie sonst X / Shift: am Boden erst auf die Schwebehoehe,
+    // dann Vollgas (boostOrig). Losgelassen 50 % wie bei X, nicht 0 % – sonst sackt man ab.
     const gp = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
-    if(keys['KeyC'] || (gp && gp.buttons[0] && gp.buttons[0].pressed)) state.throttle = 1;
+    const gas = !!(keys['KeyC'] || (gp && gp.buttons[0] && gp.buttons[0].pressed));
+    if(gas) boostOrig();
+    else if(gasWar){ state.throttle = 0.5; xwingLaunch = false; boosting = false; }
+    gasWar = gas;
+    // Umgekehrt ist X / Shift jetzt die Bremse: losgelassen 0 % wie sonst A / C. Die Engine setzt
+    // beim Loslassen von X immer 50 % (vor diesem Wrapper) – das wird hier zurueckgenommen.
+    const bremse = !!(keys['ShiftLeft'] || keys['ShiftRight'] || (gp && gp.buttons[2] && gp.buttons[2].pressed));
+    if(!bremse && bremseWar && !gas) state.throttle = 0;
+    bremseWar = bremse;
     return { pitch: -inp.pitch, roll: -inp.roll, yaw: -inp.yaw };
   };
   const boostOrig = boostDruck;
