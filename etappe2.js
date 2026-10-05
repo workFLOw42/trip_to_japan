@@ -193,18 +193,31 @@ function sndStart(url, loop, fertig){
     fertig(s, g);
   }).catch((e) => console.warn('Wuesten-Sound:', e));
 }
+function wuesteSoundAus(){
+  for(const k of ['wind', 'musik']) if(snd[k]){ try { snd[k].stop(); } catch(e){} snd[k] = null; }
+  snd.windGain = snd.musikGain = null; snd.laedt = false; snd.musikAus = false;
+}
 function updateWuesteSound(dt){
   if(!audioCtx || audioCtx.state !== 'running' || !window.WUESTE_SND) return;
-  const an = e2() && locale === 'earth' && soundOn && !(story.globusAktiv && story.globusAktiv());
-  if(e2() && !snd.laedt){
+  // Wind in Etappe 2 und 3 (Wueste, Fluss), Musik nur in Etappe 2. Andere Etappe: sofort stoppen.
+  // Beim Test-Sprung nach E3 steht story.etappe waehrend des Globus auf 2 – dort startete die
+  // Wuestenmusik und lief nach dem Wechsel noch kurz nach. Der Globus selbst blendet ALLES ueber
+  // masterBlende aus (story.js); hier zusaetzlich die Pegel auf 0, damit danach nichts nachklingt.
+  const mitWind = story.etappe === 2 || story.etappe === 3;
+  if(!mitWind){ if(snd.wind || snd.musik) wuesteSoundAus(); return; }
+  if(!e2() && snd.musik){ try { snd.musik.stop(); } catch(e){} snd.musik = null; snd.musikGain = null; snd.musikAus = true; }
+  const imGlobus = !!(story.globusAktiv && story.globusAktiv()) || story.phase === 'reise';
+  const an = locale === 'earth' && soundOn && !imGlobus;
+  if(!snd.laedt && !imGlobus){
     snd.laedt = true;
     sndStart(window.WUESTE_SND.wind, true, (s, g) => { snd.wind = s; snd.windGain = g; });
-    sndStart(window.WUESTE_SND.musik, false, (s, g) => { snd.musik = s; snd.musikGain = g; s.onended = () => { snd.musikAus = true; }; });
+    if(e2()) sndStart(window.WUESTE_SND.musik, false, (s, g) => { snd.musik = s; snd.musikGain = g; s.onended = () => { snd.musikAus = true; }; });
   }
   const k = Math.min(1, 0.7 * dt);
   if(snd.windGain){
     const y = eva ? eva.group.position.y : state.pos.y;
-    const hoehe = 1 - Math.max(0, Math.min(1, (y - duene(state.pos.x, state.pos.z)) / AMB_MAX_Y));
+    const boden = e2() ? duene(state.pos.x, state.pos.z) : (story.flussY ? story.flussY(state.pos.x, state.pos.z) : 0);
+    const hoehe = 1 - Math.max(0, Math.min(1, (y - boden) / AMB_MAX_Y));
     const ziel = an ? AMB_OCEAN_VOL * hoehe : 0;
     snd.windGain.gain.value += (ziel - snd.windGain.gain.value) * k;
   }

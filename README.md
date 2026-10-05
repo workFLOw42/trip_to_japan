@@ -44,15 +44,21 @@ Nur Wüste, kein Wasser: Dünen, Felsen, Kakteen, Flugfeld, Oase mit Palmen. Lei
     Merksatz: *Schub in Prozent × 5 = Meter vor dem Ziel.* Treffer (± 50 m) → **4 Tage**, daneben → **7 Tage**.
 
 ### Etappe 3 – Der Fluss
-Grüne Uferlandschaft mit einem gewundenen Fluss (Sandufer, Bäume, Felsen im Wasser).
+Grüne Uferlandschaft mit einem gewundenen Fluss: sechs enge Kurven mit Geraden dazwischen, Sandufer, Bäume,
+Felsen außen in den Kurven und in der Flussmitte, dazu eine versetzte Felsgruppe zwischen Feuer 1 und 2.
+Wüstenwind wie in Etappe 2 (ohne Musik).
 - **X-Wing („1 Tag“):** normale Startsequenz in 10 s (kein Kurzschluss).
   - geschafft → zum Radarpunkt → **1 Tag**, aber ohne Boots-Wissen für Etappe 4
-  - verpasst → Autopilot zum **Mond** → **7 Tage**. Wer schon in Etappe 2 dort war: *„Du schon wieder … den Stein
-    verloren. Hol mal bitte noch einen.“*
+  - verpasst → Autopilot zum **Mond** → **7 Tage**. Der Text hängt davon ab, wo Kenji schon war: Mars und Mond
+    („Weltraum-Profi“), nur Mond (*„Du schon wieder … den Stein verloren“*), nur Mars, oder zum ersten Mal
+    (volle Flugerklärung).
 - **Feuerwehrboot („4 Tage“):** im gelben Ring am Ufer einsteigen (wie beim U-Boot). Der Kapitän erklärt Trägheit
   in Kurven, Strömung und Löschen; die Zeit läuft erst danach. Drei Feuer am Ufer flussabwärts in **2 Minuten** löschen
-  (anhalten, Nase zum Feuer, **B**), höchstens **2 Felskontakte**. Die Strömung schiebt flussabwärts.
-  Geschafft → **4 Tage** (+ Boots-Wissen), 3. Felskontakt oder Zeit um → **7 Tage**.
+  (bremsen, quer stellen mit der Nase zum Feuer, **B**), höchstens **2 Felskontakte**.
+  Das Boot ist hier träger als sonst: es bremst langsam, rutscht in Kurven weiter geradeaus, und das Ruder wird mit
+  der Fahrt steifer – mit Vollgas kommt man durch keine Kurve. Ufer kosten fast die ganze Fahrt.
+  Geschafft → *„Du bist ein echter Held!“*; Felsen zählen weiter, bis der Satz zu Ende ist → **4 Tage**
+  (+ Boots-Wissen). 3. Felskontakt oder Zeit um → **7 Tage**. Live abgestimmt: ~16 s Rest bei 2 Kontakten.
 
 Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, gelb = Etappen, lila = Fukuoka).
 

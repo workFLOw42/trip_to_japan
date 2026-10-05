@@ -4,8 +4,9 @@
 // folgt dem Spieler) wird zum Boden – Ufer, Wiese und das Flussbett mit Wasserfarbe. Wasser ist nur
 // im Fluss; das Feuerwehrboot faehrt mit der Bootsphysik der Engine, die Stroemung schiebt es
 // flussabwaerts. Felsen im Fluss, drei Feuer am Ufer.
-//   Sicher (Feuerwehrboot): Kapitaen erklaert Traegheit + Loeschen, dann 3 Feuer in < 2 min und
-//     hoechstens 2 Felskontakte -> 4 Tage. 3. Felskontakt oder Zeit um -> 7 Tage.
+//   Sicher (Feuerwehrboot): Kapitaen erklaert Traegheit + Loeschen, dann 3 Feuer in < 2 min,
+//     hoechstens 2 Felskontakte -> 4 Tage. 3. Felskontakt oder Zeit um -> 7 Tage. Nach dem letzten
+//     Feuer zaehlen Felsen weiter, bis die Schlussansage zu Ende ist (Konzentration bis zum Schluss).
 //   Risiko (X-Wing): normale Startsequenz (kein Kurzschluss). Geschafft -> Radarpunkt, 1 Tag.
 //     Verpasst -> Autopilot zum Mond (story.js) -> 7 Tage.
 (function(){
@@ -20,10 +21,23 @@ function hier(){ return e3() && locale === 'earth'; }
 // Kurven – genau dort, wo die Traegheit zaehlt.
 const FLUSS_B   = 70;        // m Breite (Ufer zu Ufer)
 const UFER_SAND = 14;        // m Sandstreifen am Ufer
-const FLUSS_Z0  = 420, FLUSS_Z1 = -2600;      // Anfang / Ende der Strecke (z)
-const STROM     = 3.2;       // m/s Stroemung in der Flussmitte (Boot max. 24 m/s)
+const FLUSS_Z0  = 420, FLUSS_Z1 = -2270;      // Anfang / Ende der Strecke (z)
+const STROM     = 4.5;       // m/s Stroemung in der Flussmitte (Boot max. 24 m/s)
+// Rhythmus Gerade – Kurve – Gerade: fuenf enge Kurven (seitlicher Versatz a auf KNICK_L Laenge,
+// Radius ~120 m), dazwischen 180 m Gerade. Auf der Geraden Gas, vor der Kurve bremsen – genau das, was
+// der Kapitaen erklaert. Vorher: entweder keine Kurve unter 326 m (Vollgas ging ueberall) oder 72 %
+// der Strecke Kurve (vorsichtig fahren dauerte 240 s ohne Loeschen; C:\tmp\sfg\fluss_tempo.js).
+// Jede Kurve ist eine Cosinus-Rampe: stetig, ohne Knick, Kruemmung am Anfang/Ende am groessten.
+const KNICK_L = 240;
+// Zwischen Feuer 2 und 3 liegen seit dem Live-Test zwei Kurven statt einer (+330 m Weg).
+const KNICKE = [[140, 100], [-280, -110], [-700, 100], [-1120, -100], [-1420, 100], [-1840, -100]];   // [Mitte z, Versatz x]
 function mitteX(z){
-  return Math.sin(z * 0.0021) * 260 + Math.sin(z * 0.0047 + 1.3) * 90;
+  let x = 0;
+  for(const [zk, a] of KNICKE){
+    const u = (zk + KNICK_L / 2 - z) / KNICK_L;          // 0 am Kurvenanfang .. 1 am Ende (flussabwaerts)
+    if(u >= 1) x += a; else if(u > 0) x += a * (1 - Math.cos(Math.PI * u)) / 2;
+  }
+  return x;
 }
 // Abstand von (x, z) zur Mittellinie (waagerecht, mit Kurvenkorrektur) und Flussrichtung dort
 function flussLage(x, z){
@@ -46,6 +60,7 @@ function bodenY(x, z){
   return BETT_Y * (1 - a / (FLUSS_B / 2)) * 0.9;                                 // Bett, Mitte am tiefsten
 }
 story.flussY = bodenY;
+story.fluss3 = { mitteX, feuer: () => kul.feuer };
 
 // ---- Felsen im Fluss ---------------------------------------------------------------------------
 // Fest verteilt (gleicher Zufall wie die Wueste): in den Kurven auf der Aussenseite, dazwischen
@@ -54,14 +69,38 @@ const FELSEN = [];
 (function(){
   let s = 31;
   const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  for(let z = FLUSS_Z0 - 220; z > FLUSS_Z1 + 100; z -= 120 + rnd() * 90){
+  for(let z = FLUSS_Z0 - 200; z > FLUSS_Z1 + 100; ){
     const krumm = (mitteX(z + 40) - 2 * mitteX(z) + mitteX(z - 40));             // Kruemmung: Vorzeichen = Aussenseite
-    const seite = Math.abs(krumm) > 4 ? -Math.sign(krumm) : (rnd() < 0.5 ? -1 : 1);
-    const lage = 0.15 + rnd() * 0.45;                                             // Anteil der halben Breite
+    // In der Kurve aussen (dort traegt die Fahrt hin, wer zu schnell ist), auf der Geraden vereinzelt
+    const kurve = Math.abs(krumm) > 2;
+    z -= kurve ? 55 + rnd() * 40 : 85 + rnd() * 50;
+    const seite = kurve ? -Math.sign(krumm) : (rnd() < 0.5 ? -1 : 1);
+    // Anteil der halben Breite: in der Kurve nur aussen (innen bleibt eine Gasse), auf der Geraden mittig-seitlich
+    const lage = kurve ? 0.4 + rnd() * 0.4 : 0.05 + rnd() * 0.6;
     const r = 3 + rnd() * 3;
     const L = flussLage(mitteX(z), z);
     const nx = -L.rz, nz = L.rx;                                                  // quer zum Fluss
     FELSEN.push({ x: mitteX(z) + nx * seite * lage * FLUSS_B / 2, z: z + nz * seite * lage * FLUSS_B / 2, r });
+  }
+  // Weitere genau in der Flussmitte (Live-Test: wer mittig fuhr, kam zu leicht durch – mit 5 blieben
+  // noch 35 s, Ziel 10-20 s). Nur auf Geraden, >= 60 m vor den Feuern, >= 45 m untereinander.
+  for(const z of [330, 0, -130, -990, -1270, -1560, -1700, -2010, -2090, -2160]){
+    FELSEN.push({ x: mitteX(z), z, r: 4 + rnd() * 1.5 });
+  }
+  // Felsgruppe zwischen Feuer 1 und 2, am Ausgang von Kurve 2 (Live-Test: dort kam man ohne Bremsen
+  // durch). Drei lockere Reihen mit je 3 Felsen, 22 m Abstand, jede zweite um 11 m versetzt, 60 m
+  // zwischen den Reihen. Live-Test: das war die beste Variante (ein Zickzack aus halben Reihen war mit
+  // vier Reihen unmoeglich).
+  // Zufallsfelsen in diesem Bereich fallen weg, sonst wuerde eine Luecke zugestellt.
+  const GRUPPE = [
+    [-420, [-16.5, 5.5, 27.5]],
+    [-480, [-27.5, -5.5, 16.5]],
+    [-540, [-16.5, -5.5, 5.5, 27.5]],            // -5,5: Live-Test (Screenshot), dort ging es gerade durch
+  ];
+  for(let i = FELSEN.length - 1; i >= 0; i--) if(FELSEN[i].z < -400 && FELSEN[i].z > -560) FELSEN.splice(i, 1);
+  for(const [z, quer] of GRUPPE){
+    const L = flussLage(mitteX(z), z), nx = -L.rz, nz = L.rx;
+    for(const d of quer) FELSEN.push({ x: mitteX(z) + nx * d, z: z + nz * d, r: 4.5 });
   }
 })();
 
@@ -69,12 +108,12 @@ const FELSEN = [];
 // Drei Feuer auf der Wiese, knapp hinter dem Sandstreifen – vom Wasser aus mit dem Strahl erreichbar
 // (Engine: Strahl 80 m voraus, Loeschradius 80 m). Reihenfolge flussabwaerts.
 const FEUER_DEF = [
-  { z: -350,  seite:  1 },
-  { z: -1150, seite: -1 },
-  { z: -1950, seite:  1 },
+  { z: -70,   seite:  1 },
+  { z: -910,  seite: -1 },
+  { z: -1630, seite:  1 },
 ];
 const FEUER_ABSTAND = FLUSS_B / 2 + UFER_SAND + 18;   // m von der Flussmitte
-const ZEIT_MAX = 120;         // s fuer alle drei Feuer
+const ZEIT_MAX = 120;         // s fuer alle drei Feuer (Live-Test: mit 3 min blieben 1:37 uebrig)
 const KONTAKT_MAX = 2;        // erlaubte Felskontakte (der dritte ist zu viel)
 
 // ---- Gelaende einhaengen (wie hookWelt2 der Wueste) -------------------------------------------
@@ -391,21 +430,22 @@ function hookRadar3(){
 const KAPITAEN_TEXT = [
   'Ahoi! Gut, dass du da bist. Weiter unten am Fluss brennt es an drei Stellen, und wir brauchen jede Hand.',
   'Mit dem rechten Stick oder W und S gibst du Gas, gelenkt wird mit dem linken Stick oder den Pfeilen.',
-  'Pass auf: Ein Boot ist schwer. Es fährt in der Kurve weiter geradeaus, bevor es dreht. Nimm also vor jeder Kurve das Gas zurück und lenk früh ein.',
+  'Pass auf: Ein Boot ist schwer. Es fährt in der Kurve weiter geradeaus, bevor es dreht, und je schneller du bist, desto schlechter gehorcht das Ruder. Vor jeder Kurve nimmst du also Gas zurück und lenkst früh ein.',
   'Die Strömung schiebt uns flussabwärts. Wer zu schnell ist, landet auf den Felsen.',
-  'Zum Löschen: anhalten, das Boot quer zum Feuer stellen, mit der Nase zum Ufer, und mit B den Wasserstrahl einschalten.',
+  'Zum Löschen bremst du ab und stellst dich quer, mit der Nase zum Feuer am Ufer. Dann schaltest du mit B den Wasserstrahl ein.',
   'Drei Feuer in zwei Minuten. Und höchstens zwei Mal an einen Felsen, sonst ist das Boot hin. Los geht\'s!',
 ];
 const boot = story.boot3 = { aktiv: false, fertig: false, t: 0, kontakte: 0, rede: null, hudEl: null, fels: null, cool: 0 };
 function bootEinsteigen(){
   story.phase = 'boot';
-  boot.aktiv = true; boot.fertig = false; boot.t = 0; boot.kontakte = 0; boot.laeuft = false; boot.cool = 0;
+  boot.aktiv = true; boot.fertig = false; boot.t = 0; boot.kontakte = 0; boot.laeuft = false; boot.cool = 0; boot.schluss = false;
+  quer = { x: 0, z: 0 };
   const bp = bootPlatz();
   const idx = MODEL_NAMES.indexOf('Boat');
   clearEva();
   currentModel = idx;
   document.getElementById('mdl').textContent = 'Feuerwehrboot';
-  buildModel('Boat'); spec = PLANE_SPECS.Boat || DEFAULT_SPEC;
+  buildModel('Boat'); spec = Object.assign({}, PLANE_SPECS.Boat || DEFAULT_SPEC, { accel: BOOT_ACCEL });   // traeger (nur hier)
   state.pos.set(bp.x, -BOAT_DRAFT, bp.z);
   state.quat.setFromEuler(new THREE.Euler(0, bp.yaw, 0, 'YXZ'));
   state.vel.set(0, 0, 0); state.throttle = 0; state.onGround = true; state.crashed = false;
@@ -434,7 +474,7 @@ function bootHud(){
   const rest = Math.max(0, ZEIT_MAX - boot.t);
   const zeit = Math.floor(rest / 60) + ':' + String(Math.floor(rest % 60)).padStart(2, '0');
   const fels = '🪨'.repeat(boot.kontakte) + '·'.repeat(Math.max(0, KONTAKT_MAX + 1 - boot.kontakte));
-  const html = '🔥 ' + aus + '/3  ·  ⏱ ' + (boot.laeuft ? zeit : '2:00') + '  ·  Felsen ' + fels;
+  const html = '🔥 ' + aus + '/3  ·  ⏱ ' + (boot.laeuft || boot.schluss || boot.fertig ? zeit : '2:00') + '  ·  Felsen ' + fels;
   if(boot.hudEl._h !== html){ boot.hudEl.textContent = html; boot.hudEl._h = html; }
 }
 // naechstes brennendes Feuer (fuer den Radarpunkt)
@@ -443,6 +483,52 @@ function naechstesFeuer(){
   for(const f of kul.feuer){ if(f.aus) continue;
     const d = Math.hypot(f.x - state.pos.x, f.z - state.pos.z); if(d < bd){ bd = d; best = f; } }
   return best;
+}
+// Traegheit auf dem Fluss. Die Engine-Bootsphysik (stepBoat) bremst mit 9 m/s^2, lenkt mit 0,9 rad/s
+// und baut das Seitwaertsrutschen in ~0,25 s ab – das Boot faehrt praktisch auf Schienen, mit
+// Vollgas kam man ueberall durch. Das U-Boot ist deutlich traeger (5 m/s^2, 0,55 rad/s). Hier, nur in
+// Etappe 3, wird das Feuerwehrboot schwer:
+//   - Beschleunigen/Bremsen 3,5 m/s^2 (spec.accel)
+//   - Ruder je nach Fahrt (ruderFaktor): langsam wendig, schnell steif
+//   - Querschlupf: die Fahrt quer zur Nase bleibt erhalten und klingt erst mit QUER_ABBAU ab. In der
+//     Kurve faehrt das Boot also erst weiter geradeaus und dreht sich nur langsam in die neue Richtung.
+const BOOT_ACCEL = 3.5, QUER_ABBAU = 0.45;                       // 1/s – Engine: 4
+// Ruder abhaengig von der Fahrt: langsam wendig, schnell steif. Bei 24 m/s und der Engine-Wendigkeit
+// (0,9 rad/s) war der kleinste Wendekreis 27 m – kleiner als jede Kurve (~106 m), Vollgas ging
+// ueberall. Jetzt: stehend 0,7, ab ~60 % Fahrt (14 m/s) bleiben 0,22 -> Wendekreis 24/(0,9*0,22) =
+// 121 m: bei Vollgas kommt man durch keine Kurve, ohne aussen am Felsen oder Ufer zu landen.
+function ruderFaktor(){
+  const v = Math.hypot(state.vel.x, state.vel.z);
+  const k = Math.min(1, v / 14);
+  return 0.7 - (0.7 - 0.22) * k;
+}
+let quer = { x: 0, z: 0 };                                       // Fahrt quer zur Nase, die die Engine sonst wegdaempft
+function bootTraegheit(dt, fwdVor){
+  // stepBoat hat die Querfahrt mit 4/s abgebaut. Was davor quer war (quer + neue Drehung), wird hier
+  // zurueckgegeben und nur langsam abgebaut.
+  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);
+  const sx = -fwd.z, sz = fwd.x;
+  // Querkomponente der Fahrt VOR dem Schritt in der neuen Ausrichtung: genau das, was eine Drehung
+  // an "Weiterrutschen" erzeugt
+  const vq = fwdVor.vx * sx + fwdVor.vz * sz;
+  const ziel = vq * Math.exp(-QUER_ABBAU * dt);
+  const jetzt = state.vel.x * sx + state.vel.z * sz;
+  const add = ziel - jetzt;
+  // nur, wenn das Wasser vorne frei ist (sonst ins Ufer gedrueckt)
+  const nx = state.pos.x + sx * add * dt, nz = state.pos.z + sz * add * dt;
+  if(imFluss(nx, nz, BOAT_HALF_W)){
+    state.vel.x += sx * add; state.vel.z += sz * add;
+    state.pos.x = nx; state.pos.z = nz;
+  } else {
+    // Ufer: Querfahrt wird abgefangen (Boot schrammt am Sand entlang)
+    state.vel.x -= sx * jetzt; state.vel.z -= sz * jetzt;
+  }
+  // Auf Grund gelaufen (Rumpf beruehrt das Ufer): die Engine laesst das Boot dort mit 85 % der Fahrt
+  // weitergleiten – so schob man sich mit Vollgas am Sand entlang. Hier kostet Ufer fast die ganze
+  // Fahrt; man muss zurueck ins Wasser manoevrieren.
+  if(!imFluss(state.pos.x + fwd.x * BOAT_LOOK, state.pos.z + fwd.z * BOAT_LOOK, BOAT_HALF_W * 0.5)){
+    state.vel.multiplyScalar(Math.max(0, 1 - 3.5 * dt));
+  }
 }
 // Pro Bild im Boot (nach stepBoat): Stroemung, Felsen, Loeschen, Zeit
 function bootUpdate(dt){
@@ -473,7 +559,7 @@ function bootUpdate(dt){
       boot.cool = 2;
       state.vel.multiplyScalar(-0.35);
       if(typeof rumble === 'function') rumble(300, 0.9, 0.6);
-      if(boot.laeuft){
+      if(boot.laeuft || boot.schluss){
         boot.kontakte++;
         if(boot.kontakte > KONTAKT_MAX){ bootEnde(false, 'Boot am Felsen kaputt'); return; }
         story.sprich([boot.kontakte === 1 ? 'Vorsicht, ein Felsen! Langsamer in den Kurven.' : 'Noch ein Felsen! Beim nächsten ist das Boot hin.'], null, 'pilot');
@@ -499,25 +585,38 @@ function bootUpdate(dt){
   for(const f of kul.feuer) if(!f.aus) for(const fl of f.flammen) fl.scale.y = 0.7 + Math.random() * 0.6;
   if(boot.laeuft){
     boot.t += dt;
-    if(kul.feuer.every(f => f.aus)){ bootEnde(true, 'mit dem Feuerwehrboot'); return; }
+    if(kul.feuer.every(f => f.aus)){ bootGeschafft(); return; }
     if(boot.t >= ZEIT_MAX){ bootEnde(false, 'Zeit abgelaufen'); return; }
   }
   bootHud();
 }
-function bootEnde(ok, wie){
+// Alle Feuer aus: der Kapitaen spricht – das Boot faehrt weiter (Spieler steuert), Felsen zaehlen
+// weiter. Erst wenn der Satz zu Ende ist, kommt der Globus. Wer waehrenddessen zum dritten Mal
+// rammt, scheitert doch noch (bootEnde mit 7 Tagen).
+function bootGeschafft(){
+  if(boot.schluss || boot.fertig) return;
+  boot.schluss = true; boot.laeuft = false;      // Uhr steht, Felsen zaehlen (boot.schluss)
+  boot.rede = story.sprich(['Großartig! Alle Feuer sind aus. Du bist ein echter Held!'], () => {
+    if(boot.fertig) return;                      // inzwischen am Felsen gescheitert
+    bootEnde(true, 'mit dem Feuerwehrboot', true);
+  }, 'pilot');
+}
+function bootEnde(ok, wie, schonGesagt){
   if(boot.fertig) return;
-  boot.fertig = true; boot.laeuft = false;
+  boot.fertig = true; boot.laeuft = false; boot.schluss = false;
   state.throttle = 0;
   if(boot.rede) boot.rede.abbrechen();
   story.boots_wissen = ok;                  // fuer Etappe 4 (Schnellboot-Flucht)
-  story.sprich([ok ? 'Großartig! Alle Feuer sind aus. Du bist ein echter Kapitän!'
-                   : (wie === 'Zeit abgelaufen' ? 'Oh nein, das hat zu lange gedauert. Die Feuerwehr vom Land übernimmt.'
-                                                : 'Autsch! Das Boot ist leck. Wir müssen abschleppen lassen.')], null, 'pilot');
-  story.spaeter(4, () => {
+  // Globus erst NACH der Ansage (vorher nach festen 4 s – der Satz wurde abgeschnitten), dazu eine
+  // kurze Pause, damit der letzte Satz nicht direkt in die Schwarzblende laeuft.
+  const weiter = () => story.spaeter(1, () => {
     boot.aktiv = false; bootHud();
     story.hinweis('');
     story.etappeEnde(ok ? 4 : 7, wie);
   });
+  if(schonGesagt){ weiter(); return; }           // Erfolg: der Satz ist schon durch (bootGeschafft)
+  story.sprich([wie === 'Zeit abgelaufen' ? 'Oh nein, das hat zu lange gedauert. Die Feuerwehr vom Land übernimmt.'
+                                          : 'Autsch! Das Boot ist leck. Wir müssen abschleppen lassen.'], weiter, 'pilot');
 }
 
 // Feuer-Radar: im Boot der naechste Brand, sonst wie gehabt
@@ -531,13 +630,18 @@ function hookBoot(){
   // Waehrend der Erklaerung steht das Boot (sonst triebe es schon ab)
   const physOrig = stepPhysics;
   stepPhysics = function(dt, inp){
-    if(hier() && boot.aktiv && !boot.laeuft && !boot.fertig){
+    if(hier() && boot.aktiv && !boot.laeuft && !boot.schluss && !boot.fertig){
       state.vel.set(0, 0, 0); state.throttle = 0;
       planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
       return;
     }
-    const r = physOrig.apply(this, arguments);
-    if(hier() && boot.aktiv) bootUpdate(dt);
+    if(!(hier() && boot.aktiv)) return physOrig.apply(this, arguments);
+    const vor = { vx: state.vel.x, vz: state.vel.z };
+    const inp2 = Object.assign({}, inp, { yaw: (inp.yaw || 0) * ruderFaktor() });   // schnell = steif
+    const r = physOrig.call(this, dt, inp2);
+    bootTraegheit(dt, vor);
+    planeGroup.position.copy(state.pos);
+    bootUpdate(dt);
     return r;
   };
   // Aussteigen aus dem Boot gibt es in der Aufgabe nicht
@@ -565,7 +669,7 @@ story.aufgabeE3 = () => boot.aktiv ? ['Feuerwehrboot', [
   ['Ziel', '3 Feuer flussabwärts löschen'],
   ['Zeit', boot.laeuft ? Math.max(0, Math.ceil(ZEIT_MAX - boot.t)) + ' s übrig' : '2 Minuten'],
   ['Felsen', boot.kontakte + ' von ' + KONTAKT_MAX + ' erlaubt'],
-  ['Löschen', 'anhalten, Nase zum Feuer, B'],
+  ['Löschen', 'bremsen, quer stellen (Nase zum Feuer), B'],
   ['Kurven', 'früh Gas weg, früh lenken'],
 ]] : null;
 

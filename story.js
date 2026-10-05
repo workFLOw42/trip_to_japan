@@ -545,6 +545,7 @@ function sprich(saetze, fertig, rolle){
     abbrechen(){ done = true; reden.delete(r); clearTimeout(timer); utt = null; if(synth) synth.cancel(); untertitel(''); },
     tonGeaendert(){
       if(done || i < 0 || pausePos >= 0) return;         // angehalten: fortsetzen nimmt den neuen Ton
+      if(laut === tonAn() && (laut ? !!utt : true)) return;   // nichts zu tun (z. B. voiceschanged bei laufender Stimme)
       const p = Math.floor(aktPos());
       utt = null;
       if(synth) synth.cancel();
@@ -561,6 +562,12 @@ function sprich(saetze, fertig, rolle){
   reden.add(r);
   naechster();
   return r;
+}
+// Die Browser laden ihre Stimmen spaet (Chrome: getVoices() ist anfangs leer). Eine Ansage, die
+// davor beginnt, liefe sonst komplett als Untertitel, obwohl der Ton an ist – erst Ton aus/an holte
+// die Stimme. Kommen die Stimmen nach, schaltet jede laufende Ansage an der aktuellen Stelle um.
+if(window.speechSynthesis){
+  window.speechSynthesis.addEventListener('voiceschanged', () => { for(const rd of [...reden]) rd.tonGeaendert(); });
 }
 function hookTon(){
   // Das grosse Ton-Symbol nicht ueber Filmszene/Globus zeigen (z. B. beim automatischen Einschalten
