@@ -8,10 +8,22 @@
 # Datei hoch, bricht ab und bittet um einen zweiten Versuch.
 # Installieren:  cp tools/pre-commit .git/hooks/pre-commit
 
-sw="sw.js"
-[ -f "$sw" ] || exit 0
 staged=$(git diff --cached --name-only)
 [ -z "$staged" ] && exit 0
+
+# Welten: Story-Objekte gehoeren in story.welt(n), nie direkt in die Szene – sonst stehen sie in
+# anderen Welten herum (Schule, Wuestenfelsen auf dem Mond). Gewollt globale Stellen tragen
+# "// global-ok" in derselben Zeile.
+welt=$(git grep --cached -n 'scene\.add(' -- story.js 'etappe*.js' | grep -v 'global-ok')
+if [ -n "$welt" ]; then
+  echo "Welt-Regel: scene.add( direkt in der Szene – bitte story.welt(n).add( nutzen" >&2
+  echo "            (oder bewusst global: '// global-ok' an die Zeile):" >&2
+  printf '%s\n' "$welt" >&2
+  exit 1
+fi
+
+sw="sw.js"
+[ -f "$sw" ] || exit 0
 relevant=$(printf '%s\n' "$staged" | grep -vE '^([^/]*\.md|\.gitignore|\.nojekyll|sw\.js|tools/.*|models/.*)$')
 [ -z "$relevant" ] && exit 0
 

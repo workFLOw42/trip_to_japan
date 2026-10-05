@@ -233,7 +233,7 @@ function imRing(){
   return Math.hypot(eva.group.position.x - r.x, eva.group.position.z - r.z) < RING_R;
 }
 // Objekt aus seiner Szene nehmen und Geometrie, Material und Texturen freigeben (R14). Nur fuer
-// Story-eigene Objekte â€“ Engine-Modelle teilen Materialien, die duerfen nicht weg.
+// Story-eigene Objekte – Engine-Modelle teilen Materialien, die duerfen nicht weg.
 function entsorgen(obj){
   if(!obj) return;
   if(obj.parent) obj.parent.remove(obj);
@@ -244,6 +244,37 @@ function entsorgen(obj){
   });
 }
 story.entsorgen = entsorgen;
+
+// ---- Welten ----------------------------------------------------------------------------------
+// Jede Etappe baut ihre Kulisse in EINE eigene Gruppe (story.welt(n)), nie direkt in die Szene. Die
+// Story-Objekte stehen in Weltkoordinaten, und Mond und Mars nutzen denselben Raum – ohne Container
+// musste jedes Objekt selbst ans Ausblenden denken, und wer es vergass, schwebte auf dem Mond
+// (Schule, Wuestenfelsen). Jetzt gilt EINE Regel, zentral in weltenSichtbar():
+//   sichtbar ist nur die Welt der aktuellen Etappe, und nur auf der Erde.
+// Beim Etappenwechsel wird die alte Welt komplett entsorgt (weltEntsorgen).
+// Global (ohne Welt) bleibt nur, was ueber alle Etappen gilt: Kenji, Warp-Sterne, Ziel-Stein auf
+// Mond/Mars (der gehoert zu deren Locale, siehe marsUpdate).
+const welten = new Map();
+function welt(n){
+  if(!welten.has(n)){
+    const g = new THREE.Group(); g.name = 'welt' + n;
+    scene.add(g); welten.set(n, g);                           // global-ok: Welt-Wurzel
+  }
+  return welten.get(n);
+}
+function weltenSichtbar(){
+  for(const [n, g] of welten) g.visible = n === story.etappe && locale === 'earth';
+}
+// Ganze Welt freigeben. Engine-Objekte darin (Kisten, Kulissenmodelle mit geteilten Materialien)
+// haben userData.fremd: die werden nur abgehaengt, nicht freigegeben.
+function weltEntsorgen(n){
+  const g = welten.get(n);
+  if(!g) return;
+  for(const o of [...g.children]) o.userData.fremd ? g.remove(o) : entsorgen(o);
+  scene.remove(g); welten.delete(n);
+}
+story.welt = welt;
+story.weltEntsorgen = weltEntsorgen;
 let ringMesh = null;
 function updateRing(zeigen){
   const r = ubootRingPlatz();
@@ -254,7 +285,7 @@ function updateRing(zeigen){
         side: THREE.DoubleSide, depthWrite: false }));
     ringMesh.rotation.x = -Math.PI / 2;
     ringMesh.renderOrder = 996;
-    scene.add(ringMesh);
+    welt(1).add(ringMesh);
   }
   ringMesh.visible = zeigen;
   if(!zeigen) return;
@@ -503,7 +534,7 @@ function sprich(saetze, fertig, rolle){
       if(synth) synth.cancel();
       weiterAb(p);
     },
-    // Anhalten (Anleitung oder Aufgabe offen) und am selben Wort fortsetzen â€“ wie beim Tonwechsel.
+    // Anhalten (Anleitung oder Aufgabe offen) und am selben Wort fortsetzen – wie beim Tonwechsel.
     // speechSynthesis.pause() nicht: das haelt nicht in jedem Browser verlaesslich an.
     pause(an){
       if(done || i < 0 || an === (pausePos >= 0)) return;
@@ -665,7 +696,7 @@ function baueSchule(x, z, yaw){
   g.traverse(o => { if(o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
   g.position.set(x, evaFootY(x, z) - 0.05, z);
   g.rotation.y = yaw;
-  scene.add(g);
+  welt(1).add(g);
   return g;
 }
 
@@ -931,7 +962,7 @@ function wsEnsure(){
   ws.mesh.renderOrder = 996;
   ws.z = new Float32Array(WS_N); ws.a = new Float32Array(WS_N); ws.r = new Float32Array(WS_N);
   for(let i = 0; i < WS_N; i++){ ws.z[i] = Math.random() * WS_TIEFE; wsNeu(i); }
-  scene.add(ws.mesh);
+  scene.add(ws.mesh);                         // global-ok: Warp-Sterne gelten in jeder Etappe
 }
 function wsNeu(i){
   ws.a[i] = Math.random() * Math.PI * 2;
@@ -1209,7 +1240,7 @@ story.globusAktiv = () => gl.aktiv;
 
 // ---- Story-Timer (R7) ------------------------------------------------------------------------
 // Laufen ueber die Spielzeit statt setTimeout: sie stehen, solange die Anleitung offen ist (Pause)
-// und waehrend des Globus. Beim Start einer Globus-Reise werden alle verworfen â€“ sie gehoeren zur
+// und waehrend des Globus. Beim Start einer Globus-Reise werden alle verworfen – sie gehoeren zur
 // alten Etappe. Schwarzblende und Untertitel-Takt bleiben bei setTimeout (echte Zeit).
 const timerListe = [];
 function spaeter(sek, fn){ timerListe.push({ t: sek, fn }); }
@@ -1243,8 +1274,7 @@ function hookLoop(){
     timerTick(dt);                            // nach Pause und Globus: dort stehen die Timer
     updateKenji(dt);
     kenjiWache(dt);
-    // Die Schule steht in Weltkoordinaten – Mond/Mars nutzen denselben Raum, dort darf sie nicht stehen
-    if(story.schule) story.schule.visible = locale === 'earth';
+    weltenSichtbar();                         // nur die Welt der aktuellen Etappe, nur auf der Erde
     kenjiTasten();
     updateAufgabe();
     if(eva && story.phase === 'mars') marsUpdate(dt);
@@ -1571,11 +1601,9 @@ story.e1aufraeumen = function(){
   auto.blende = false; auto.t = 0; story.ende = false;
   mars.stein = null; mars.ort = null; mars.hinweisWeg = false; mars.rede = null;
   pf.gruen = false; pf.schritt = 0; pf.t = 0;
-  // Etappe-1-Kulissen ENTFERNEN, nicht nur ausblenden â€“ sonst sammeln sie sich ueber sechs Etappen an
-  for(const m of marken){ entsorgen(m.saeule); entsorgen(m.pfeil); entsorgen(m.schild); }
-  marken.length = 0;
-  entsorgen(ringMesh); ringMesh = null;
-  entsorgen(story.schule); story.schule = null;
+  // Etappe-1-Kulissen ENTFERNEN, nicht nur ausblenden – sonst sammeln sie sich ueber sechs Etappen an
+  weltEntsorgen(1);
+  marken.length = 0; ringMesh = null; story.schule = null;
   entsorgen(mars.steinObj); mars.steinObj = null;
   if(ub.padEl) ub.padEl.style.display = 'none';
   if(ub.fotoEl) ub.fotoEl.style.display = 'none';
@@ -1704,7 +1732,7 @@ function marsStein(){
   saeule.position.y = 100; saeule.renderOrder = 995;
   g.add(saeule);
   g.position.set(x, y, z);
-  scene.add(g);
+  scene.add(g);                               // global-ok: steht auf Mond/Mars, nicht in einer Erd-Welt
   mars.steinObj = g; mars.stein = { x, z };
 }
 
@@ -2049,7 +2077,7 @@ function baueSchild(text, col){
     depthTest: false, transparent: true }));
   sp.scale.set(12, 3.75, 1);
   sp.renderOrder = 999;
-  scene.add(sp);
+  welt(story.etappe).add(sp);
   return sp;
 }
 function baueMarke(col){
@@ -2059,7 +2087,7 @@ function baueMarke(col){
   const pfeil = new THREE.Mesh(new THREE.ConeGeometry(1.6, 3.2, 12),
     new THREE.MeshBasicMaterial({ color: col }));
   pfeil.rotation.x = Math.PI;                    // Spitze nach unten
-  saeule.renderOrder = 995; scene.add(saeule); scene.add(pfeil);
+  saeule.renderOrder = 995; welt(story.etappe).add(saeule, pfeil);
   const m = { saeule, pfeil, schild: null, x: 0, y: 0, z: 0, hoehe: 10 };
   if(story.etappe === 1) marken.push(m);        // Etappe-1-Marken steuert updateMarken
   return m;

@@ -130,7 +130,7 @@ function baueKulisse(){
   }
   o.position.set(OASE.x, 0, OASE.z);
   g.add(o);
-  scene.add(g);
+  story.welt(2).add(g);
   kulisse.gruppe = g;
 }
 
@@ -170,7 +170,8 @@ function stelleFahrzeuge(){
     if(p.obj){ p.obj.visible = MODEL_NAMES[currentModel] !== name || !!eva; continue; }
     ladeKulissenModell(name, (w) => {
       w.position.set(p.x, 0, p.z); w.rotation.y = p.yaw;
-      scene.add(w); p.obj = w;
+      w.userData.fremd = true;                // Engine-Modell: Materialien geteilt, nicht freigeben
+      story.welt(2).add(w); p.obj = w;
     });
   }
 }
@@ -502,7 +503,8 @@ function kisteAbwerfen(){
   const g = makeCrate();
   g.position.set(state.pos.x + back.x * 6, state.pos.y - 2, state.pos.z + back.z * 6);
   g.children.forEach((o, i) => { if(i > 0) o.visible = false; });     // Schirm erst nach dem freien Fall
-  scene.add(g);
+  g.userData.fremd = true;                    // makeCrate: Engine-Materialien, nicht freigeben
+  story.welt(2).add(g);
   kiste = { g, vx: state.vel.x, vz: state.vel.z, vy: Math.min(0, state.vel.y), t: 0, gelandet: false };
   story.ziel = null;
 }
@@ -588,9 +590,7 @@ story.transallNah = transallNah;
 function updateE2(dt){
   updateWuesteSound(dt || 0);
   if(!e2()) return;
-  // Die Wuestenkulisse steht in Weltkoordinaten: auf Mond und Mars (selber Raum) schwebten sonst
-  // ihre Felsen und Kakteen in der Luft
-  if(kulisse.gruppe) kulisse.gruppe.visible = locale === 'earth';
+
   if(story.phase === 'flugschule'){ fsFrageEingabe(); fsAbwurfEingabe(); }
   updateE2Marken();
   for(const name of Object.keys(PARK)){

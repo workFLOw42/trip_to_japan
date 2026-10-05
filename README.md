@@ -76,6 +76,13 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `etappe2.js` → `engine/engine.js`. Die Engine ruft am Ende
 ihres Boot-Blocks `STORY_HOOK` (Wrapper setzen) und `STORY_START` (Startszene) auf – die zwei Zeilen fügt das Build-Skript ein.
 
+**Welten:** Jede Etappe baut ihre Kulisse in eine eigene Gruppe – `story.welt(n).add(obj)`, nie `scene.add(obj)`.
+Sichtbar ist zentral nur die Welt der aktuellen Etappe und nur auf der Erde (Mond und Mars teilen sich den
+Koordinatenraum, sonst stünden dort Wüstenfelsen oder die Schule). Beim Etappenwechsel `story.weltEntsorgen(n)`:
+gibt alles frei, außer Objekten mit `userData.fremd = true` (Engine-Modelle mit geteilten Materialien – nur
+abhängen). Der pre-commit-Hook lehnt `scene.add(` in `story.js`/`etappe*.js` ab; bewusst globale Stellen tragen
+`// global-ok`.
+
 Engine aktualisieren: `powershell -File tools/build_engine.ps1` (Flugspiel-Repo muss daneben liegen).
 
 **Version / Offline:** Committen mit `powershell -File tools/commit.ps1 "Nachricht"` – das zählt die Cache-Version

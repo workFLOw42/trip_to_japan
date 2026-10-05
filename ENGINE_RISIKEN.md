@@ -64,6 +64,7 @@ Kategorie **akut** = betrifft Etappe 1/2 schon jetzt · **später** = betrifft g
 - R7: Story-`setTimeout`s liefen in Pause und Globus weiter → `story.spaeter(sek, fn)` zählt über die Spielzeit (steht bei offener Anleitung und im Globus). Anleitung hält zusätzlich Ansagen an, die Aufgabe nur die Ansagen (Spiel läuft). Beim Start einer Globus-Reise werden Ansagen und Timer der alten Etappe verworfen. Schwarzblende und Untertitel-Takt bleiben bei `setTimeout`.
 - R14: Etappe-1-Kulissen wurden nur ausgeblendet → `e1aufraeumen` entfernt Schule, Ring, Marken samt Schildern und Stein und gibt Geometrie, Material und Texturen frei (`story.entsorgen`, auch für spätere Etappen nutzbar).
 - R15: Globus-Fäden wurden jedes Bild neu gebaut, aber nie freigegeben → vor dem Neuzeichnen `entsorgen`. Gemessen: Geometrien im Globus bleiben stabil (416 → 417 in 3 s).
+- Story-Objekte standen in Weltkoordinaten direkt in der Szene und tauchten in anderen Welten auf (Schule, Wüstenfelsen auf dem Mond) → Welt-Container je Etappe (`story.welt(n)`), Sichtbarkeit zentral in `weltenSichtbar`, Freigabe mit `weltEntsorgen`; pre-commit-Hook verbietet direktes `scene.add(`.
 - Wrapper reichte nur 4 von 5 Argumenten an `hitsBuilding` weiter → Schiffe drehten auf der Stelle (alle Wrapper nutzen jetzt `.apply(this, arguments)`).
 - Zustände liefen in die nächste Etappe mit (`autostart.blende` → Autostart endlos) → Zurücksetzen beim Etappenwechsel.
 - `resetPlane` räumt Sirene/Feuerwehr auf, wird beim Etappen-Ende umgangen → Aufräumen in der Schwarzblende zum Globus.
