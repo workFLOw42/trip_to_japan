@@ -284,8 +284,7 @@ function wuesteStart(){
   if(typeof clearUwCells === 'function') clearUwCells();
   if(typeof clearFish === 'function') clearFish();
   seabedMesh.visible = false;
-  if(story.schule){ scene.remove(story.schule); story.schule = null; }
-  // Etappe-1-Kulissen (Ring, Marken, Stein) verbergen
+  // Etappe-1-Kulissen (Schule, Ring, Marken, Stein) entfernen und freigeben
   if(story.e1aufraeumen) story.e1aufraeumen();
   if(typeof clearArrows === 'function') clearArrows();
   if(typeof clearCargoTarget === 'function') clearCargoTarget();

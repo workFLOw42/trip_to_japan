@@ -232,6 +232,18 @@ function imRing(){
   if(!eva || !r) return false;
   return Math.hypot(eva.group.position.x - r.x, eva.group.position.z - r.z) < RING_R;
 }
+// Objekt aus seiner Szene nehmen und Geometrie, Material und Texturen freigeben (R14). Nur fuer
+// Story-eigene Objekte â€“ Engine-Modelle teilen Materialien, die duerfen nicht weg.
+function entsorgen(obj){
+  if(!obj) return;
+  if(obj.parent) obj.parent.remove(obj);
+  obj.traverse(o => {
+    if(o.geometry) o.geometry.dispose();
+    const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+    for(const m of mats){ if(m.map) m.map.dispose(); m.dispose(); }
+  });
+}
+story.entsorgen = entsorgen;
 let ringMesh = null;
 function updateRing(zeigen){
   const r = ubootRingPlatz();
@@ -599,7 +611,6 @@ function springeZu(n){
   intro.phase = 'aus';
   hudSichtbar(true);
   if(intro.rede) intro.rede.abbrechen();
-  if(story.schule){ story.schule.visible = false; }
   story.e1aufraeumen && story.e1aufraeumen();
   story.reise = [];
   for(let i = 0; i < n - 1; i++) story.reise.push(i);     // 0 .. n-2 schon besucht
@@ -1106,7 +1117,8 @@ function fadenStueck(a, b, anteil){
 }
 // Zustand zeichnen: alle bisherigen Fadenstuecke + Punkte, das letzte Stueck bis "anteil"
 function globusZeichnen(anteil){
-  gl.punkte.clear(); gl.faden.clear();
+  // jedes Bild neu gebaut: die alten Stuecke freigeben, nicht nur aus der Gruppe nehmen (R15)
+  for(const o of [...gl.punkte.children, ...gl.faden.children]) entsorgen(o);
   const r = story.reise;
   for(let i = 1; i < r.length; i++){
     const letztes = i === r.length - 1;
@@ -1559,9 +1571,12 @@ story.e1aufraeumen = function(){
   auto.blende = false; auto.t = 0; story.ende = false;
   mars.stein = null; mars.ort = null; mars.hinweisWeg = false; mars.rede = null;
   pf.gruen = false; pf.schritt = 0; pf.t = 0;
-  for(const m of marken){ m.saeule.visible = m.pfeil.visible = false; if(m.schild) m.schild.visible = false; }
-  if(ringMesh) ringMesh.visible = false;
-  if(mars.steinObj){ scene.remove(mars.steinObj); mars.steinObj = null; }
+  // Etappe-1-Kulissen ENTFERNEN, nicht nur ausblenden â€“ sonst sammeln sie sich ueber sechs Etappen an
+  for(const m of marken){ entsorgen(m.saeule); entsorgen(m.pfeil); entsorgen(m.schild); }
+  marken.length = 0;
+  entsorgen(ringMesh); ringMesh = null;
+  entsorgen(story.schule); story.schule = null;
+  entsorgen(mars.steinObj); mars.steinObj = null;
   if(ub.padEl) ub.padEl.style.display = 'none';
   if(ub.fotoEl) ub.fotoEl.style.display = 'none';
   if(pf.el) pf.el.style.display = 'none';
@@ -1704,7 +1719,7 @@ function marsUpdate(dt){
     if(state.onGround || eva) marsStein();
     if(eva && mars.phase === 'gelandet' && !mars.hinweisWeg){ mars.hinweisWeg = true; hinweis('Hol den leuchtenden Stein'); spaeter(6, () => { if(mars.phase === 'gelandet') hinweis(''); }); }
   } else if(mars.steinObj && locale !== (mars.ort || 'mars')){
-    scene.remove(mars.steinObj); mars.steinObj = null;
+    entsorgen(mars.steinObj); mars.steinObj = null;
   }
 }
 
@@ -1716,7 +1731,7 @@ function marsSteinNah(){
 }
 function marsSteinHolen(){
   mars.stein = 'geholt';
-  if(mars.steinObj){ scene.remove(mars.steinObj); mars.steinObj = null; }
+  if(mars.steinObj){ entsorgen(mars.steinObj); mars.steinObj = null; }
   mars.phase = 'zurueck';
   blitz();
   const st = TRIP[mars.ort || 'mars'].stein;
