@@ -1679,15 +1679,33 @@ function mondLang(){
     'Zur Erinnerung: Du hast dich freiwillig gemeldet, zum Mond zu fliegen und als Beweis einen Stein mitzubringen.',
   ].concat(MARS_TEXT.slice(3, 9)).concat([MARS_TEXT[9]]);   // Flugerklaerung + Schluss wie beim Mars
 }
-// Etappe 3, schon in Etappe 2 auf dem Mond gewesen (Konzept: "zweiter Mond-Trip")
+// Etappe 3 (kein Kurzschluss) – vier Faelle, je nachdem, wo Kenji schon war:
+//   Mars und Mond  -> MOND_PROFI      Mond, nicht Mars -> MOND_ZWEITER (Konzept: "zweiter Mond-Trip")
+//   Mars, nicht Mond -> MOND_NACH_MARS   zum ersten Mal -> mondLang() mit voller Flugerklaerung
+const MOND_PROFI = [
+  'Na, wen haben wir denn da? Erst der Mars, dann der Mond, und jetzt schon wieder. Du bist ja ein richtiger Weltraum-Profi.',
+  'Das trifft sich gut. Wir haben es nämlich auch verbockt und den Stein vom Mond verloren.',
+  'Hol mal bitte noch einen. Du weißt ja, wie es geht. Bis nächste Woche dann!',
+];
 const MOND_ZWEITER = [
   'Du schon wieder.',
   'Das trifft sich ja gut. Wir haben es nämlich auch verbockt und den Stein vom Mond verloren.',
   'Hol mal bitte noch einen. Du weißt ja, wie es geht. Bis nächste Woche dann!',
 ];
+const MOND_NACH_MARS = [
+  'Du schon wieder. Wohl immer noch ein wenig nervös, was?',
+  'Wir haben die Startsequenz und den Start wieder automatisch erledigt. Wie man fliegt, weißt du ja noch vom Mars.',
+  'Diesmal geht es zum Mond. Hol von dort einen Stein, genau wie auf dem Mars. Bis in einer Woche dann!',
+];
 function mondText(){
-  if(story.etappe >= 3 && story.e2weg === 'mond') return MOND_ZWEITER;
-  return story.e1weg === 'mars' ? MOND_KURZ : mondLang();
+  if(story.etappe >= 3){
+    const warMars = story.e1weg === 'mars', warMond = story.e2weg === 'mond';
+    if(warMars && warMond) return MOND_PROFI;
+    if(warMond) return MOND_ZWEITER;
+    if(warMars) return MOND_NACH_MARS;
+    return mondLang();
+  }
+  return story.e1weg === 'mars' ? MOND_KURZ : mondLang();     // Etappe 2
 }
 const TRIP = {
   mars: { text: () => MARS_TEXT, ziel: 'Mars', stein: 'Stein', farbe: 0xff7a2a, glanz: 0xff4400 },
