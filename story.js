@@ -1754,7 +1754,8 @@ function hookVerdreht(){
 }
 
 // ---- Freiflug zum Radarpunkt ----------------------------------------------------------------
-const ZIEL_R = 250;   // m: so nah (waagerecht) muss man ueber den Radarpunkt
+const ZIEL_R = 800;   // m waagerecht, Hoehe egal: ~16 px im Radar (49 m/px) – reicht ueber das ganze Dreieck,
+                      // man fliegt also durch den Zielbereich, statt den Punkt auf die Spitze zu zirkeln
 function freiflugUpdate(){
   if(locale !== 'earth' || !story.ziel) return;
   if(state.crashed) return;                 // Absturz: nach der Loeschsequenz ueber resetPlane
@@ -1767,7 +1768,7 @@ function freiflugUpdate(){
 
 // ---- U-Boot-Weg ------------------------------------------------------------------------------
 // Stimme + Ziffernfeld (Code 14 02 – kommt in Etappe 6 wieder!), dann frei tauchen. Zwei
-// UNTERSCHIEDLICHE Wracks fotografieren (X / F) -> 4 Tage. Scheitern kann man hier nicht.
+// UNTERSCHIEDLICHE Wracks fotografieren (Controller Y / Tastatur F) -> 4 Tage. Scheitern kann man hier nicht.
 const UBOOT_TEXT = [   // den Code NICHT aussprechen – er steht gross genug im Ziffernfeld
   'Hallo, danke für deine Hilfe.',
   'Du siehst jung aus, und als würdest du zum ersten Mal ein U-Boot fahren. Wir helfen dir.',
@@ -1779,8 +1780,9 @@ const UBOOT_TEXT = [   // den Code NICHT aussprechen – er steht gross genug im
   'Wir möchten die Wracks nachbauen, um daraus künstliche Riffe zu erschaffen.',
   'Wir wissen, dass es hier in der Nähe viele Wracks gibt.',
   'Finde zwei unterschiedliche Schiffswracks und mache jeweils ein Foto davon, dann können wir der Umwelt helfen.',
-  'Fotografiert wird mit X oder F, wenn du nah genug dran bist. Viel Spaß!',
 ];
+// Fototaste: Y am Controller, F auf der Tastatur – genannt wird, was gerade angeschlossen ist
+function fotoTaste(){ return gamepadIndex !== null ? 'Y' : 'F'; }
 const FOTO_R = 130;             // m waagerecht vom Wrack
 const FOTO_TIEFE = -10;         // m: getaucht
 const ub = story.uboot = { aktiv: false, fotos: {}, rede: null, padEl: null, fotoEl: null, nah: null };
@@ -1806,9 +1808,9 @@ function ubootStart(){
   ub.aktiv = true; story.phase = 'uboot';
   hinweis('');
   ziffernfeld('14 02');
-  ub.rede = sprich(UBOOT_TEXT, () => {
+  ub.rede = sprich(UBOOT_TEXT.concat(['Fotografiert wird mit ' + fotoTaste() + ', wenn du nah genug dran bist. Viel Spaß!']), () => {
     if(ub.padEl) ub.padEl.style.display = 'none';        // Code-Anzeige nach der Ansage weg
-    hinweis('Finde zwei unterschiedliche Wracks und fotografiere sie (X / F)');
+    hinweis('Finde zwei unterschiedliche Wracks und fotografiere sie (' + fotoTaste() + ')');
     setTimeout(() => { if(ub.aktiv) hinweis(''); }, 9000);
   });
 }
@@ -1822,7 +1824,7 @@ function fotoAnzeige(){
     document.body.appendChild(ub.fotoEl);
   }
   const n = Object.keys(ub.fotos).length;
-  ub.fotoEl.textContent = '📷 Fotos ' + n + '/2' + (ub.nah ? '  ·  X / F: Foto machen' : '');
+  ub.fotoEl.textContent = '📷 Fotos ' + n + '/2' + (ub.nah ? '  ·  ' + fotoTaste() + ': Foto machen' : '');
 }
 
 // naechstes Wrack in Fotoreichweite (oder null): getaucht, nah genug und VOR dem U-Boot
@@ -1883,13 +1885,18 @@ function ubootUpdate(){
   if(!ub.aktiv) return;
   ub.nah = wrackNah();
   fotoAnzeige();
-  // X am Controller (sonst Boost) bzw. F: Foto
+  // Y am Controller bzw. F: Foto. Y ruft zwar auch buttonY der Engine, das ist im U-Boot aber
+  // gesperrt (story.phase, siehe hookEinsteigen) – aussteigen geht hier ohnehin nicht.
   const gp = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
-  const x = !!(gp && gp.buttons[2] && gp.buttons[2].pressed);
-  if(x && !ub.xPrev) fotoMachen();
-  ub.xPrev = x;
+  const y = !!(gp && gp.buttons[3] && gp.buttons[3].pressed);
+  if(y && !ub.yPrev) fotoMachen();
+  ub.yPrev = y;
 }
 addEventListener('keydown', e => { if(e.code === 'KeyF' && !e.repeat) fotoMachen(); });
+// X hat im U-Boot keine Aufgabe, die Engine verstellt damit aber den Schub: Tastatur-X setzt ihn
+// auf 0, Controller-X (Boost) auf 100 % und beim Loslassen auf 50 %. Tastatur-X wird hier vor der
+// Engine abgefangen (Capture), Controller-X in hookEinsteigen (readInput).
+addEventListener('keydown', e => { if(ub.aktiv && e.code === 'KeyX') e.stopImmediatePropagation(); }, true);
 
 // ---- Einsteigen ------------------------------------------------------------------------------
 function hookEinsteigen(){
@@ -1918,7 +1925,20 @@ function hookEinsteigen(){
     const r = physOrig.apply(this, arguments);
     if(story.phase === 'freiflug') freiflugUpdate();
     if(story.phase === 'mars') marsUpdate(dt);
-    if(ub.aktiv){ ubootUpdate(); boosting = false; }      // X ist im U-Boot das Foto, kein Boost
+    if(ub.aktiv){ ubootUpdate(); boosting = false; }      // kein Boost im U-Boot
+    return r;
+  };
+  // Controller-X im U-Boot: Schub bleibt, wie er vor readInput war (sonst Halten = 100 %,
+  // Loslassen = 50 %). Solange X gedrueckt ist, wirkt auch der R-Stick nicht – dafuer bleibt die
+  // Fahrt genau so, wie sie eingestellt war.
+  const inputOrig = readInput;
+  readInput = function(){
+    const gp = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
+    const x = !!(gp && gp.buttons[2] && gp.buttons[2].pressed);
+    const xWar = ub.xRoh; ub.xRoh = x;
+    const th = state.throttle;
+    const r = inputOrig.apply(this, arguments);
+    if(ub.aktiv && (x || xWar)){ state.throttle = th; boosting = false; }
     return r;
   };
   // Aussteigen (Y) waehrend Startsequenz/Autostart/danach nicht erlaubt
@@ -1927,9 +1947,15 @@ function hookEinsteigen(){
     if(!eva && (pf.aktiv || (story.phase && !(story.phase === 'mars' && GROUNDS[locale])))) return;
     return buttonYOrig.apply(this, arguments);
   };
-  // Reset (R) nur gesperrt, solange Story-Sequenzen laufen
+  // Kameraabstand (V) gesperrt: die Story-Kameras (Intro, Schwimmen, Autostart, Unterwasser) rechnen
+  // mit der Standardansicht, und die Anleitung kennt die Taste nicht. viewMode bleibt so immer 0.
+  cycleView = function(){};
+  // Reset (R / Start) gibt es nicht: man koennte damit einem Absturz (7 Tage) ausweichen. Die Engine
+  // ruft resetPlane aber auch selbst auf, wenn nach einem Absturz die Loeschsequenz durch ist – nur
+  // das bleibt (bzw. R kuerzt sie ab). In Flugaufgaben wird daraus das Etappen-Ende mit 7 Tagen.
   const resetOrig = resetPlane;
   resetPlane = function(){
+    if(!state.crashed) return;
     if(pf.aktiv || auto.aktiv || story.phase === 'platzhalter' || story.phase === 'reise') return;
     if(story.etappe <= 2 && (story.phase === 'mars' || story.phase === 'freiflug' || story.phase === 'flugschule') && state.crashed){
       absturzEnde();
@@ -2152,6 +2178,11 @@ function aufgabeText(){
     ['Landen', '10 % Schub, senkrecht aufsetzen'],
     ['Stein', 'aussteigen (Y), hinlaufen, Y'],
     ['Starten', '20 % Schub: senkrecht hoch'],
+  ]];
+  if(ub.aktiv) return ['U-Boot', [
+    ['Ziel', 'zwei unterschiedliche Wracks fotografieren'],
+    ['Foto', fotoTaste() + ' (getaucht, Wrack vor dir)'],
+    ['Sonar', 'B'],
   ]];
   if(story.phase === 'freiflug') return ['Ziel', [
     ['Radar', 'fliege zum roten Punkt'],

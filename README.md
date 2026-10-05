@@ -29,7 +29,7 @@ vorerst ein Platzhalter.
   - Absturz (egal wo) → **7 Tage**
 - **U-Boot:** im gelben Ring am Strand einsteigen. Code ist schon eingegeben (Ziffernfeld, nur kurz sichtbar).
   Fünf Wracks (2 Segler, 3 Liberty) suchen – das Periskop zeigt nur nach einem **Sonar-Ping (B)** ein Bild,
-  das über 10 s verblasst. Zwei **unterschiedliche** Wracks fotografieren (X / F) → **4 Tage**.
+  das über 10 s verblasst. Zwei **unterschiedliche** Wracks fotografieren (Controller Y / Tastatur F; angezeigt wird die passende Taste) → **4 Tage**.
 
 ### Etappe 2 – Die Wüste
 Nur Wüste, kein Wasser: Dünen, Felsen, Kakteen, Flugfeld, Oase mit Palmen. Leise arabische Musik zu Beginn, Wüstenwind.

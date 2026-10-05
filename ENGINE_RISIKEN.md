@@ -12,10 +12,7 @@ Kategorie **akut** = betrifft Etappe 1/2 schon jetzt · **später** = betrifft g
 
 | ID | Schwere | Kat. | Ort | Problem | Mögliche Lösung |
 |---|---|---|---|---|---|
-| R1 | mittel | akut | engine.js:11069 · story.js (U-Boot-Foto) | Taste **X** setzt in der Engine immer `state.throttle = 0`. Im U-Boot ist X/F das Foto – beim Fotografieren mit X geht der Schub auf 0, das U-Boot bleibt stehen (mit F nicht). | Den keydown-Handler der Engine für X im U-Boot abfangen (Capture-Listener mit `stopImmediatePropagation`), oder X am Controller nur noch als Foto, Tastatur nur F. |
-| R2 | mittel | akut | engine.js:11067, 11305 | Taste **V** (`cycleView`) wechselt den Kamera-Abstand. Die Story-Kameras (Intro, Schwimmen, Autostart) rechnen mit dem Standard; nach V passt z. B. die Unterwasser-Kamera nicht mehr zu den Erwartungen, und der Spieler weiß nichts von der Taste. | V sperren oder in die Anleitung aufnehmen; `viewMode` beim Etappenwechsel auf 0 setzen. |
-| R3 | niedrig | akut | engine.js:11070 · etappe2.js (Kistenabwurf) | Taste **B** ruft zusätzlich `buttonB()` der Engine auf. In der Transall ist das der Engine-Kistenabwurf (`dropCrate`), den etappe2.js sperrt – funktioniert, hängt aber an dieser Sperre. Im All ist B der Laser. | Sperre beibehalten; bei jeder neuen B-Aktion einer Etappe prüfen, was `buttonB` dort zusätzlich tut. |
-| R4 | niedrig | akut | engine.js:11066, 11280 | **R** und Gamepad **Start** = `resetPlane`. Die Story sperrt es in Sequenzen, sonst setzt es zur Startposition zurück. Ein Reset mitten im Freiflug zählt nicht als Absturz – man kann so einem 7-Tage-Absturz ausweichen. | Reset während Flug-Aufgaben als Absturz werten oder ganz sperren. |
+| R3 | niedrig | akut | engine.js:11070 · etappe2.js (Kistenabwurf) | Taste **B** ruft zusätzlich `buttonB()` der Engine auf. In der Transall ist das der Engine-Kistenabwurf (`dropCrate`), den etappe2.js sperrt – funktioniert, hängt aber an dieser Sperre. Im All ist B der Laser. | **Entschieden:** Jedes Fahrzeug hat auf B seine eigene Funktion. Ob sie in einer Etappe gebraucht wird oder gesperrt werden muss, wird von Fall zu Fall bei der jeweiligen Etappe entschieden (Transall: gesperrt). |
 
 ### Lade-Callbacks
 
@@ -64,6 +61,9 @@ Kategorie **akut** = betrifft Etappe 1/2 schon jetzt · **später** = betrifft g
 
 ## Bereits gelöst
 
+- R1: X im U-Boot verstellte den Schub (Tastatur auf 0, Controller-Boost auf 100/50 %) → Foto liegt jetzt auf Controller **Y** bzw. Tastatur **F**, die Anzeige nennt die Taste passend zum Eingabegerät, X ist im U-Boot wirkungslos.
+- R2: Taste V (`cycleView`) verstellte den Kameraabstand, auf den die Story-Kameras nicht ausgelegt sind → in der Story gesperrt (`cycleView` ist leer, `viewMode` bleibt 0). Damit ersetzt die Story eine Engine-Funktion mehr (R16).
+- R4: R / Start setzte mitten im Flug zurück (Ausweg aus einem 7-Tage-Absturz) → manueller Reset gesperrt. `resetPlane` wirkt nur noch nach einem Absturz (Engine-Löschsequenz oder R zum Abkürzen); in Flugaufgaben wird daraus das Etappen-Ende mit 7 Tagen.
 - Wrapper reichte nur 4 von 5 Argumenten an `hitsBuilding` weiter → Schiffe drehten auf der Stelle (alle Wrapper nutzen jetzt `.apply(this, arguments)`).
 - Zustände liefen in die nächste Etappe mit (`autostart.blende` → Autostart endlos) → Zurücksetzen beim Etappenwechsel.
 - `resetPlane` räumt Sirene/Feuerwehr auf, wird beim Etappen-Ende umgangen → Aufräumen in der Schwarzblende zum Globus.
