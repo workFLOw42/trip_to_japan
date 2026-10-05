@@ -293,6 +293,22 @@ function updateRing(zeigen){
   const t = performance.now() / 1000;
   ringMesh.material.opacity = 0.55 + 0.35 * Math.sin(t * 3);
 }
+// Derselbe Einstieg fuer spaetere Etappen: ein pulsierender gelber Ring am Ufer, im Ring Y = an
+// Bord (Etappe 3: Feuerwehrboot). Gebaut in der Welt der aktuellen Etappe.
+//   const r = story.einstiegsRing(x, y, z);  r.zeigen(an);  r.drin()  -> Kenji steht im Ring
+story.einstiegsRing = function(x, y, z){
+  const m = new THREE.Mesh(new THREE.RingGeometry(RING_R - 0.7, RING_R, 48),
+    new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.8,
+      side: THREE.DoubleSide, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2; m.renderOrder = 996;
+  m.position.set(x, y + 0.06, z);
+  welt(story.etappe).add(m);
+  return {
+    x, z, mesh: m,
+    zeigen(an){ m.visible = an; if(an) m.material.opacity = 0.55 + 0.35 * Math.sin(performance.now() / 1000 * 3); },
+    drin(){ return !!eva && Math.hypot(eva.group.position.x - x, eva.group.position.z - z) < RING_R; },
+  };
+};
 
 // ---- Kenji statt Astronaut -------------------------------------------------------------------
 // Kenji ist ein Skinned Mesh mit Mixamo-Animationen. clone(true) taugt dafuer nicht (das Skelett
@@ -362,7 +378,7 @@ const GEH_MAX = 0.3;          // Anteil von EVA_SPEED bei 50 % Stick (≈ 1,8 m/
 const TRICK_CLIP = { tanz: 'dance_silly', twirl: 'butterfly_twirl', evade: 'aerial_evade' };
 const tricks = story.tricks = { aktiv: null, t: 0, moon: false, ausschlag: 0, prev: {} };
 
-function amFahrzeug(){ return !!eva && (evaCanBoard() || !!harborSubNear() || marsSteinNah() || !!(story.transallNah && story.transallNah())); }
+function amFahrzeug(){ return !!eva && (evaCanBoard() || !!harborSubNear() || marsSteinNah() || !!(story.transallNah && story.transallNah()) || !!(story.bootNah && story.bootNah())); }
 
 // Rohzustand der vier Tasten (Controller + Tastatur)
 function trickTasten(){
@@ -646,6 +662,7 @@ function springeZu(n){
   story.reise = [];
   for(let i = 0; i < n - 1; i++) story.reise.push(i);     // 0 .. n-2 schon besucht
   story.e1weg = story.e1weg || 'uboot';
+  story.e2weg = story.e2weg || 'transall';
   story.tage = (n - 2) * 4;                                // die Etappen vor der letzten Reise
   story.etappe = n - 1;
   story.phase = 'reise';
@@ -653,6 +670,7 @@ function springeZu(n){
   story.globusReise(n - 1, text, () => {
     story.etappe = n;
     if(n === 2 && story.etappe2Start){ hinweis(''); story.etappe2Start(); return; }
+    if(n === 3 && story.etappe3Start){ hinweis(''); story.etappe3Start(); return; }
     platzhalter('Etappe ' + n + ' (folgt) – Tag ' + story.tage + ' von 42');
   });
 }
@@ -1279,6 +1297,7 @@ function hookLoop(){
     updateAufgabe();
     if(eva && story.phase === 'mars') marsUpdate(dt);
     if(story.updateE2) story.updateE2(dt);
+    if(story.updateE3) story.updateE3(dt);
     introDt(dt);
     updateMarken();
     return loopOrig.apply(this, arguments);
@@ -1299,7 +1318,7 @@ function hookRadar(){
   };
   const activeOrig = activeTarget;
   activeTarget = function(){
-    if(story.etappe <= 2 && !eva && locale === 'earth')       // keine Brandherde o. Ae. aus der Engine
+    if(story.etappe <= 3 && !eva && locale === 'earth')       // keine Brandherde o. Ae. aus der Engine
       return story.ziel ? { x: story.ziel.x, z: story.ziel.z, col: COL_ZIEL } : null;
     return activeOrig();
   };
@@ -1465,7 +1484,7 @@ function pfHud(){
 // opts: { kurzschluss, ohneZeit, still, danach(ok) } – ohne opts wie im X-Wing (Etappe 2 = Kurzschluss)
 function pfStart(opts){
   opts = opts || {};
-  pf.kurzschluss = opts.kurzschluss !== undefined ? opts.kurzschluss : story.etappe >= 2;   // Etappe 2: X-Wing-Falle
+  pf.kurzschluss = opts.kurzschluss !== undefined ? opts.kurzschluss : story.etappe === 2;   // nur Etappe 2: X-Wing-Falle
   pf.ohneZeit = !!opts.ohneZeit;
   pf.danach = opts.danach || null;
   pf.aktiv = true; pf.t = 0; pf.schritt = 0; pf.gruen = false;
@@ -1616,12 +1635,16 @@ story.e1aufraeumen = function(){
 function etappeEnde(tage, wie){
   if(story.etappe === 1) story.e1weg = story.phase === 'mars' || mars.phase === 'fertig' ? 'mars'
     : (ub.fotos && Object.keys(ub.fotos).length >= 2 ? 'uboot' : 'xwing');
+  // Etappe 2: 'mond' (X-Wing-Falle verpasst), 'transall' oder 'xwing' – fuer den zweiten Mond-Trip
+  if(story.etappe === 2) story.e2weg = story.phase === 'mars' || mars.phase === 'fertig' ? 'mond'
+    : (story.phase === 'flugschule' ? 'transall' : 'xwing');
   story.phase = 'reise';
   story.verdreht = false;                  // Kurzschluss endet mit der Etappe
   const text = tageVergangen(tage) + ' (' + wie + ') · noch ' + (42 - story.tage) + ' von 42 Tagen';
   story.globusReise(story.etappe, text, () => {
     story.etappe++;
     if(story.etappe === 2 && story.etappe2Start){ hinweis(''); story.etappe2Start(); return; }
+    if(story.etappe === 3 && story.etappe3Start){ hinweis(''); story.etappe3Start(); return; }
     platzhalter('Etappe ' + story.etappe + ' (folgt) – Tag ' + story.tage + ' von 42');
   });
 }
@@ -1650,14 +1673,25 @@ const MOND_KURZ = [
 ];
 function mondLang(){
   return [
-    'Hallo. Da hatte der Flieger wohl einen Kurzschluss, deshalb war die Startsequenz nicht wie gewohnt.',
+    story.etappe >= 3 ? 'Hallo. Du warst wohl etwas nervös.'
+      : 'Hallo. Da hatte der Flieger wohl einen Kurzschluss, deshalb war die Startsequenz nicht wie gewohnt.',
     'Aber keine Sorge, wir haben die Startsequenz und den Start automatisch durchgeführt.',
     'Zur Erinnerung: Du hast dich freiwillig gemeldet, zum Mond zu fliegen und als Beweis einen Stein mitzubringen.',
   ].concat(MARS_TEXT.slice(3, 9)).concat([MARS_TEXT[9]]);   // Flugerklaerung + Schluss wie beim Mars
 }
+// Etappe 3, schon in Etappe 2 auf dem Mond gewesen (Konzept: "zweiter Mond-Trip")
+const MOND_ZWEITER = [
+  'Du schon wieder.',
+  'Das trifft sich ja gut. Wir haben es nämlich auch verbockt und den Stein vom Mond verloren.',
+  'Hol mal bitte noch einen. Du weißt ja, wie es geht. Bis nächste Woche dann!',
+];
+function mondText(){
+  if(story.etappe >= 3 && story.e2weg === 'mond') return MOND_ZWEITER;
+  return story.e1weg === 'mars' ? MOND_KURZ : mondLang();
+}
 const TRIP = {
   mars: { text: () => MARS_TEXT, ziel: 'Mars', stein: 'Stein', farbe: 0xff7a2a, glanz: 0xff4400 },
-  moon: { text: () => story.e1weg === 'mars' ? MOND_KURZ : mondLang(), ziel: 'Mond', stein: 'Stein', farbe: 0xd8d8e6, glanz: 0x8888aa },
+  moon: { text: mondText, ziel: 'Mond', stein: 'Stein', farbe: 0xd8d8e6, glanz: 0x8888aa },
 };
 function tripOrt(){ return story.etappe >= 2 ? 'moon' : 'mars'; }
 const MARS_TEXT = [
@@ -1782,7 +1816,7 @@ function hookMars(){
   story.onWeltall = marsStart;
   // Rover gibt es in Etappe 1 nicht (der Stein liegt nah genug)
   const roverObjOrig = roverObjFor;
-  roverObjFor = function(){ return story.etappe <= 2 ? null : roverObjOrig.apply(this, arguments); };
+  roverObjFor = function(){ return story.etappe <= 3 ? null : roverObjOrig.apply(this, arguments); };
   // Y am Stein
   const boardYOrig = evaBoardY;
   evaBoardY = function(){
@@ -1792,7 +1826,7 @@ function hookMars(){
   // Zur Erde: mit Stein -> Ende; ohne Stein darf man nicht zurueck (wird ins All zurueckgeschoben)
   const enterEarthOrig = enterEarth;
   enterEarth = function(){
-    if(story.etappe <= 2 && mars.phase && mars.phase !== 'fertig'){
+    if(story.etappe <= 3 && mars.phase && mars.phase !== 'fertig'){
       if(marsErde()) return enterEarthOrig.apply(this, arguments);
       // noch kein Stein: ein Stueck von der Erde weg zurueck ins All
       const n = state.pos.clone().sub(earthHome).normalize();
@@ -1993,7 +2027,7 @@ function hookEinsteigen(){
   const boardOrig = evaBoard;
   evaBoard = function(){
     const r = boardOrig.apply(this, arguments);
-    if(story.etappe <= 2 && !story.phase && isXWing()) pfStart();
+    if(story.etappe <= 3 && !story.phase && isXWing()) pfStart();
     return r;
   };
   // Waehrend Startsequenz und Autostart: Flieger steht bzw. fliegt allein (keine Physik/Eingabe)
@@ -2041,7 +2075,7 @@ function hookEinsteigen(){
   resetPlane = function(){
     if(!state.crashed) return;
     if(pf.aktiv || auto.aktiv || story.phase === 'platzhalter' || story.phase === 'reise') return;
-    if(story.etappe <= 2 && (story.phase === 'mars' || story.phase === 'freiflug' || story.phase === 'flugschule') && state.crashed){
+    if(story.etappe <= 3 && (story.phase === 'mars' || story.phase === 'freiflug' || story.phase === 'flugschule') && state.crashed){
       absturzEnde();
       return;
     }
@@ -2171,7 +2205,7 @@ function hookHud(){
         if(alt && alt.textContent !== String(t)) alt.textContent = String(t);
       }
       if(statEl){
-        const ein = evaCanBoard() || harborSubNear() || (story.transallNah && story.transallNah());
+        const ein = evaCanBoard() || harborSubNear() || (story.transallNah && story.transallNah()) || (story.bootNah && story.bootNah());
         const s = marsSteinNah() ? 'Y: ' + TRIP[mars.ort || 'mars'].stein + ' aufheben' : (ein ? 'Y: einsteigen' : '');
         if(statEl.textContent !== s) statEl.textContent = s;
       }
@@ -2268,9 +2302,17 @@ function aufgabeText(){
     ['Foto', fotoTaste() + ' (getaucht, Wrack vor dir)'],
     ['Sonar', 'B'],
   ]];
+  const a3 = story.aufgabeE3 && story.aufgabeE3();
+  if(a3) return a3;
   if(story.phase === 'freiflug') return ['Ziel', [
     ['Radar', 'fliege zum roten Punkt'],
     ['Zeit', 'Fliegen kostet keine Zeit – erst über dem Ziel geht es weiter'],
+  ]];
+  if(story.etappe === 3) return ['Etappe 3: Der Fluss', [
+    ['X-Wing (weiß)', '1 Tag Reisedauer, aber riskant'],
+    ['Feuerwehrboot (gelb)', '4 Tage, Boots-Wissen für später'],
+    ['Einsteigen', 'in den gelben Ring am Ufer bzw. zum X-Wing, Y'],
+    ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],
   ]];
   return ['Etappe 1: Der Aufbruch am Strand', [
     ['X-Wing (weiß)', '1 Tag Reisedauer, aber riskant'],

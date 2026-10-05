@@ -14,7 +14,7 @@ Technische Basis ist die Engine des **[Flugspiel](https://github.com/workFLOw42/
 
 ## Stand
 
-Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 und 2**, danach folgt
+Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 3**, danach folgt
 vorerst ein Platzhalter.
 
 **Startmenü:** *Neues Spiel* oder – zum Testen – direkt **E2 … E6** (linker Stick / ← → wählen, A / Enter starten).
@@ -43,6 +43,17 @@ Nur Wüste, kein Wasser: Dünen, Felsen, Kakteen, Flugfeld, Oase mit Palmen. Lei
   - JA → Startsequenz (ohne Zeitlimit), selbst starten, auf 270–330 m zur Oase, Kiste mit **B** abwerfen.
     Merksatz: *Schub in Prozent × 5 = Meter vor dem Ziel.* Treffer (± 50 m) → **4 Tage**, daneben → **7 Tage**.
 
+### Etappe 3 – Der Fluss
+Grüne Uferlandschaft mit einem gewundenen Fluss (Sandufer, Bäume, Felsen im Wasser).
+- **X-Wing („1 Tag“):** normale Startsequenz in 10 s (kein Kurzschluss).
+  - geschafft → zum Radarpunkt → **1 Tag**, aber ohne Boots-Wissen für Etappe 4
+  - verpasst → Autopilot zum **Mond** → **7 Tage**. Wer schon in Etappe 2 dort war: *„Du schon wieder … den Stein
+    verloren. Hol mal bitte noch einen.“*
+- **Feuerwehrboot („4 Tage“):** im gelben Ring am Ufer einsteigen (wie beim U-Boot). Der Kapitän erklärt Trägheit
+  in Kurven, Strömung und Löschen; die Zeit läuft erst danach. Drei Feuer am Ufer flussabwärts in **2 Minuten** löschen
+  (anhalten, Nase zum Feuer, **B**), höchstens **2 Felskontakte**. Die Strömung schiebt flussabwärts.
+  Geschafft → **4 Tage** (+ Boots-Wissen), 3. Felskontakt oder Zeit um → **7 Tage**.
+
 Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, gelb = Etappen, lila = Fukuoka).
 
 ## Steuerung zu Fuß
@@ -68,12 +79,13 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `engine/` | Flugspiel-Engine + Modelle, **unverändert** kopiert von `tools/build_engine.ps1` |
 | `story.js` | Spiellogik und Etappe 1 – hängt sich per Wrapper in die Engine ein |
 | `etappe2.js` | Etappe 2 (Wüste, X-Wing-Falle, Transall-Flugschule) |
+| `etappe3.js` | Etappe 3 (Fluss, Feuerwehrboot, X-Wing ohne Kurzschluss) |
 | `kenji_glb.js` | Kenji als eingebettetes GLB (aus `models/kenji.glb`) |
 | `wueste_snd.js` | Wüsten-Sounds (Musik, Wind) als Base64 |
 | `sw.js`, `manifest.json` | Offline-Cache und App-Installation (PWA) |
 | `ENGINE_RISIKEN.md` | bekannte Stolperstellen der Engine-Übernahme |
 
-Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `etappe2.js` → `engine/engine.js`. Die Engine ruft am Ende
+Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `etappe2.js` → `etappe3.js` → `engine/engine.js`. Die Engine ruft am Ende
 ihres Boot-Blocks `STORY_HOOK` (Wrapper setzen) und `STORY_START` (Startszene) auf – die zwei Zeilen fügt das Build-Skript ein.
 
 **Welten:** Jede Etappe baut ihre Kulisse in eine eigene Gruppe – `story.welt(n).add(obj)`, nie `scene.add(obj)`.
@@ -105,7 +117,7 @@ einem eigenen Cache, dessen Version nur bei geänderten Modellen hochgeht – so
 | `surfboard.glb` | Surfbrett, 1,90 m |
 | `snowboard.glb` | Snowboard, 1,45 m |
 
-Schule, Wüste, Oase, Flugfeld und Globus sind aus Code gebaut.
+Schule, Wüste, Oase, Flugfeld, Fluss und Globus sind aus Code gebaut.
 
 ## 🙏 Danksagungen
 

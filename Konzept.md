@@ -7,11 +7,15 @@ Ein 3D-Abenteuerspiel im Browser auf Basis der WebGL/Three.js-Engine des „Flug
 ## 📌 Arbeitsstand (02.10.2026)
 
 **Gebaut und spielbar:** Etappe 1 (alle Wege inkl. Mars-Trip) und Etappe 2 (X-Wing-Falle mit Kurzschluss,
-Mond-Trip, Transall-Flugschule) · Startmenü mit Etappen-Sprung (Test) · Globus-Reise zwischen den Etappen ·
+Mond-Trip, Transall-Flugschule) und Etappe 3 (Fluss mit Feuerwehrboot, X-Wing ohne Kurzschluss) · Startmenü mit Etappen-Sprung (Test) · Globus-Reise zwischen den Etappen ·
 Tageszähler · Stimmen (Pilot männlich) · Offline-PWA · Highscores still gespeichert (noch ohne Anzeige).
 Details zum Gebauten in der [README](README.md); Stolperstellen der Engine in [ENGINE_RISIKEN.md](ENGINE_RISIKEN.md).
 
-**Als Nächstes:** Etappe 3 (Indischer Ozean).
+**Als Nächstes:** Etappe 4 (Südostasien).
+
+- **Etappe 3 gebaut als Fluss** (nicht Meer): gewundener Fluss mit Strömung, Felsen, 3 Uferfeuer. Einstieg ins
+  Feuerwehrboot über den gelben Ring wie beim U-Boot. X-Wing in Etappe 3 **ohne Kurzschluss**. Ergebnis des
+  Bootswegs steht in `story.boots_wissen` (für die Schnellboot-Flucht in Etappe 4).
 
 ### 🔧 Beim Bauen entschieden (weicht vom Text unten ab oder ergänzt ihn)
 
