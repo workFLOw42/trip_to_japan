@@ -207,27 +207,34 @@ function hookWelt3(){
 const kul = { baeume: null, felsen: [], feuer: [] };
 function baueKulisse(){
   const w = story.welt(3);
-  // Baeume beidseits des Flusses (fester Zufall), nicht auf dem Ufer
+  // Baeume beidseits des Flusses (fester Zufall), nicht auf dem Ufer. Live-Wunsch: mehr und hoeher, dichter
+  // am Fluss -> 1100 Stueck (vorher 420, 6-14 m) als InstancedMesh (drei Zeichenaufrufe statt 2200).
   let s = 7;
   const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const stamm = new THREE.MeshLambertMaterial({ color: 0x6b4a2b });
   const krone = new THREE.MeshLambertMaterial({ color: 0x2f6b2a });
   const krone2 = new THREE.MeshLambertMaterial({ color: 0x3f7f30 });
   const g = new THREE.Group();
-  for(let i = 0; i < 420; i++){
+  const N = 1100, stI = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.4, 0.6, 1, 6), stamm, N);
+  const krGeo = new THREE.ConeGeometry(1, 1, 7), krI = [new THREE.InstancedMesh(krGeo, krone, N), new THREE.InstancedMesh(krGeo, krone2, N)];
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), yAchse = new THREE.Vector3(0, 1, 0);
+  const frei = [xwingPlatz(), ankunft(), stegPlatz()];
+  let nS = 0; const nK = [0, 0];
+  for(let i = 0; i < N; i++){
     const z = FLUSS_Z0 + 300 - rnd() * (FLUSS_Z0 - FLUSS_Z1 + 600);
     const seite = rnd() < 0.5 ? -1 : 1;
-    const ab = FLUSS_B / 2 + UFER_SAND + 30 + rnd() * 600;
+    const ab = FLUSS_B / 2 + UFER_SAND + 12 + Math.pow(rnd(), 1.6) * 650;     // mehr nah am Fluss
     const x = mitteX(z) + seite * ab;
+    const h = 10 + rnd() * 16, dick = 0.8 + h / 20, kk = rnd() < 0.5 ? 0 : 1, dreh = rnd() * 6.28;
+    if(Math.abs(flussLage(x, z).d) < FLUSS_B / 2 + UFER_SAND + 6) continue;   // in Kurven liegt der Fluss schraeg
     if(FEUER_DEF.some(f => Math.hypot(x - feuerPos(f).x, z - feuerPos(f).z) < 45)) continue;   // Feuerplatz frei
-    const h = 6 + rnd() * 8;
-    const t = new THREE.Group();
-    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, h * 0.45, 6), stamm); st.position.y = h * 0.22; t.add(st);
-    const kr = new THREE.Mesh(new THREE.ConeGeometry(h * 0.32, h * 0.75, 7), rnd() < 0.5 ? krone : krone2);
-    kr.position.y = h * 0.62; t.add(kr);
-    t.position.set(x, WIESE_Y, z); t.rotation.y = rnd() * 6.28;
-    g.add(t);
+    if(frei.some(p => Math.hypot(x - p.x, z - p.z) < 60)) continue;          // X-Wing, Ankunft, Steg frei
+    q.setFromAxisAngle(yAchse, dreh);
+    sc.set(dick, h * 0.45, dick); ps.set(x, WIESE_Y + h * 0.22, z); m4.compose(ps, q, sc); stI.setMatrixAt(nS++, m4);
+    sc.set(h * 0.32, h * 0.75, h * 0.32); ps.set(x, WIESE_Y + h * 0.62, z); m4.compose(ps, q, sc); krI[kk].setMatrixAt(nK[kk]++, m4);
   }
+  stI.count = nS; krI[0].count = nK[0]; krI[1].count = nK[1];
+  for(const m of [stI, krI[0], krI[1]]){ m.frustumCulled = false; g.add(m); }   // Huelle gilt nur um den Ursprung
   w.add(g); kul.baeume = g;
   // Fluss als Band entlang der Mittellinie: Wasser (WASSER_Y) und beidseits ein Sandstreifen, der
   // von der Wiese zum Wasser abfaellt. Fein aufgeloest (alle 8 m ein Querschnitt), damit das Ufer

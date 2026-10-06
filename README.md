@@ -14,7 +14,7 @@ Technische Basis ist die Engine des **[Flugspiel](https://github.com/workFLOw42/
 
 ## Stand
 
-Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 3** und in Etappe 4 der **Container-Kran**, danach folgt
+Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 4**, danach folgt
 vorerst ein Platzhalter.
 
 **Startmenü:** *Neues Spiel* oder – zum Testen – direkt **E2 … E6** (linker Stick / ← → wählen, A / Enter starten).
@@ -61,8 +61,13 @@ Wüstenwind wie in Etappe 2 (ohne Musik).
   (+ Boots-Wissen). 3. Felskontakt oder Zeit um → **7 Tage**. Live abgestimmt: ~16 s Rest bei 2 Kontakten.
 
 ### Etappe 4 – Der Hafen
-Hafenbecken mit Kai, Frachtschiff längsseits (Ladung als Fächer um den Kran) und Container-Kran.
-- **Schnellboot („1 Tag“):** folgt im nächsten Schritt.
+Hafenbecken mit Kai (glattes Wasser), Frachtschiff längsseits (Ladung als Fächer um den Kran), Container-Kran und ein Kanal
+(60 m breit, sieben Kurven, Häuser am Ufer) bis zur Mündung aufs offene Meer mit Schiffen.
+- **Schnellboot („1 Tag“):** im gelben Ring am Kai einsteigen (wie bei den anderen Booten). Kenji kapert das Boot, zwei
+  Polizeiboote mit Blaulicht jagen ihn: eines kommt von hinten und nimmt die Kurven so schnell, wie der Radius es zulässt, das zweite wartet in einem Seitenarm und schießt an der
+  Abzweigung heraus. Durch den Kanal bis zu den gelben Bojen an der Mündung. Das Ruder wird mit der Fahrt steifer –
+  Kurve 1 schafft man mit Vollgas nur haarscharf. HUD: Abstand zur Polizei, Rest bis zur Mündung, Felskontakte.
+  Risiko-Variante: nur perfekt gefahren (Vollgas, vor jeder Kurve passend bremsen) knapp zu schaffen. Entkommen → **1 Tag**. Eingeholt (< 15 m) oder 3 Felskontakte → kurze Geschichte (eine Woche Gefängnis) → **7 Tage**.
 - **Container-Kran („4 Tage“):** im gelben Ring am Kranfuß einsteigen. Vier Container vom Kai in vier Lücken, **6 Minuten**,
   höchstens **2 Fehler**. Der Container hängt wie ein Pendel; Wind kommt abwechselnd von links und rechts, baut sich
   langsam auf und fällt ruckartig ab (nicht angesagt).
@@ -104,14 +109,16 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `story.js` | Spiellogik und Etappe 1 – hängt sich per Wrapper in die Engine ein |
 | `etappe2.js` | Etappe 2 (Wüste, X-Wing-Falle, Transall-Flugschule) |
 | `etappe3.js` | Etappe 3 (Fluss, Feuerwehrboot, X-Wing ohne Kurzschluss) |
-| `etappe4.js` | Etappe 4 (Hafen, Container-Kran; Schnellboot folgt) |
+| `etappe4.js` | Etappe 4: Hafen-Welt und Container-Kran |
+| `etappe4b.js` | Etappe 4: Schnellboot-Flucht (Kanal, Polizei) |
+| `flucht_glb.js` | Schnellboot und Polizeiboot (verkleinert) als Base64 |
 | `hafen_glb.js` | Frachtschiff (verkleinert), Container und Kran als Base64 |
 | `kenji_glb.js` | Kenji als eingebettetes GLB (aus `models/kenji.glb`) |
 | `wueste_snd.js` | Wüsten-Sounds (Musik, Wind) als Base64 |
 | `sw.js`, `manifest.json` | Offline-Cache und App-Installation (PWA) |
 | `ENGINE_RISIKEN.md` | bekannte Stolperstellen der Engine-Übernahme |
 
-Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `etappe2.js` → `etappe3.js` → `hafen_glb.js` → `etappe4.js` → `engine/engine.js`. Die Engine ruft am Ende
+Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `etappe2.js` → `etappe3.js` → `hafen_glb.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `engine/engine.js`. Die Engine ruft am Ende
 ihres Boot-Blocks `STORY_HOOK` (Wrapper setzen) und `STORY_START` (Startszene) auf – die zwei Zeilen fügt das Build-Skript ein.
 
 **Welten:** Jede Etappe baut ihre Kulisse in eine eigene Gruppe – `story.welt(n).add(obj)`, nie `scene.add(obj)`.
@@ -143,7 +150,7 @@ einem eigenen Cache, dessen Version nur bei geänderten Modellen hochgeht – so
 | `surfboard.glb` | Surfbrett, 1,90 m |
 | `snowboard.glb` | Snowboard, 1,45 m |
 
-Schule, Wüste, Oase, Flugfeld, Fluss und Globus sind aus Code gebaut.
+Schule, Wüste, Oase, Flugfeld, Fluss, Hafenbecken, Kanal und Globus sind aus Code gebaut.
 
 ## 🙏 Danksagungen
 
@@ -160,6 +167,8 @@ Dieses Spiel wäre ohne die großartige Arbeit vieler Künstlerinnen und Künstl
 | [Building crane low poly](https://sketchfab.com/3d-models/building-crane-low-poly-52d3ffdc37f844a892bebbd7e76f1939) | **Mostafa Hamed** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – Haken und Laufkatze ersetzt |
 | [Cargo Ship 06 without containers](https://sketchfab.com/3d-models/cargo-ship-06-without-containers-c73ae6cc314941069a0e3a7ca6acc26d) | **gogiart** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – verkleinert (Dreiecke, Texturen) |
 | [Container](https://sketchfab.com/3d-models/container-92bd84031ebc4ddcbf3b3d3689c4bf31) | **H.A.K_Niazi** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – skaliert, eingefärbt |
+| [Speedboat n°2](https://sketchfab.com/3d-models/speedboat-n2-66da3d79c45c41719c19fb80d0009bef) | **Jonathan Geoffroy** (Sketchfab) | [CC BY-NC 4.0](http://creativecommons.org/licenses/by-nc/4.0/) – verkleinert. **Nicht-kommerziell:** das Spiel darf mit diesem Modell nicht verkauft werden |
+| [Police Boat](https://sketchfab.com/3d-models/police-boat-959e50ef12a546d8a203182c4ccef17a) | **gogiart** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – verkleinert, Blaulicht ergänzt |
 
 Rigging und Animationen der Spielfigur: **[Mixamo](https://www.mixamo.com)** (Adobe).
 

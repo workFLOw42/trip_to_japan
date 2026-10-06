@@ -11,7 +11,14 @@ Mond-Trip, Transall-Flugschule) und Etappe 3 (Fluss mit Feuerwehrboot, X-Wing oh
 Tageszähler · Stimmen (Pilot männlich) · Offline-PWA · Highscores still gespeichert (noch ohne Anzeige).
 Details zum Gebauten in der [README](README.md); Stolperstellen der Engine in [ENGINE_RISIKEN.md](ENGINE_RISIKEN.md).
 
-**Als Nächstes:** Etappe 4 – Schnellboot-Flucht (der Kran ist gebaut).
+**Als Nächstes:** Etappe 5 (Chinesisches Meer).
+
+- **Etappe 4 Schnellboot gebaut:** Kanal hinter dem Hafen (60 m, sieben Kurven), zwei Polizeiboote (von hinten + Seitenarm),
+  eingeholt < 15 m oder 3 Felskontakte = Gefängnis-Geschichte, 7 Tage. Ohne Boots-Wissen aus Etappe 3 gibt es keinen
+  künstlichen Malus – wer nicht gelernt hat, früh zu bremsen, scheitert an den Kurven von selbst. Das Schnellboot-Modell
+  ist **CC BY-NC** (nur nicht-kommerziell).
+  Live abgestimmt: Risiko-Variante – nur perfekt gefahren knapp zu schaffen (~50 m Vorsprung). Mit 50 % Schub entkam man
+  vorher locker, weil die Polizei fast überall im Kurventempo (72 km/h) fuhr.
 
 - **Etappe 4 Kran gebaut, live abgestimmt (weicht vom Text unten ab):** Steuerung in **Stufen** (5° je Druck, Laufkatze
   einen Marker je Druck auf **LT/RT**), Ladung als **Fächer** um den Kran, damit Lücken, Winkel und Marker genau

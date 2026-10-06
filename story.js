@@ -1296,6 +1296,35 @@ function timerTick(dt){
 }
 
 // ---- Hauptschleife ---------------------------------------------------------------------------
+// ---- KI-Flieger am Himmel (Etappe 2-4) --------------------------------------------------------
+// Live-Wunsch: auch in Wueste, Fluss und Hafen Verkehr am Himmel. Die Engine-Flotte sucht dort Inseln
+// und Traeger zum Landen und stuerzte ab (siehe etappe2.js) -> hier nur Reiseflug hoch oben zwischen
+// Zufallspunkten um den Spieler, ohne Mission, ohne Landung.
+const HIMMEL = ['Airbus', 'Airbus', 'Transall', 'Mustang', 'AlphaJet', 'Canadair'];
+const himmel = [];
+function himmelUpdate(dt){
+  if(!himmel.length){
+    if(!HIMMEL.every(m => glbTemplates[m])) return;
+    for(const m of HIMMEL){
+      const p = spawnAroundPlayer(0.3, 1.0), e = spawnPlane(m, p.x, p.z);
+      if(e){ e.hoch = 160 + Math.random() * 260; e.group.position.y = e.hoch; himmel.push(e); }
+    }
+  }
+  for(const e of himmel){
+    const px = e.group.position.x, pz = e.group.position.z;
+    if(!e.ziel || Math.hypot(e.ziel.x - px, e.ziel.z - pz) < 120) e.ziel = spawnAroundPlayer(0.4, 1.1);
+    flyToward(e, e.ziel.x, e.ziel.z, e.hoch, dt);
+    trafficTrail(e);
+    // zu weit weg -> nahebei neu einsetzen (wie recycleIfFar der Engine)
+    if(Math.hypot(px - state.pos.x, pz - state.pos.z) > VIEW_CELLS * CELL * 1.5){
+      const p = spawnAroundPlayer(0.9, 1.2); e.group.position.set(p.x, e.hoch, p.z); e.ziel = null;
+      if(e.trail) e.trail.pts.length = 0;
+    }
+  }
+}
+function himmelWeg(){ for(const e of himmel) removePlane(e); himmel.length = 0; }
+story.himmel = himmelUpdate;
+story.himmelWeg = himmelWeg;
 function hookLoop(){
   const loopOrig = loop;
   let tPrev = performance.now();
@@ -1323,6 +1352,7 @@ function hookLoop(){
     if(story.updateE2) story.updateE2(dt);
     if(story.updateE3) story.updateE3(dt);
     if(story.updateE4) story.updateE4(dt);
+    if(story.etappe >= 2 && locale === 'earth') himmelUpdate(dt); else if(himmel.length) himmelWeg();
     introDt(dt);
     updateMarken();
     return loopOrig.apply(this, arguments);
@@ -2355,7 +2385,7 @@ function aufgabeText(){
     ['Zeit', 'Fliegen kostet keine Zeit – erst über dem Ziel geht es weiter'],
   ]];
   if(story.etappe === 4) return ['Etappe 4: Der Hafen', [
-    ['Schnellboot (weiß)', '1 Tag, riskant (folgt)'],
+    ['Schnellboot (weiß)', '1 Tag, riskant – Flucht vor der Polizei'],
     ['Container-Kran (gelb)', '4 Tage, Geduld im Wind'],
     ['Einsteigen', 'in den gelben Ring, Y'],
     ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],

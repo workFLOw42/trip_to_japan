@@ -84,16 +84,51 @@ function windTick(dt){
 // Windrichtung in der Welt: quer zum Kai (x) - "links/rechts" vom Kranfuehrer aus
 const WIND_DIR = { x: 0, z: 1 };
 
-// ---- Gelaende: Meer bleibt (Engine), Inseln weg, Kai als Land -------------------------------
+// ---- Gelaende: Hafenland (Meeresgitter als Beton), Wasser nur in Becken, Kanal, Seitenarm --------
+// Wie der Fluss in Etappe 3: das Meeresgitter der Engine wird zum Boden, das Wasser ist eine eigene
+// GLATTE Flaeche (etappe4b.js). Vorher war es das Meer mit 3 m Duenung – fuer Kran-Schiff und Kanal-
+// Rennboot unpassend, und das Boot haette auf jeder Welle getanzt.
+function nass4(x, z, rand){ return !!(story.flucht4 && story.flucht4.nass(x, z, rand)); }
+const LAND_Y = KAI_Y;
+const BODEN_BETON = new THREE.Color(0x5f5b55);
+let bodenX4 = NaN, bodenZ4 = NaN;
+function bodenRaster4(){ ground.position.x = Math.round(ground.position.x / SEA_STEP) * SEA_STEP; ground.position.z = Math.round(ground.position.z / SEA_STEP) * SEA_STEP; }
+function updateBoden4(erzwingen){
+  bodenRaster4();
+  const ox = ground.position.x, oz = ground.position.z;
+  if(!erzwingen && ox === bodenX4 && oz === bodenZ4) return;
+  bodenX4 = ox; bodenZ4 = oz;
+  for(let i = 0; i < seaPos.count; i++){
+    const wx = seaBaseX[i] + ox, wz = seaBaseZ[i] + oz;
+    // Gitter grob (62,5 m): liegt innerhalb einer Gitterweite Wasser, wird der Punkt tief gelegt – sonst
+    // spannt das Gitter seine Dreiecke ueber den Wasserrand (Live-Bild: Landstreifen mitten im Becken).
+    // Den Uferrand zeichnen die Kaimauern (etappe4b.js) und der Kai-Klotz.
+    let nahWasser = false;
+    for(const [ax, az] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]])
+      if(nass4(wx + ax * SEA_STEP, wz + az * SEA_STEP)){ nahWasser = true; break; }
+    seaPos.setY(i, nahWasser ? -3 : LAND_Y);
+    seaCol.setXYZ(i, BODEN_BETON.r, BODEN_BETON.g, BODEN_BETON.b);
+  }
+  seaPos.needsUpdate = true; seaCol.needsUpdate = true; seaGeo.computeVertexNormals();
+}
+story.boden4 = updateBoden4;
 function hookWelt4(){
   const isOnLandOrig = isOnLand, surfaceYOrig = surfaceY, evaFootYOrig = evaFootY, isOpenWaterOrig = isOpenWater,
-        isOnBeachOrig = isOnBeach, hitsBuildingOrig = hitsBuilding;
-  const aufKai = (x, z) => x < KAI_X && x > -120 && Math.abs(z) < 160;
-  isOnLand    = function(x, z){ return hier() ? aufKai(x, z) : isOnLandOrig.apply(this, arguments); };
+        isOnBeachOrig = isOnBeach, hitsBuildingOrig = hitsBuilding, seaYAtOrig = seaYAt, seaSurfaceYOrig = seaSurfaceY,
+        seabedYOrig = seabedY, updateSeaOrig = updateSea, seaFloorNeededOrig = seaFloorNeeded;
+  const wasser = (x, z) => nass4(x, z) && !imSchiff(x, z);
+  isOnLand    = function(x, z){ return hier() ? !nass4(x, z) : isOnLandOrig.apply(this, arguments); };
   isOnBeach   = function(x, z){ return hier() ? false : isOnBeachOrig.apply(this, arguments); };
-  isOpenWater = function(x, z){ return hier() ? !aufKai(x, z) && !imSchiff(x, z) : isOpenWaterOrig.apply(this, arguments); };
-  surfaceY    = function(x, z){ return hier() ? (aufKai(x, z) ? KAI_Y : 0) : surfaceYOrig.apply(this, arguments); };
-  evaFootY    = function(x, z){ return hier() ? (aufKai(x, z) ? KAI_Y : surfaceYOrig.apply(this, arguments)) : evaFootYOrig.apply(this, arguments); };
+  isOpenWater = function(x, z){ return hier() ? wasser(x, z) : isOpenWaterOrig.apply(this, arguments); };
+  surfaceY    = function(x, z){ return hier() ? (nass4(x, z) ? 0 : LAND_Y) : surfaceYOrig.apply(this, arguments); };
+  evaFootY    = function(x, z){ return hier() ? (nass4(x, z) ? 0 : LAND_Y) : evaFootYOrig.apply(this, arguments); };
+  seaYAt      = function(x, z, t){ return hier() ? 0 : seaYAtOrig.apply(this, arguments); };
+  seaSurfaceY = function(dx, dz, t){ return hier() ? 0 : seaSurfaceYOrig.apply(this, arguments); };
+  seabedY     = function(x, z){ return hier() ? -6 : seabedYOrig.apply(this, arguments); };
+  seaFloorNeeded = function(){ return hier() ? false : seaFloorNeededOrig(); };
+  updateSea   = function(dt){ if(!hier()) return updateSeaOrig.apply(this, arguments); updateBoden4(); };
+  const recycleOrig = recycleWorld;
+  recycleWorld = function(){ const r = recycleOrig.apply(this, arguments); if(hier()) bodenRaster4(); return r; };
   hitsBuilding = function(){ return hier() ? false : hitsBuildingOrig.apply(this, arguments); };
   const updateTrafficOrig = updateTraffic, updateFlybyOrig = updateFlyby, updateShipsSeaOrig = updateShipsSea;
   updateTraffic = function(dt){
@@ -143,7 +178,7 @@ function baueHafen(){
     const o = g.scene;
     const s = normiere(o, 96);
     s.rotation.y = Math.PI / 2;                    // Laenge auf z (laengs am Kai)
-    s.position.set(31, -3.2, 0);
+    s.position.set(31, -3.2, 0);                   // Wasserlinie bei 0 (glatt)
     s.userData.fremd = false;
     w.add(s); hafen.schiff = s;
   });
@@ -657,7 +692,7 @@ function kranKamera(){
 
 // ---- Ankunft ---------------------------------------------------------------------------------
 const ANKUNFT = { x: -30, z: -30 };
-const SCHNELLBOOT = { x: 4, z: -110 };            // liegt am Kai (Flucht folgt)
+const SCHNELLBOOT = { x: 12, z: -110 };           // Ring am Kai, das Boot liegt davor im Becken (etappe4b.js)
 function hafenStart(){
   _islandInfoCalc = function(){ return null; };
   _islandCache.clear(); _subBerthCache.clear(); _xwpCache.clear(); _parkCache.clear(); _wreckCache.clear();
@@ -672,6 +707,7 @@ function hafenStart(){
   if(typeof clearArrows === 'function') clearArrows();
   if(typeof clearFire === 'function') clearFire();
   baueHafen();
+  if(story.fluchtKulisse) story.fluchtKulisse();
   if(locale !== 'earth') enterEarth();
   // Flieger/Boot: Kenji kommt zu Fuss an, das Fahrzeug der Reise (X-Wing) steht abseits auf dem Kai
   clearEva();
@@ -682,6 +718,7 @@ function hafenStart(){
   state.vel.set(0, 0, 0); state.throttle = 0; state.onGround = true; state.crashed = false;
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
   planeGroup.visible = false;                       // in Etappe 4 gibt es keinen eigenen Flieger
+  ground.position.set(0, 0, 0); updateBoden4(true);
   evaExit();
   eva.group.position.set(ANKUNFT.x, KAI_Y, ANKUNFT.z);
   const mx = 0 - ANKUNFT.x, mz = (SCHNELLBOOT.z + 0) / 2 - ANKUNFT.z;
@@ -718,11 +755,7 @@ function hookKran(){
   const boardYOrig = evaBoardY;
   evaBoardY = function(){
     if(hier() && kranNah()){ kranEinsteigen(); return; }
-    if(hier() && bootNah4()){
-      story.hinweis('Die Schnellboot-Flucht kommt im nächsten Schritt – nimm erst den Kran.');
-      story.spaeter(5, () => story.hinweis(''));
-      return;
-    }
+
     return boardYOrig.apply(this, arguments);
   };
   // Kran steuert statt Kenji: Eingabe nehmen, Kenji nicht laufen lassen
@@ -761,15 +794,16 @@ function updateE4(dt){
   if(hafen.ring) hafen.ring.zeigen(!!eva && locale === 'earth' && !story.phase);
   if(hafen.ringBoot) hafen.ringBoot.zeigen(!!eva && locale === 'earth' && !story.phase);
   if(!kran.aktiv) kranZeigen();
+  if(story.meerSchiffe4 && locale === 'earth') story.meerSchiffe4(dt);
 }
 story.updateE4 = updateE4;
-story.aufgabeE4 = () => kran.aktiv ? ['Container-Kran', [
+story.aufgabeE4 = () => (story.aufgabeE4b && story.aufgabeE4b()) || (kran.aktiv ? ['Container-Kran', [
   ['Ziel', '4 Container aufs Schiff (' + kran.voll + '/4)'],
   ['Zeit', kran.laeuft ? Math.max(0, Math.ceil(ZEIT_MAX - kran.t)) + ' s übrig' : '6 Minuten'],
   ['Fehler', kran.fehler + ' von ' + FEHLER_MAX + ' erlaubt'],
   ['Ruhig', 'Pendel-Punkt grün = Container hängt still'],
   ['Plan', 'P: Ladeplan ein- und ausblenden'],
-]] : null;
+]] : null);
 
 const hookOrig = window.STORY_HOOK;
 window.STORY_HOOK = function(){

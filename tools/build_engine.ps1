@@ -58,6 +58,8 @@ $out = ($head -join "`n") + "`n" +
   '<script src="etappe3.js"></script>' + "`n" +
   '<script src="hafen_glb.js"></script>' + "`n" +
   '<script src="etappe4.js"></script>' + "`n" +
+  '<script src="flucht_glb.js"></script>' + "`n" +
+  '<script src="etappe4b.js"></script>' + "`n" +
   '<script src="engine/engine.js"></script>' + "`n" +
   "</body>`n</html>`n"
 [IO.File]::WriteAllText((Join-Path $root 'index.html'), $out, $utf8)
