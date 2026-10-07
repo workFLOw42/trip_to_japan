@@ -45,17 +45,25 @@ function sandRaster(){
   ground.position.x = Math.round(ground.position.x / SEA_STEP) * SEA_STEP;
   ground.position.z = Math.round(ground.position.z / SEA_STEP) * SEA_STEP;
 }
+// Live-Test (X-Wing): bei Mach 2 ruckelte die Wueste (15 von 340 Bildern ueber 33 ms) – je Rasterschritt 3x duene() pro
+// Punkt (Hoehe + Hang links/rechts) = 28.227 Aufrufe. Jetzt einmal duene() je Punkt in ein Raster, der Hang aus den
+// Nachbarn links/rechts im Raster (62,5 m statt 12 m Abstand – bei Duenen von ueber 600 m Laenge kaum zu sehen).
+let _duene = null;                                    // erst beim ersten Aufruf: seaPos gibt es erst mit der Engine
 function updateSand(erzwingen){
   sandRaster();
   const ox = ground.position.x, oz = ground.position.z;
   if(!erzwingen && ox === sandX && oz === sandZ) return;
   sandX = ox; sandZ = oz;
+  const N = SEA_SEG + 1;
+  if(!_duene) _duene = new Float32Array(seaPos.count);
+  for(let i = 0; i < seaPos.count; i++) _duene[i] = duene(seaBaseX[i] + ox, seaBaseZ[i] + oz);
   for(let i = 0; i < seaPos.count; i++){
-    const wx = seaBaseX[i] + ox, wz = seaBaseZ[i] + oz;
-    const y = duene(wx, wz);
+    const y = _duene[i];
     seaPos.setY(i, y);
     // Hoehe hell/dunkel und Hangneigung (Licht von Westen): so sieht man die Duenen auch ohne Schatten
-    const hang = (duene(wx + 6, wz) - duene(wx - 6, wz)) / 12;
+    const c = i % N, l = c > 0 ? _duene[i - 1] : y, r = c < N - 1 ? _duene[i + 1] : y;
+    const dx = (seaBaseX[c < N - 1 ? i + 1 : i] - seaBaseX[c > 0 ? i - 1 : i]) || 1;
+    const hang = (r - l) / dx;
     const k = Math.max(0, Math.min(1, y / DUENE_H * 0.55 + 0.45 - hang * 4.5));
     _c2.copy(SAND_DUNKEL).lerp(SAND_HELL, k);
     seaCol.setXYZ(i, _c2.r, _c2.g, _c2.b);
@@ -400,7 +408,7 @@ function fsEinsteigen(){
 
 function fsSymbol(an){
   if(!fsch.symbolEl){
-    fsch.symbolEl = document.createElement('div');
+    fsch.symbolEl = document.createElement('div'); fsch.symbolEl.dataset.etappeHud = '1';
     fsch.symbolEl.style.cssText = 'position:absolute;left:16px;top:50%;transform:translateY(-50%);padding:6px 12px;'
       + 'border-radius:8px;background:#e03c31;box-shadow:0 0 14px #e03c31;color:#fff;font:700 26px system-ui;z-index:20;';
     fsch.symbolEl.textContent = '⇄';
@@ -414,7 +422,7 @@ function fsFrage(){
   fsch.schritt = 'frage';
   story.sprich(['Und, du kannst doch fliegen, oder?'], null, 'pilot');
   if(!fsch.frageEl){
-    fsch.frageEl = document.createElement('div');
+    fsch.frageEl = document.createElement('div'); fsch.frageEl.dataset.etappeHud = '1';
     fsch.frageEl.style.cssText = 'position:absolute;left:50%;bottom:16%;transform:translateX(-50%);display:flex;gap:18px;z-index:22;';
     fsch.frageEl.innerHTML = ['JA', 'NEIN'].map((t, i) => '<button data-i="' + i + '" style="width:140px;height:54px;border-radius:12px;'
       + 'border:2px solid #fff;background:rgba(0,0,0,.5);color:#fff;font:700 22px system-ui;cursor:pointer">' + t + '</button>').join('');
@@ -485,7 +493,7 @@ const FS_TREFFER = 50;         // m Toleranz um die Oasenmitte
 let fsHudEl = null;
 function fsHud(){
   if(!fsHudEl){
-    fsHudEl = document.createElement('div');
+    fsHudEl = document.createElement('div'); fsHudEl.dataset.etappeHud = '1';
     fsHudEl.style.cssText = 'position:absolute;left:16px;top:62%;transform:translateY(-50%);padding:10px 14px;'
       + 'border-radius:10px;background:rgba(0,0,0,.55);color:#fff;font:15px/1.6 system-ui,sans-serif;min-width:200px;z-index:20;';
     document.body.appendChild(fsHudEl);

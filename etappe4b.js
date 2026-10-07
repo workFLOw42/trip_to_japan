@@ -312,10 +312,12 @@ function fluchtStart(){
   document.getElementById('mdl').textContent = 'Schnellboot';
   buildModel('Boat');
   // Rennboot statt Feuerwehrboot: Modell tauschen
-  if(fl.bootVorlage){ while(planeGroup.children.length) planeGroup.remove(planeGroup.children[0]);
+  // In den modelHolder der Engine (wie buildModel), NICHT planeGroup leeren: sonst hing der Halter danach nicht mehr
+  // im Flieger, und in Etappe 5 sah man in der Mustang das Rennboot (Live-Bild).
+  if(fl.bootVorlage){ while(modelHolder.children.length) modelHolder.remove(modelHolder.children[0]);
     const b = normiere(fl.bootVorlage.clone(true), 13, false); b.position.y = BOAT_DRAFT - 0.5;
     b.rotation.y = Math.PI;                          // Modell hat den Bug bei +z, die Engine faehrt nach -z (Live-Test)
-    planeGroup.add(b); }
+    modelHolder.add(b); }
   spec = Object.assign({}, PLANE_SPECS.Boat || DEFAULT_SPEC, { vMax: RB.vMax, accel: RB.accel });
   state.pos.set(START.x, 0, START.z);
   state.quat.setFromEuler(new THREE.Euler(0, START.yaw, 0, 'YXZ'));
@@ -514,12 +516,12 @@ function fluchtEnde(ok, wie){
 // ---- HUD ------------------------------------------------------------------------------------
 function fluchtHud(){
   if(!fl.hudEl){
-    fl.hudEl = document.createElement('div');
+    fl.hudEl = document.createElement('div'); fl.hudEl.dataset.etappeHud = '1';
     fl.hudEl.style.cssText = 'position:absolute;left:50%;top:56px;transform:translateX(-50%);padding:8px 16px;border-radius:10px;'
       + 'background:rgba(0,0,0,.72);color:#fff;font:600 18px system-ui,sans-serif;pointer-events:none;z-index:20;white-space:nowrap;';
     document.body.appendChild(fl.hudEl);
   }
-  if(!fl.aktiv){ fl.hudEl.style.display = 'none'; return; }
+  if(!fl.aktiv || !e4()){ fl.hudEl.style.display = 'none'; return; }   // nach dem Etappenwechsel nicht stehen lassen
   fl.hudEl.style.display = '';
   const pol = naechstePolizei(), weg = Math.max(0, state.pos.z - ZIEL_Z);
   const polTxt = pol === Infinity ? '🚓 —' : '🚓 <span style="color:' + (pol < 60 ? '#ff5a3c' : pol < 120 ? '#ffd23f' : '#fff') + '">' + Math.round(pol) + ' m</span>';

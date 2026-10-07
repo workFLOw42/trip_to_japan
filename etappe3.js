@@ -126,27 +126,44 @@ function bodenRaster(){
   ground.position.x = Math.round(ground.position.x / SEA_STEP) * SEA_STEP;
   ground.position.z = Math.round(ground.position.z / SEA_STEP) * SEA_STEP;
 }
-// Nur bei einem Rasterwechsel neu rechnen (wie die Wueste, R12)
+// Nur bei einem Rasterwechsel neu rechnen (wie die Wueste, R12).
+// Live-Test: im X-Wing ruckelte es (gemessen bei Mach 2: 30 von 337 Bildern ueber 33 ms, bis 95 ms) – nicht der
+// Speicher, sondern dieser Neuaufbau: 9409 Gitterpunkte je flussLage() (2x mitteX ueber 6 Knicke), dazu offsetHSL
+// und computeVertexNormals, bei Mach 2 elf Mal pro Sekunde. Jetzt:
+//   - weit vom Fluss (Querabstand ueber die naechste Mittellinie sicher > Ufer + 1 Gitterweite) gar nicht rechnen,
+//     der Punkt ist Wiese; der Querabstand wird grob ueber |wx - mitteX(wz)| abgeschaetzt (in Schlingen ist der
+//     echte Abstand kleiner, daher der Rand MITTE_RAND)
+//   - Wiesenfarbe direkt in RGB statt offsetHSL
+//   - Normalen nur neu, wenn sich eine Hoehe wirklich geaendert hat (die Wiese ist eben)
+const MITTE_RAND = 2.2;                               // Sicherheitsfaktor fuer die grobe Abschaetzung
+// erst beim Aufruf rechnen: SEA_STEP gibt es erst, wenn die Engine geladen ist (diese Datei laedt davor)
+const fern = () => (FLUSS_B / 2 + UFER_SAND + SEA_STEP * 0.5) * MITTE_RAND;
 function updateBoden(erzwingen){
   bodenRaster();
   const ox = ground.position.x, oz = ground.position.z;
   if(!erzwingen && ox === bodenX && oz === bodenZ) return;
   bodenX = ox; bodenZ = oz;
+  let hoeheNeu = false;
+  const FERN = fern();
+  const gr = BODEN_GRAS.r, gg = BODEN_GRAS.g, gb = BODEN_GRAS.b;
   for(let i = 0; i < seaPos.count; i++){
     const wx = seaBaseX[i] + ox, wz = seaBaseZ[i] + oz;
     // Gitterpunkte in Flussnaehe liegen tief (unter dem Wasserband), sonst Wiese. Das Gitter ist
     // grob – daher grosszuegig absenken, das Wasserband deckt den Uebergang ab, die Ufer-Sandstreifen
     // liegen als eigenes Band darueber.
-    const a = Math.abs(flussLage(wx, wz).d);
-    const nah = wz <= FLUSS_Z0 + 40 && wz >= FLUSS_Z1 - 40 && a < FLUSS_B / 2 + UFER_SAND + SEA_STEP * 0.5;
-    seaPos.setY(i, nah ? BETT_Y : WIESE_Y);
-    if(nah) _c3.copy(BODEN_BETT);
-    else _c3.copy(BODEN_GRAS).offsetHSL(0, 0, (Math.sin(wx * 0.013) * Math.sin(wz * 0.017)) * 0.04);
-    seaCol.setXYZ(i, _c3.r, _c3.g, _c3.b);
+    const imBereich = wz <= FLUSS_Z0 + 40 && wz >= FLUSS_Z1 - 40;
+    const nah = imBereich && Math.abs(wx - mitteX(wz)) < FERN
+      && Math.abs(flussLage(wx, wz).d) < FLUSS_B / 2 + UFER_SAND + SEA_STEP * 0.5;
+    const y = nah ? BETT_Y : WIESE_Y;
+    if(seaPos.getY(i) !== y){ seaPos.setY(i, y); hoeheNeu = true; }
+    if(nah) seaCol.setXYZ(i, BODEN_BETT.r, BODEN_BETT.g, BODEN_BETT.b);
+    else { const l = 1 + (Math.sin(wx * 0.013) * Math.sin(wz * 0.017)) * 0.08;   // leichte Helligkeit wie vorher (+-4 % L)
+      seaCol.setXYZ(i, gr * l, gg * l, gb * l); }
   }
   seaPos.needsUpdate = true; seaCol.needsUpdate = true;
-  seaGeo.computeVertexNormals();
+  if(hoeheNeu || erzwingen) seaGeo.computeVertexNormals();
 }
+story.boden3 = updateBoden;                         // fuer Tests (C:\tmp\sfg\fps_e3b.js)
 
 function hookWelt3(){
   const isOnLandOrig = isOnLand, isOnBeachOrig = isOnBeach, surfaceYOrig = surfaceY,
@@ -470,19 +487,19 @@ function bootEinsteigen(){
 }
 function bootHud(){
   if(!boot.hudEl){
-    boot.hudEl = document.createElement('div');
-    boot.hudEl.style.cssText = 'position:absolute;left:50%;top:60px;transform:translateX(-50%);padding:6px 14px;'
-      + 'border-radius:8px;background:rgba(0,0,0,.5);color:#fff;font:16px system-ui,sans-serif;pointer-events:none;z-index:20;';
+    boot.hudEl = document.createElement('div'); boot.hudEl.dataset.etappeHud = '1';
+    boot.hudEl.style.cssText = 'position:absolute;left:50%;top:56px;transform:translateX(-50%);padding:8px 16px;border-radius:10px;'
+      + 'background:rgba(0,0,0,.72);color:#fff;font:600 18px system-ui,sans-serif;pointer-events:none;z-index:20;white-space:nowrap;';
     document.body.appendChild(boot.hudEl);
   }
   if(!boot.aktiv){ boot.hudEl.style.display = 'none'; return; }
   boot.hudEl.style.display = '';
   const aus = kul.feuer.filter(f => f.aus).length;
   const rest = Math.max(0, ZEIT_MAX - boot.t);
-  const zeit = Math.floor(rest / 60) + ':' + String(Math.floor(rest % 60)).padStart(2, '0');
+  const zeit = '<span style="color:' + (rest < 20 ? '#ff5a3c' : rest < 45 ? '#ffd23f' : '#fff') + '">' + Math.ceil(rest) + ' s</span>';
   const fels = '🪨'.repeat(boot.kontakte) + '·'.repeat(Math.max(0, KONTAKT_MAX + 1 - boot.kontakte));
-  const html = '🔥 ' + aus + '/3  ·  ⏱ ' + (boot.laeuft || boot.schluss || boot.fertig ? zeit : '2:00') + '  ·  Felsen ' + fels;
-  if(boot.hudEl._h !== html){ boot.hudEl.textContent = html; boot.hudEl._h = html; }
+  const html = '⏱ ' + zeit + '  ·  🔥 ' + aus + '/3  ·  ' + fels;
+  if(boot.hudEl._h !== html){ boot.hudEl.innerHTML = html; boot.hudEl._h = html; }
 }
 // naechstes brennendes Feuer (fuer den Radarpunkt)
 function naechstesFeuer(){

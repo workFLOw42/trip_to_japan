@@ -17,8 +17,10 @@ function hier(){ return e5() && locale === 'earth'; }
 // Startinsel der Engine: Mitte (0,0), Radius 260 m, Startbahn 24 x 260 m laengs z durch die Mitte.
 const RW_HALB = 130;
 const MUSTANG = { x: 0, z: RW_HALB - 20, yaw: 0 };   // +z-Ende der Bahn, Nase nach -z (die ganze Bahn voraus)
-const ANKUNFT = { x: 30, z: 150 };                   // Kenji: neben der Bahn
-const UBOOT_RING = { x: -60, z: 250 };               // Strand (Risiko-Weg, folgt)
+// U-Boot-Ring = der Strandring aus Etappe 1 (dieselbe Startinsel): Engine-Einstieg ueber harborSubNear/imRing.
+// Kenji kommt zwischen Mustang und Ring an, damit beide gleich weit weg sind (der Ring liegt am anderen Ufer).
+function ubootRing(){ return (story.ubootRingPlatz && story.ubootRingPlatz()) || { x: 200, z: -260 }; }
+function ankunft(){ const r = ubootRing(); return { x: (MUSTANG.x + r.x) / 2 + 30, z: (MUSTANG.z + r.z) / 2 }; }
 
 // ---- Parcours ---------------------------------------------------------------------------------
 // Live-Wunsch: Looping, Steilflug und Messerflug gehoeren hinein (die Schraube im Steilflug ist wieder raus: zwischen
@@ -70,7 +72,8 @@ const STRAFE = { verpasst: 5, pylon: 3, hoch: 2, messer: 3, looping: 15, schraub
 // (2 Pylonen, 1 Tor) 71,6 s. Ohne Figuren war der Slalom 51 s – die drei Figuren kosten ~10 s. 85 s: ein sauberer
 // Flug mit ein, zwei Fehlern reicht; wer Figuren auslaesst (+3..5 s je) oder viel streift, wird knapp.
 // Live-Test nach dem Auseinanderziehen der Tore (~550 m): 100 s, dann 90 s reichen.
-const ZIELZEIT = 90;
+// Live-Test: zuverlaessig in 69 s geflogen -> 80 s (gut 10 s Puffer fuer Fehler)
+const ZIELZEIT = 80;
 const START_GAS = 0.0;
 
 // ---- Tore: Lage im Raum ------------------------------------------------------------------------
@@ -103,23 +106,27 @@ function torPylone(T, L){
 }
 
 // ---- Welt -------------------------------------------------------------------------------------
+// Skyline-Kueste links der Strecke: Wasserkante bei x = KUESTE.x, von z0 (hinter der Insel) bis z1 (hinter dem letzten Tor)
+const KUESTE = { x: -1000, z0: 1400, z1: -4400 };
 const welt = { gebaut: false, pylone: [], tore: [], marken: [] };
 story.e5tore = welt.tore;                           // fuer den Bot (C:\tmp\sfg\test_e5bot.js)
 function baueWelt(){
   if(welt.gebaut) return; welt.gebaut = true;
   const w = story.welt(5);
-  // Skyline (Hongkong) jenseits der Insel, nach +z und seitlich: Hochhaeuser, dicht, verschmolzen
+  // Skyline (Hongkong) als Kueste LINKS entlang des ganzen Parcours (Live-Test: man sah sie nicht – sie stand hinter der
+  // Insel, im Rennen fliegt man bis 3,6 km davon weg, der Nebel endet bei 3 km). Jetzt 0,9-2 km seitlich der Strecke.
+  // Hochhaeuser dicht an der Wasserkante, nach hinten niedriger; Landstreifen darunter.
   let s = 517; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const farben = [0x9aa7b4, 0x6f7f8f, 0xc9d2da, 0x4f5d6b, 0xb7c4cf, 0x8c97a1];
   const proFarbe = farben.map(() => []);
   const box = new THREE.BoxGeometry(1, 1, 1);
-  for(let i = 0; i < 260; i++){
-    const a = -0.5 + rnd() * 4.1 + Math.PI * 0.3;    // Bogen hinter der Insel (Blickrichtung Parcours frei)
-    const r = 1300 + rnd() * 900;
-    const x = Math.cos(a) * r, z = Math.sin(a) * r * 0.8 + 900;
-    if(z < 400) continue;                             // nicht vor die Insel in den Parcours
-    const b = 25 + rnd() * 35, t = 25 + rnd() * 35, h = 60 + Math.pow(rnd(), 1.6) * 360;
-    const m = new THREE.Matrix4().compose(new THREE.Vector3(x, h / 2 - 2, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 3),
+  for(let i = 0; i < 420; i++){
+    const z = KUESTE.z0 - rnd() * (KUESTE.z0 - KUESTE.z1);
+    const tief = Math.pow(rnd(), 1.4);                 // 0 = an der Wasserkante, 1 = landeinwaerts
+    const x = KUESTE.x - 20 - tief * 900;
+    const nah = 1 - tief;
+    const b = 22 + rnd() * 34, t = 22 + rnd() * 34, h = 50 + Math.pow(rnd(), 1.5) * (160 + 320 * nah);
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(x, h / 2 - 2, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (rnd() - 0.5) * 0.4),
       new THREE.Vector3(b, h, t));
     proFarbe[Math.floor(rnd() * farben.length)].push(m);
   }
@@ -128,9 +135,9 @@ function baueWelt(){
     const inst = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ color: farben[i] }), ms.length);
     ms.forEach((m, k) => inst.setMatrixAt(k, m)); inst.frustumCulled = false; w.add(inst);
   });
-  // Landmasse unter der Skyline (flache graue Kueste), damit die Tuerme nicht im Wasser stehen
-  const kueste = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshLambertMaterial({ color: 0x5d6a4f }));
-  kueste.rotation.x = -Math.PI / 2; kueste.scale.set(2600, 1500, 1); kueste.position.set(400, 0.6, 2300); w.add(kueste);
+  // Landstreifen unter der Skyline (leicht ueber dem Wasser, Kante zum Meer)
+  const land = new THREE.Mesh(new THREE.BoxGeometry(1200, 4, KUESTE.z0 - KUESTE.z1 + 400), new THREE.MeshLambertMaterial({ color: 0x5d6a4f }));
+  land.position.set(KUESTE.x - 600, 0, (KUESTE.z0 + KUESTE.z1) / 2); w.add(land);
   // Tore: Pylonen (Kegel-Schlauch rot/weiss wie beim Air Race), Messertor (hoch, schmal), Ringe (Looping/Steigflug)
   const rot = new THREE.MeshLambertMaterial({ color: 0xe8352b }), weiss = new THREE.MeshLambertMaterial({ color: 0xf2f2f2 });
   const ringMat = new THREE.MeshLambertMaterial({ color: 0xe8352b, emissive: 0x401008 });
@@ -378,7 +385,7 @@ function fmt(t){ return t.toFixed(1).replace('.', ','); }
 const _pfV = new THREE.Vector3();
 function torPfeil(){
   if(!ar.pfeilEl){
-    ar.pfeilEl = document.createElement('div');
+    ar.pfeilEl = document.createElement('div'); ar.pfeilEl.dataset.etappeHud = '1';
     ar.pfeilEl.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:21;'
       + 'border-left:26px solid transparent;border-right:26px solid transparent;border-bottom:52px solid #ffd23f;'
       + 'filter:drop-shadow(0 0 6px rgba(0,0,0,.7));transform-origin:26px 26px;';
@@ -402,7 +409,7 @@ function torPfeil(){
 }
 function arHud(){
   if(!ar.hudEl){
-    ar.hudEl = document.createElement('div');
+    ar.hudEl = document.createElement('div'); ar.hudEl.dataset.etappeHud = '1';
     ar.hudEl.style.cssText = 'position:absolute;left:50%;top:56px;transform:translateX(-50%);padding:8px 16px;border-radius:10px;'
       + 'background:rgba(0,0,0,.72);color:#fff;font:600 18px system-ui,sans-serif;pointer-events:none;z-index:20;white-space:nowrap;';
     document.body.appendChild(ar.hudEl);
@@ -412,7 +419,7 @@ function arHud(){
   if(ar.landen){ const h = '⏱ ' + fmt(ar.zeitZiel) + ' s ✔  ·  🛬 jetzt landen'; if(ar.hudEl._h !== h){ ar.hudEl.innerHTML = h; ar.hudEl._h = h; } return; }
   const zeit = ar.t + ar.strafe, rest = ZIELZEIT - zeit;
   const farbe = rest < 10 ? '#ff5a3c' : rest < 25 ? '#ffd23f' : '#fff';
-  const html = '⏱ <span style="color:' + farbe + '">' + fmt(zeit) + ' s</span> / ' + ZIELZEIT + ' s'
+  const html = '⏱ <span style="color:' + farbe + '">' + Math.max(0, Math.ceil(rest)) + ' s</span>'
     + (ar.strafe ? '  ·  <span style="color:#ff8a6a">+' + ar.strafe + ' s</span>' : '')
     + '  ·  🚩 Tor ' + Math.min(ar.naechstes + 1, welt.tore.length) + '/' + welt.tore.length
 ;
@@ -433,14 +440,13 @@ const marken = [];
 function updateMarken(){
   if(!marken.length && story.baueMarke){
     marken.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: MUSTANG.x, z: MUSTANG.z, h: 7 });
-    marken.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: UBOOT_RING.x, z: UBOOT_RING.z, h: 6 });
+    const rg = ubootRing(); marken.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: rg.x, z: rg.z, h: 6 });
   }
   const zeigen = e5() && !!eva && locale === 'earth' && !story.phase;
   for(const o of marken) story.setzeMarke(o.m, o.x, ISLAND_Y, o.z, o.h, zeigen);
 }
 function mustangNah(){ return !!(e5() && !story.phase && eva && !(park.obj && !park.obj.visible)
   && Math.hypot(eva.group.position.x - MUSTANG.x, eva.group.position.z - MUSTANG.z) < 12); }
-function ubootNah5(){ return !!(e5() && !story.phase && welt.ringUboot && welt.ringUboot.drin()); }
 
 // ---- Start der Etappe -------------------------------------------------------------------------
 function etappe5Start(){
@@ -449,11 +455,18 @@ function etappe5Start(){
   _islandCache.clear(); _subBerthCache.clear(); _xwpCache.clear(); _parkCache.clear(); _wreckCache.clear();
   refreshIslands();
   if(typeof clearSeaShips === 'function') clearSeaShips();          // neu gesetzt: ausserhalb des Parcours
+  // Orcas/Fische/Unterwasser-Zellen neu setzen (wie Etappe 2-4): sonst behielten sie ihre Plaetze aus der Etappe davor –
+  // aus dem Hafenbecken von Etappe 4 lagen alle sechs Orcas mitten auf der Insel (Live-Bild: Wale springen ueber die Insel)
+  if(typeof clearOrcas === 'function') clearOrcas();
+  if(typeof clearUwCells === 'function') clearUwCells();
+  if(typeof clearFish === 'function') clearFish();
   if(typeof clearArrows === 'function') clearArrows();
   if(typeof clearFire === 'function') clearFire();
   seabedMesh.visible = true;
   if(story.e1aufraeumen) story.e1aufraeumen();
   for(const n of [2, 3, 4]) story.weltEntsorgen(n);
+  // Schnellboot-Flucht aus Etappe 4 beenden: ihr HUD blieb sonst oben stehen (fl.aktiv wurde nie zurueckgesetzt)
+  const fl = story.flucht; if(fl){ fl.aktiv = false; fl.laeuft = false; if(fl.hudEl) fl.hudEl.style.display = 'none'; }
   baueWelt();
   if(locale !== 'earth') enterEarth();
   clearEva();
@@ -465,12 +478,13 @@ function etappe5Start(){
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
   planeGroup.visible = false;                       // die geparkte Mustang ist Kulisse, bis man einsteigt
   evaExit();
-  eva.group.position.set(ANKUNFT.x, ISLAND_Y, ANKUNFT.z);
-  const mx = (MUSTANG.x + UBOOT_RING.x) / 2 - ANKUNFT.x, mz = (MUSTANG.z + UBOOT_RING.z) / 2 - ANKUNFT.z;
+  const an = ankunft(), rg = ubootRing();
+  eva.group.position.set(an.x, ISLAND_Y, an.z);
+  const mx = (MUSTANG.x + rg.x) / 2 - an.x, mz = (MUSTANG.z + rg.z) / 2 - an.z;
   eva.yaw = Math.atan2(-mx, -mz); eva.group.rotation.y = eva.yaw;
   evaOrbit = 0; evaPitch = 0;
   snapCamera();
-  if(!welt.ringUboot) welt.ringUboot = story.einstiegsRing(UBOOT_RING.x, ISLAND_Y, UBOOT_RING.z);
+  if(!welt.ringUboot) welt.ringUboot = story.einstiegsRing(rg.x, ISLAND_Y, rg.z);
   ladeParkMustang();
   if(park.obj) park.obj.visible = true;
   marken.length = 0;
@@ -493,20 +507,17 @@ function hookE5(){
   };
   updateFlyby = function(dt){ if(hier()){ if(typeof clearFlyby === 'function') clearFlyby(); return; } return updateFlybyOrig(dt); };  // Engine-Schiffe nicht durch den Parcours (Live-Bild: Kreuzfahrtschiff zwischen den Toren) – dort gilt
   // fuer sie "kein Wasser", sie drehen ab wie an einer Kueste. Rechteck um alle Tore + 350 m Rand.
-  const sx = TORE.map(t => t[0]), sz = TORE.map(t => t[1]);
+  const sx = TORE.map(t => t.x), sz = TORE.map(t => t.z);
   const RAND = 350, PX0 = Math.min(...sx) - RAND, PX1 = Math.max(...sx) + RAND, PZ0 = Math.min(...sz) - RAND, PZ1 = Math.max(...sz) + RAND;
   const shipWaterOrig = seaShipWaterFor;
   seaShipWaterFor = function(sh, x, z){
-    if(hier() && x > PX0 && x < PX1 && z > PZ0 && z < PZ1) return false;
+    if(hier() && ((x > PX0 && x < PX1 && z > PZ0 && z < PZ1) || x < KUESTE.x + 150)) return false;   // Parcours, Kueste
     return shipWaterOrig.apply(this, arguments);
-  };  const boardYOrig = evaBoardY;
+  };
+  // Mustang hier; ins U-Boot geht es ueber den Engine-Einstieg am Strandring (etappe5b.js haengt sich dort ein)
+  const boardYOrig = evaBoardY;
   evaBoardY = function(){
     if(hier() && mustangNah()){ mustangEinsteigen(); return; }
-    if(hier() && ubootNah5()){
-      story.hinweis('Die U-Boot-Schlucht folgt im nächsten Schritt – nimm vorerst die Mustang.');
-      story.spaeter(5, () => { if(!story.phase) story.hinweis(''); });
-      return;
-    }
     return boardYOrig.apply(this, arguments);
   };
   // Waehrend der Ansage steht die Mustang mit Bremse auf der Bahn
@@ -536,9 +547,10 @@ function updateE5(dt){
   if(welt.ringUboot) welt.ringUboot.zeigen(!!eva && locale === 'earth' && !story.phase);
   if(welt.gebaut) torSichtbar();
   if(story.phase === 'airrace'){ arHud(); torPfeil(); } else if(ar.pfeilEl) ar.pfeilEl.style.display = 'none';
+  if(story.updateE5b) story.updateE5b(dt);
 }
 story.updateE5 = updateE5;
-story.aufgabeE5 = () => ar.aktiv ? ['Air Race', [
+story.aufgabeE5 = () => (story.aufgabeE5b && story.aufgabeE5b()) || (ar.aktiv ? ['Air Race', [
   ['Ziel', 'alle ' + TORE.length + ' Tore zwischen den Pylonen, unter ' + ZIELZEIT + ' s'],
   ['Figuren', 'Messerflug (auf die Seite), Looping, Steilflug durch 2 Ringe, zum Schluss eine Schraube'],
   ['Danach', 'Zeit stoppt im Zielring, dann auf der Insel landen'],
@@ -546,11 +558,11 @@ story.aufgabeE5 = () => ar.aktiv ? ['Air Race', [
   ['Weg', 'das leuchtende Tor, dahinter das nächste'],
   ['Zeit', ar.laeuft ? fmt(ar.t + ar.strafe) + ' s' : 'läuft ab dem Start'],
 ]] : (e5() && !story.phase ? ['Etappe 5: Chinesisches Meer', [
-  ['U-Boot (weiß)', '1 Tag, riskant – Code und Felsenschlucht'],
+  ['U-Boot (weiß)', '1 Tag'],
   ['Mustang (gelb)', '4 Tage, Air Race über dem Meer'],
   ['Einsteigen', 'hinlaufen, Y'],
   ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],
-]] : null);
+]] : null));
 
 const hookOrig = window.STORY_HOOK;
 window.STORY_HOOK = function(){

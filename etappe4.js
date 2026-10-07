@@ -93,23 +93,35 @@ const LAND_Y = KAI_Y;
 const BODEN_BETON = new THREE.Color(0x5f5b55);
 let bodenX4 = NaN, bodenZ4 = NaN;
 function bodenRaster4(){ ground.position.x = Math.round(ground.position.x / SEA_STEP) * SEA_STEP; ground.position.z = Math.round(ground.position.z / SEA_STEP) * SEA_STEP; }
+// Live-Test (X-Wing): bei Mach 2 ruckelte der Hafen (36 von 355 Bildern ueber 33 ms) – je Rasterschritt 9409 Punkte
+// mal 9 Nachbarpruefungen nass4 = 84.681 Abfragen. Jetzt ein Raster: jeder Punkt einmal nass4, "nahe am Wasser" aus den
+// 8 Nachbarn im Raster gelesen (genau eine Gitterweite = dasselbe Ergebnis wie vorher). Normalen nur bei Aenderung.
+let _nass4 = null;                                    // Raster erst beim ersten Aufruf: seaPos gibt es erst mit der Engine
 function updateBoden4(erzwingen){
   bodenRaster4();
   const ox = ground.position.x, oz = ground.position.z;
   if(!erzwingen && ox === bodenX4 && oz === bodenZ4) return;
   bodenX4 = ox; bodenZ4 = oz;
+  const N = SEA_SEG + 1;
+  if(!_nass4) _nass4 = new Uint8Array(seaPos.count);
+  for(let i = 0; i < seaPos.count; i++) _nass4[i] = nass4(seaBaseX[i] + ox, seaBaseZ[i] + oz) ? 1 : 0;
+  let neu = false;
   for(let i = 0; i < seaPos.count; i++){
-    const wx = seaBaseX[i] + ox, wz = seaBaseZ[i] + oz;
     // Gitter grob (62,5 m): liegt innerhalb einer Gitterweite Wasser, wird der Punkt tief gelegt – sonst
     // spannt das Gitter seine Dreiecke ueber den Wasserrand (Live-Bild: Landstreifen mitten im Becken).
     // Den Uferrand zeichnen die Kaimauern (etappe4b.js) und der Kai-Klotz.
-    let nahWasser = false;
-    for(const [ax, az] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]])
-      if(nass4(wx + ax * SEA_STEP, wz + az * SEA_STEP)){ nahWasser = true; break; }
-    seaPos.setY(i, nahWasser ? -3 : LAND_Y);
+    const r = Math.floor(i / N), c = i % N;
+    let nah = _nass4[i] === 1;
+    for(let dr = -1; dr <= 1 && !nah; dr++) for(let dc = -1; dc <= 1 && !nah; dc++){
+      const rr = r + dr, cc = c + dc;
+      if(rr >= 0 && rr < N && cc >= 0 && cc < N && _nass4[rr * N + cc]) nah = true;
+    }
+    const y = nah ? -3 : LAND_Y;
+    if(seaPos.getY(i) !== y){ seaPos.setY(i, y); neu = true; }
     seaCol.setXYZ(i, BODEN_BETON.r, BODEN_BETON.g, BODEN_BETON.b);
   }
-  seaPos.needsUpdate = true; seaCol.needsUpdate = true; seaGeo.computeVertexNormals();
+  seaPos.needsUpdate = true; seaCol.needsUpdate = true;
+  if(neu || erzwingen) seaGeo.computeVertexNormals();
 }
 story.boden4 = updateBoden4;
 function hookWelt4(){
@@ -556,7 +568,7 @@ function kranEnde(ok, wie, schonGesagt){
 // ---- HUD: Pendel, Winkel, Wind, Seil, Fehler, Zeit, Zaehler + Ladeplan -----------------------
 function kranHud(){
   if(!kran.hudEl){
-    kran.hudEl = document.createElement('div');
+    kran.hudEl = document.createElement('div'); kran.hudEl.dataset.etappeHud = '1';
     kran.hudEl.style.cssText = 'position:absolute;left:50%;top:56px;transform:translateX(-50%);display:flex;gap:16px;align-items:center;'
       + 'padding:8px 16px;border-radius:10px;background:rgba(0,0,0,.72);color:#fff;font:600 18px system-ui,sans-serif;pointer-events:none;z-index:20;white-space:nowrap;';
     document.body.appendChild(kran.hudEl);
@@ -564,7 +576,7 @@ function kranHud(){
   if(!kran.aktiv){ kran.hudEl.style.display = 'none'; return; }
   kran.hudEl.style.display = 'flex';
   const rest = Math.max(0, ZEIT_MAX - kran.t);
-  const zeit = Math.floor(rest / 60) + ':' + String(Math.floor(rest % 60)).padStart(2, '0');
+  const zeit = '<span style="color:' + (rest < 20 ? '#ff5a3c' : rest < 45 ? '#ffd23f' : '#fff') + '">' + Math.ceil(rest) + ' s</span>';
   const w = windJetzt(), st = Math.round(Math.abs(w) / WIND_MAX * 5);
   const windTxt = (w < -0.02 ? '◀' : w > 0.02 ? '▶' : '·') + ' ' + '█'.repeat(st) + '░'.repeat(5 - st);
   // Pendel-Punkt in einem Kreis (gruen = ruhig)
@@ -580,7 +592,7 @@ function kranHud(){
   const html = (gh ? '<b style="color:#ffd23f">' + gh + '</b>' : '') + pendel
     + '<span style="' + gross + '">' + (winkel > 0 ? '+' : '') + winkel + '°</span>'
     + '<span>Marker <span style="' + gross + '">' + kran.zielM + '</span></span>' + hoeheHtml()
-    + '<span>Wind ' + windTxt + '</span><span>📦 ' + kran.voll + '/4</span><span>' + fehlerTxt + '</span><span>⏱ ' + (kran.laeuft || kran.fertig ? zeit : '6:00') + '</span>';
+    + '<span>Wind ' + windTxt + '</span><span>📦 ' + kran.voll + '/4</span><span>' + fehlerTxt + '</span><span>⏱ ' + zeit + '</span>';
   if(kran.hudEl._h !== html){ kran.hudEl.innerHTML = html; kran.hudEl._h = html; }
 }
 // Ladeplan als Draufsicht: man sieht direkt, wo Ausleger und Haken stehen und wo die Luecken liegen.

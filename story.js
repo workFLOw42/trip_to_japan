@@ -228,6 +228,7 @@ function ubootRingPlatz(){
   }
   return null;
 }
+story.ubootRingPlatz = () => ubootRingPlatz();
 function imRing(){
   const r = ubootRingPlatz();
   if(!eva || !r) return false;
@@ -486,6 +487,14 @@ function untertitel(text){
 // Umschalten faengt nicht von vorne an: die Ansage laeuft weiter und setzt an dem Wort fort, an dem
 // sie gerade ist – gemeldet von der Stimme (onboundary), sonst nach dem Sprechtempo geschaetzt.
 const reden = new Set();
+// Stimme: immer nur EINE Ansage spricht. Live-Test (Air Race): "jetzt einen loop…", "jetzt noch die schr…" brachen mitten im
+// Satz ab – zwei Ansagen kamen im selben Bild (z. B. "Looping geschafft!" + die Ansage fuers naechste Tor), und das
+// synth.cancel() der einen loeschte die Warteschlange des Browsers samt dem Satz der anderen. Jetzt wartet eine neue
+// Ansage, bis die laufende fertig ist; abbrechen/pausieren schneidet nur noch die eigene Stimme ab.
+// warteMax (s, optional): so lange darf eine Ansage hoechstens warten, sonst verfaellt sie (fuer Rennansagen).
+let sprecher = null;
+const wartend = [];
+function sprecherFrei(r){ if(sprecher === r) sprecher = null; const n = wartend.shift(); if(n) n(); }
 const ZEICHEN_PRO_S = 14;
 // Stimme nach Rolle: 'pilot' = maennlich, sonst ('funk') weiblich. Gewaehlt wird nach Namen, weil die
 // Browser kein Geschlecht melden. Edge bringt zusaetzlich natuerliche Online-Stimmen mit.
@@ -497,8 +506,8 @@ function stimmeFuer(rolle){
   return (rolle === 'pilot' ? bevorzugt(STIMME_M) : bevorzugt(STIMME_W)) || de[0] || null;
 }      // Sprechtempo bei rate 1.0 (fuer Schaetzung und Untertitel-Takt)
 function satzDauer(s){ return 1200 + s.length / ZEICHEN_PRO_S * 1000; }   // ms, Untertitel-Takt
-function sprich(saetze, fertig, rolle){
-  let i = -1, done = false, timer = null, utt = null;
+function sprich(saetze, fertig, rolle, warteMax){
+  let i = -1, done = false, timer = null, utt = null, wartetSeit = 0;
   let laut = false, pos0 = 0, t0 = 0, bPos = null;     // aktueller Satz: ab Zeichen pos0 seit t0
   let pausePos = -1;                                   // >= 0: angehalten an diesem Zeichen
   const synth = window.speechSynthesis;
@@ -521,6 +530,15 @@ function sprich(saetze, fertig, rolle){
     if(!rest.trim()){ naechster(); return; }
     if(laut){
       untertitel('');
+      // Spricht gerade eine andere Ansage? Dann hinten anstellen und spaeter von hier aus fortsetzen.
+      if(sprecher && sprecher !== r){
+        if(!wartetSeit) wartetSeit = performance.now();
+        wartend.push(() => { if(done) return sprecherFrei(r);
+          if(warteMax && performance.now() - wartetSeit > warteMax * 1000){ done = true; reden.delete(r); return sprecherFrei(r); }   // veraltet
+          weiterAb(p); });
+        return;
+      }
+      sprecher = r; wartetSeit = 0;
       const u = utt = new SpeechSynthesisUtterance(rest);
       const stimme = stimmeFuer(rolle);
       u.lang = 'de-DE'; if(stimme) u.voice = stimme; u.rate = 1.0;
@@ -539,26 +557,27 @@ function sprich(saetze, fertig, rolle){
   function naechster(){
     clearTimeout(timer); utt = null;
     if(done) return;
-    if(++i >= saetze.length){ done = true; reden.delete(r); untertitel(''); if(fertig) fertig(); return; }
+    if(++i >= saetze.length){ done = true; reden.delete(r); untertitel(''); sprecherFrei(r); if(fertig) fertig(); return; }
     weiterAb(0);
   }
   const r = {
-    abbrechen(){ done = true; reden.delete(r); clearTimeout(timer); utt = null; if(synth) synth.cancel(); untertitel(''); },
+    abbrechen(){ done = true; reden.delete(r); clearTimeout(timer); utt = null; if(synth && sprecher === r) synth.cancel(); untertitel(''); if(sprecher === r) sprecherFrei(r); },
     // Test: zum Ende springen, der fertig-Rueckruf laeuft (anders als bei abbrechen)
-    ueberspringen(){ if(done) return; clearTimeout(timer); utt = null; if(synth) synth.cancel(); i = saetze.length - 1; naechster(); },
+    ueberspringen(){ if(done) return; clearTimeout(timer); utt = null; if(synth && sprecher === r) synth.cancel(); i = saetze.length - 1; naechster(); },
     tonGeaendert(){
       if(done || i < 0 || pausePos >= 0) return;         // angehalten: fortsetzen nimmt den neuen Ton
       if(laut === tonAn() && (laut ? !!utt : true)) return;   // nichts zu tun (z. B. voiceschanged bei laufender Stimme)
       const p = Math.floor(aktPos());
       utt = null;
-      if(synth) synth.cancel();
+      if(synth && sprecher === r) synth.cancel();
+      if(sprecher === r) sprecher = null;
       weiterAb(p);
     },
     // Anhalten (Anleitung oder Aufgabe offen) und am selben Wort fortsetzen – wie beim Tonwechsel.
     // speechSynthesis.pause() nicht: das haelt nicht in jedem Browser verlaesslich an.
     pause(an){
       if(done || i < 0 || an === (pausePos >= 0)) return;
-      if(an){ pausePos = Math.floor(aktPos()); clearTimeout(timer); utt = null; if(synth) synth.cancel(); untertitel(''); }
+      if(an){ pausePos = Math.floor(aktPos()); clearTimeout(timer); utt = null; if(synth && sprecher === r){ synth.cancel(); sprecherFrei(r); } untertitel(''); }
       else { const p = pausePos; pausePos = -1; weiterAb(p); }
     },
   };
@@ -1230,7 +1249,13 @@ function globusText(text){
 }
 
 // Oeffentlich: reise(nachIndex, tageText, fertig) – Schwarzblende, Globus, Schwarzblende, fertig()
+// Live-Bild: das Abwurf-HUD der Transall (Etappe 2) stand in Etappe 3 noch da, vorher das Schnellboot-HUD in Etappe 5.
+// Etappen-HUDs (data-etappe-hud) werden nur von ihrer eigenen Etappe nachgefuehrt – endet die Etappe, waehrend eines
+// zu sehen ist, bliebe es stehen. Darum hier beim Etappenwechsel alle auf einmal ausblenden.
+function etappenHudsAus(){ for(const el of document.querySelectorAll('[data-etappe-hud]')) el.style.display = 'none'; }
+story.etappenHudsAus = etappenHudsAus;
 function globusReise(nach, tageText, fertig){
+  etappenHudsAus();
   globusBauen();
   masterBlende(0, 0.9);                       // alle Geraeusche mit der Schwarzblende aus
   // ein stehendes Platzhalter-Schild (spaetere Etappen) wieder freigeben
@@ -1339,11 +1364,12 @@ story.himmelWeg = himmelWeg;
 // (gewohntes Bild in allen Etappen). Abstand und Nachziehen wie in der Engine.
 const KAM_EIN = 0.7;                                 // |sin Nicken| ~44 Grad: uebernehmen
 const KAM_FLACH = 0.35;                              // |sin Nicken| ~20 Grad: flach -> zurueck an die Engine
-const KAM_AUFRICHT = 1.6;                            // rad/s hoechstens beim Aufrichten (~90 Grad/s)
+const KAM_AUFRICHT = 3.2;                            // rad/s hoechstens beim Aufrichten (~180 Grad/s)
+const KAM_FEST = 0.6;                                 // |sin Nicken| ~37 Grad: darunter haelt die Kamera den Horizont fest (wie die Engine)
 const KAM_HALT = 0.87;                               // |sin Nicken| ~60 Grad: darueber steht das Kamera-Oben still
 const kam = { an: false, up: new THREE.Vector3(0, 1, 0), back: new THREE.Vector3(0, 0, 1), zurueck: 0,
-  pos: new THREE.Vector3(), quat: new THREE.Quaternion() };            // letzte eigene Lage (fuer die Rueckgabe)
-const _kF = new THREE.Vector3(), _kU = new THREE.Vector3(), _kW = new THREE.Vector3(), _kD = new THREE.Vector3();
+  pos: new THREE.Vector3(), upAlt: new THREE.Vector3(0, 1, 0) };            // letzte eigene Lage (fuer die Rueckgabe)
+const _kF = new THREE.Vector3(), _kU = new THREE.Vector3(), _kW = new THREE.Vector3(), _kD = new THREE.Vector3(), _kX = new THREE.Vector3();
 function kunstflugMoeglich(){
   return !story.kunstflugAus && !eva && !parachute && sideView === 0 && locale === 'earth' && !isSub() && !spec.boat && !state.crashed && !state.onGround;
 }
@@ -1361,7 +1387,9 @@ function kunstflugKamera(camOrig){
       camOrig();
       kam.zurueck = Math.max(0, kam.zurueck - (dtCam || 1 / 60) / 0.5);
       const m = kam.zurueck * kam.zurueck * (3 - 2 * kam.zurueck);
-      camera.position.lerp(kam.pos, m); camera.quaternion.slerp(kam.quat, m);
+      const ref0 = planeCamRef();
+      _kD.copy(camera.position).sub(ref0).lerp(kam.pos, m);              // kam.pos = Versatz zum Flieger
+      camera.position.copy(ref0).add(_kD); camera.up.lerp(kam.upAlt, m).normalize(); camera.lookAt(ref0);
       return true;
     }
     // Uebernahme ab der aktuellen Kamera (kein Sprung): Rueck- und Oben-Richtung so, wie das Bild gerade
@@ -1378,21 +1406,28 @@ function kunstflugKamera(camOrig){
   if(kam.up.lengthSq() < 1e-6) kam.up.copy(_kU);
   kam.up.normalize();
   // Zum Horizont aufrichten, sobald die Nase nicht mehr (fast) senkrecht steht: je flacher, desto schneller.
-  // Unabhaengig von der Rolllage des Fliegers â€“ nach einer Schraube liegt er sonst womoeglich auf dem Ruecken,
-  // und beim Abkippen klappte das Bild um (gemessen 165 Grad in einem Bild). Senkrecht (steil > KAM_HALT)
-  // bleibt die Kamera stehen, dort dreht sich die Welt um den Flieger.
-  // Im Looping (Nase waagerecht, Flieger auf dem Ruecken) richtet sie sich NICHT auf: dort zeigt kam.up
-  // nach unten, und der Horizont liegt gegenueber â€“ erst wenn der Flieger wieder aufrecht ist, geht es weiter.
+  // Gedreht wird das Kamera-Oben UM DIE BLICKACHSE (kuerzester Weg, hoechstens KAM_AUFRICHT rad/s) – ein Lerp kam bei
+  // grossem Abstand nicht voran: nach Steigflug + Abkippen ueber den Ruecken + Ausrollen stand das Bild dauerhaft auf
+  // dem Kopf (gemessen 169 Grad, Live-Test: "man verliert die Orientierung").
+  // Ziel ist die Lage des Fliegers: liegt er (wieder) aufrecht, richtet sich die Kamera nach ihm; auf dem Ruecken im
+  // Looping (Flieger UND Kamera ueber Kopf) bleibt sie, damit das Bild oben nicht umklappt. Senkrecht (steil > KAM_HALT)
+  // steht sie still, dort dreht sich die Welt um den Flieger.
   const horizont = _kW.set(0, 1, 0).addScaledVector(kam.back, -kam.back.y);
   if(horizont.lengthSq() > 1e-4 && steil < KAM_HALT){
     horizont.normalize();
-    const ueberKopf = _kU.y < -0.3 && kam.up.y < 0;                // Looping oben: nicht umklappen
-    if(!ueberKopf){
+    const fliegerKopf = _kU.y < -0.3;
+    if(!(fliegerKopf && kam.up.y < 0)){                             // Looping oben: beide ueber Kopf -> stehen lassen
+      // Ziel: aufrecht fliegend der Horizont; auf dem Ruecken (Kamera noch aufrecht) ebenfalls der Horizont
       const s = 1 - Math.max(0, (steil - KAM_FLACH) / (KAM_HALT - KAM_FLACH));   // 1 flach .. 0 senkrecht
-      // weich, aber hoechstens KAM_AUFRICHT rad/s – ein Lerp allein gab bei grossem Abstand bis 18 Grad je Bild
-      const winkel = Math.acos(Math.max(-1, Math.min(1, kam.up.dot(horizont))));
-      const schritt = Math.min(winkel * frameLerp(0.02 + 0.08 * s, dt), KAM_AUFRICHT * dt);
-      if(winkel > 1e-4) kam.up.lerp(horizont, schritt / winkel).normalize();
+      const blick = _kD.copy(kam.back).negate();
+      // Vorzeichen-Winkel von kam.up zum Horizont um die Blickachse
+      const quer = _kX.crossVectors(kam.up, horizont);
+      const winkel = Math.atan2(quer.dot(blick), kam.up.dot(horizont));
+      // Flach (unter KAM_FEST): Horizont FEST halten wie die Engine – sonst hinkte das Bild beim Ausrollen nach dem
+      // Abkippen ueber den Ruecken 1,5 s hinterher (gemessen bis 107 Grad verdreht). Dazwischen weich, schnell.
+      const schritt = steil < KAM_FEST ? winkel
+        : Math.sign(winkel) * Math.min(Math.abs(winkel) * frameLerp(0.06 + 0.2 * s, dt) + 0.004, KAM_AUFRICHT * dt, Math.abs(winkel));
+      if(Math.abs(winkel) > 1e-4) kam.up.applyAxisAngle(blick, schritt).normalize();
       if(steil < KAM_FLACH && _kU.y > 0.3 && kam.up.dot(horizont) > 0.995){ kam.an = false; kam.zurueck = 1; return kunstflugKamera(camOrig); }
     }
   }
@@ -1406,12 +1441,22 @@ function kunstflugKamera(camOrig){
   camera.position.copy(ref).add(_camOff.lerp(_camDes, k));
   camera.up.copy(kam.up);
   camera.lookAt(ref);
-  kam.pos.copy(camera.position); kam.quat.copy(camera.quaternion);
+  kam.pos.copy(camera.position).sub(ref); kam.upAlt.copy(camera.up);   // Versatz + Oben (fuer die Rueckgabe)
   return true;
 }
 function hookGerade(){
   const physOrig = stepPhysics;
   stepPhysics = function(dt){ const r = physOrig.apply(this, arguments); geradeSchritt(dt); return r; };
+}
+// Modellwechsel absichern: buildModel raeumt nur den modelHolder auf. Haengt etwas anderes direkt im Flieger (frueher
+// das Rennboot aus Etappe 4b) oder fehlt der Halter, wird das hier korrigiert – sonst sah man das alte Modell weiter.
+function hookModellHalter(){
+  const bmOrig = buildModel;
+  buildModel = function(){
+    for(const c of [...planeGroup.children]) if(c !== modelHolder && !c.userData.bleibt) planeGroup.remove(c);
+    if(modelHolder.parent !== planeGroup) planeGroup.add(modelHolder);
+    return bmOrig.apply(this, arguments);
+  };
 }
 function hookKunstflugKamera(){
   const camOrig = updateCamera;
@@ -1514,8 +1559,8 @@ function hookRadarAnzeige(){
     g.beginPath(); g.moveTo(cx, cy - 8); g.lineTo(cx - 6.5, cy + 7); g.lineTo(cx + 6.5, cy + 7); g.closePath(); g.fill();
     g.fillStyle = '#ffffff';
     g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx - 5, cy + 13); g.lineTo(cx + 5, cy + 13); g.closePath(); g.fill();
-    // ohne Bild: kleiner Hinweis auf den Ping
-    if(sicht <= 0){
+    // ohne Bild: kleiner Hinweis auf den Ping – nur in Etappe 1 (spaeter ist die Scheibe ohne Ping einfach dunkel, Live-Wunsch)
+    if(sicht <= 0 && story.etappe === 1){
       g.fillStyle = 'rgba(255,255,255,0.55)';
       g.font = '11px system-ui,sans-serif'; g.textAlign = 'center';
       g.fillText('B: Ping', cx, cy + 30);
@@ -2092,7 +2137,7 @@ const ub = story.uboot = { aktiv: false, fotos: {}, rede: null, padEl: null, fot
 
 function ziffernfeld(code){
   if(!ub.padEl){
-    ub.padEl = document.createElement('div');
+    ub.padEl = document.createElement('div'); ub.padEl.dataset.etappeHud = '1';
     ub.padEl.style.cssText = 'position:absolute;right:16px;bottom:16px;padding:10px;border-radius:10px;'
       + 'background:#1c1f24;border:2px solid #444;box-shadow:0 4px 14px rgba(0,0,0,.5);z-index:20;'
       + 'font-family:monospace;';
@@ -2120,7 +2165,7 @@ function ubootStart(){
 
 function fotoAnzeige(){
   if(!ub.fotoEl){
-    ub.fotoEl = document.createElement('div');
+    ub.fotoEl = document.createElement('div'); ub.fotoEl.dataset.etappeHud = '1';
     ub.fotoEl.style.cssText = 'position:absolute;left:50%;top:60px;transform:translateX(-50%);'
       + 'padding:6px 14px;border-radius:8px;background:rgba(0,0,0,.5);color:#fff;'
       + 'font:16px system-ui,sans-serif;pointer-events:none;z-index:20;';
@@ -2371,28 +2416,27 @@ function updateMarken(){
 
 // ---- HUD: zu Fuss "Kenji" statt Fahrzeugname, kein Astronauten-Symbol ------------------------
 // ---- Schubbalken (rechts, unter Radar und Gyro) -----------------------------------------------------
-// Live-Wunsch: in allen Fliegern ein senkrechter Schubbalken. 10 Segmente: 10 % rot, 20/30 % gruen (Landeschub),
-// ab 40 % fliessend von gruen ueber tuerkis nach blau (100 %). Nur im Flieger: nicht zu Fuss, nicht in Boot,
-// U-Boot oder Kran. Umkehrschub (negativ) = "R".
-const SCHUB_N = 10;
-function schubFarbe(i){                                    // i = 1..10 (Segment = i*10 %)
-  if(i === 1) return '#e8352b';
-  if(i <= 3) return '#2ecc40';
+// Live-Wunsch: in allen Fahrzeugen ein senkrechter Schubbalken. 11 Segmente von unten:
+//   1 rot = Umkehrschub (Bremse) · 2 senfgelb = 10 % · 3 gelbgruen = 20 % · 4 gruen = 30 % · 5-11 = 40-100 %, fliessend
+//   von gruen nach blau. Bei 0 % ist der Balken leer. Nur nicht zu Fuss und im Kran (kein Schub).
+// Die Prozentzahl steht schon oben links im HUD (nicht doppelt).
+const SCHUB_N = 11;
+const SCHUB_FEST = ['#e8352b', '#d4a017', '#9acd32', '#2ecc40'];   // rot, senfgelb, gelbgruen, gruen
+function schubFarbe(i){                                    // i = 0..10 (Segment von unten)
+  if(i < SCHUB_FEST.length) return SCHUB_FEST[i];
   const k = (i - 3) / 7;                                   // 40 % -> 0,14 .. 100 % -> 1
   const a = [46, 204, 64], b = [40, 110, 255];             // gruen -> blau
   return 'rgb(' + a.map((v, j) => Math.round(v + (b[j] - v) * k)).join(',') + ')';
 }
 let schubEl = null, schubSeg = [], schubAlt = '';
-// Die Prozentzahl steht schon oben links im HUD (Live-Wunsch: nicht doppelt) – hier nur der Balken, mittig unter
-// Radar und Gyro (beide 130 px breit, 12 px vom Rand). Umkehrschub: leer, rot umrandet.
 function schubBalken(){
-  const zeigen = !eva && !spec.boat && !spec.sub && !(story.kran4 && story.kran4.aktiv)
+  const zeigen = !eva && !(story.kran4 && story.kran4.aktiv)
     && story.phase !== 'platzhalter' && story.phase !== 'reise' && planeGroup.visible;
   if(!schubEl){
     schubEl = document.createElement('div');
-    schubEl.style.cssText = 'position:absolute;right:62px;top:292px;width:24px;height:222px;padding:3px;border-radius:7px;'
-      + 'background:rgba(0,0,0,.45);border:2px solid transparent;display:flex;flex-direction:column-reverse;gap:2px;pointer-events:none;z-index:15;';
-    for(let i = 1; i <= SCHUB_N; i++){
+    schubEl.style.cssText = 'position:absolute;right:62px;top:292px;width:24px;height:240px;padding:3px;border-radius:7px;'
+      + 'background:rgba(0,0,0,.45);display:flex;flex-direction:column-reverse;gap:2px;pointer-events:none;z-index:15;';
+    for(let i = 0; i < SCHUB_N; i++){
       const s = document.createElement('div');
       s.style.cssText = 'flex:1;border-radius:3px;background:' + schubFarbe(i) + ';opacity:.15;';
       schubEl.appendChild(s); schubSeg.push(s);
@@ -2400,13 +2444,16 @@ function schubBalken(){
     document.body.appendChild(schubEl);
   }
   if(!zeigen){ if(schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; } return; }
-  const g = state.throttle, n = g < 0 ? 0 : Math.round(g * SCHUB_N);
-  const k = n + '|' + (g < 0 ? 'R' : '');
+  // Boote/U-Boot haben keinen Gyro (die Engine blendet ihn aus): dann direkt unter dem Radar
+  const gyro = document.getElementById('gyro'), oben = gyro && gyro.style.display !== 'none' ? 292 : 154;
+  const g = state.throttle;
+  const an = g < 0 ? -1 : Math.round(g * 10);              // -1 = Umkehrschub, sonst 0..10 Stufen
+  const k = an + '|' + oben;
   if(k === schubAlt) return;
   schubAlt = k;
-  schubEl.style.display = 'flex';
-  schubEl.style.borderColor = g < 0 ? '#e8352b' : 'transparent';
-  schubSeg.forEach((s, i) => { s.style.opacity = i < n ? '1' : '.15'; });
+  schubEl.style.display = 'flex'; schubEl.style.top = oben + 'px';
+  // Segment 0 leuchtet nur beim Umkehrschub; Segment i (1..10) ab i*10 %
+  schubSeg.forEach((s, i) => { s.style.opacity = (i === 0 ? an < 0 : i <= an) ? '1' : '.15'; });
 }
 // ---- Y im Flug: Maschine gerade richten ---------------------------------------------------------------
 // Live-Wunsch: Y hatte im Flug keine Funktion. Jetzt richtet es den Flieger in der Luft weich (GERADE_T s) in die
@@ -2567,19 +2614,19 @@ function aufgabeText(){
     ['Zeit', 'Fliegen kostet keine Zeit – erst über dem Ziel geht es weiter'],
   ]];
   if(story.etappe === 4) return ['Etappe 4: Der Hafen', [
-    ['Schnellboot (weiß)', '1 Tag, riskant – Flucht vor der Polizei'],
+    ['Schnellboot (weiß)', '1 Tag'],
     ['Container-Kran (gelb)', '4 Tage, Geduld im Wind'],
     ['Einsteigen', 'in den gelben Ring, Y'],
     ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],
   ]];
   if(story.etappe === 3) return ['Etappe 3: Der Fluss', [
-    ['X-Wing (weiß)', '1 Tag Reisedauer, aber riskant'],
+    ['X-Wing (weiß)', '1 Tag'],
     ['Feuerwehrboot (gelb)', '4 Tage, Boots-Wissen für später'],
     ['Einsteigen', 'in den gelben Ring am Ufer bzw. zum X-Wing, Y'],
     ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],
   ]];
   return ['Etappe 1: Der Aufbruch am Strand', [
-    ['X-Wing (weiß)', '1 Tag Reisedauer, aber riskant'],
+    ['X-Wing (weiß)', '1 Tag'],
     ['U-Boot (gelb)', '4 Tage Reisedauer'],
     ['Einsteigen', 'hinlaufen und Y drücken'],
     ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],
@@ -2667,6 +2714,7 @@ window.STORY_HOOK = function(){
   hookMars();
   hookVerdreht();
   hookKunstflugKamera();
+  hookModellHalter();
   hookGerade();
   hookLoop();
 };
