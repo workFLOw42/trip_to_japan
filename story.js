@@ -1444,10 +1444,6 @@ function kunstflugKamera(camOrig){
   kam.pos.copy(camera.position).sub(ref); kam.upAlt.copy(camera.up);   // Versatz + Oben (fuer die Rueckgabe)
   return true;
 }
-function hookGerade(){
-  const physOrig = stepPhysics;
-  stepPhysics = function(dt){ const r = physOrig.apply(this, arguments); geradeSchritt(dt); return r; };
-}
 // Modellwechsel absichern: buildModel raeumt nur den modelHolder auf. Haengt etwas anderes direkt im Flieger (frueher
 // das Rennboot aus Etappe 4b) oder fehlt der Halter, wird das hier korrigiert – sonst sah man das alte Modell weiter.
 function hookModellHalter(){
@@ -1990,10 +1986,10 @@ function marsStein(){
     new THREE.MeshLambertMaterial({ color: TRIP[mars.ort || 'mars'].farbe, emissive: TRIP[mars.ort || 'mars'].glanz, emissiveIntensity: 0.9 }));
   stein.position.y = 0.28; stein.rotation.set(0.4, 0.7, 0.2);
   g.add(stein);
-  const saeule = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 200, 10, 1, true),
+  const saeule = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, SAEULE_H, 10, 1, true),
     new THREE.MeshBasicMaterial({ color: 0xff8844, transparent: true, opacity: 0.2,
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  saeule.position.y = 100; saeule.renderOrder = 995;
+  saeule.position.y = SAEULE_H / 2; saeule.renderOrder = 995;
   g.add(saeule);
   g.position.set(x, y, z);
   scene.add(g);                               // global-ok: steht auf Mond/Mars, nicht in einer Erd-Welt
@@ -2294,7 +2290,7 @@ function hookEinsteigen(){
   // Aussteigen (Y) waehrend Startsequenz/Autostart/danach nicht erlaubt
   const buttonYOrig = buttonY;
   buttonY = function(){
-    if(geradeMoeglich()){ geradeStart(); return; }             // in der Luft: Flieger gerade richten
+    if(geradeMoeglich()) return buttonYOrig.apply(this, arguments);   // in der Luft: die Engine richtet den Flieger gerade
     if(!eva && (pf.aktiv || (story.phase && !(story.phase === 'mars' && GROUNDS[locale])))) return;
     return buttonYOrig.apply(this, arguments);
   };
@@ -2347,8 +2343,11 @@ function baueSchild(text, col){
   welt(story.etappe).add(sp);
   return sp;
 }
+const SAEULE_H = 30;
 function baueMarke(col){
-  const saeule = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 300, 10, 1, true),
+  // Schaft des Pfeils: unten so breit wie der Pfeilkopf und dort angesetzt -> Pfeil und Saeule sind eins.
+  // Laenge (bis PFEIL_OBEN ueber dem Boden) setzt stelleMarke ueber scale.y.
+  const saeule = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.6, SAEULE_H, 10, 1, true).translate(0, SAEULE_H / 2, 0),
     new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.16,
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   const pfeil = new THREE.Mesh(new THREE.ConeGeometry(1.6, 3.2, 12),
@@ -2365,20 +2364,27 @@ story.baueMarke = function(farbe, text){
   m.schild = baueSchild(text, '#' + new THREE.Color(farbe).getHexString());
   return m;
 };
-story.setzeMarke = function(m, x, y, z, hoehe, zeigen){
-  m.saeule.visible = m.pfeil.visible = zeigen;
-  if(m.schild) m.schild.visible = zeigen;
-  if(!zeigen) return;
+// Live-Wunsch (harmonisch): jeder Pfeil beginnt mit der Spitze PFEIL_LUFT m ueber dem Fahrzeug und endet oben bei PFEIL_OBEN m
+// ueber dem Boden – die Pfeile sind also verschieden lang, hoeren aber alle gleich auf. Alle Schilder sind gleich gross
+// (feste Weltgroesse, waechst nicht mehr mit dem Abstand) und haengen mit der Unterkante SCHILD_UNTEN m ueber dem Boden.
+// fzg = Oberkante des Fahrzeugs ueber dem Boden y (gemessen, C:\tmp\sfg\md\chk_pfeile.js), 0 bei einem Einstiegsring.
+const PFEIL_LUFT = 3, PFEIL_OBEN = 30, SCHILD_UNTEN = 31, SCHILD_B = 14, SCHILD_H = SCHILD_B * 3.75 / 12;
+function stelleMarke(m, x, y, z, fzg){
   const t = performance.now() / 1000;
-  m.saeule.position.set(x, y + 150, z);
-  m.pfeil.position.set(x, y + hoehe + Math.sin(t * 2.5) * 0.8, z);
+  m.pfeil.position.set(x, y + fzg + PFEIL_LUFT + 1.6 + Math.sin(t * 2.5) * 0.8, z);   // Kegel 3,2 m: Mitte 1,6 ueber der Spitze
+  // Schaft vom Pfeilkopf bis PFEIL_OBEN ueber dem Boden (die Spitze wippt, das obere Ende steht still)
+  const kopf = m.pfeil.position.y + 1.6;
+  m.saeule.position.set(x, kopf, z); m.saeule.scale.set(1, Math.max(0.01, (y + PFEIL_OBEN - kopf) / SAEULE_H), 1);
   m.pfeil.rotation.y = t * 1.5;
   if(m.schild){
-    const d = Math.hypot(camera.position.x - x, camera.position.z - z);
-    const s = Math.max(1, d / 45);
-    m.schild.scale.set(12 * s, 3.75 * s, 1);
-    m.schild.position.set(x, y + hoehe + 3 + 2.2 * s, z);
+    m.schild.scale.set(SCHILD_B, SCHILD_H, 1);
+    m.schild.position.set(x, y + SCHILD_UNTEN + SCHILD_H / 2, z);   // Unterkante fest ueber dem Boden
   }
+}
+story.setzeMarke = function(m, x, y, z, fzg, zeigen){
+  m.saeule.visible = m.pfeil.visible = zeigen;
+  if(m.schild) m.schild.visible = zeigen;
+  if(zeigen) stelleMarke(m, x, y, z, fzg);
 };
 function setzeMarken(){
   if(!marken.length){
@@ -2387,10 +2393,10 @@ function setzeMarken(){
   }
   const xp = story.xwingPlatz;
   const info = islandInfo(0, 0), bl = harborSubLocal(0, 0);
-  marken[0].x = xp.x; marken[0].z = xp.z; marken[0].y = ISLAND_Y; marken[0].hoehe = 9;
+  marken[0].x = xp.x; marken[0].z = xp.z; marken[0].y = ISLAND_Y; marken[0].hoehe = 3.3;   // X-Wing
   const rg = ubootRingPlatz();
-  if(rg){ marken[1].x = rg.x; marken[1].z = rg.z; marken[1].y = ISLAND_Y; marken[1].hoehe = 6; }
-  else if(info && bl){ marken[1].x = info.wx + bl.x; marken[1].z = info.wz + bl.z; marken[1].y = 0; marken[1].hoehe = 16; }
+  if(rg){ marken[1].x = rg.x; marken[1].z = rg.z; marken[1].y = ISLAND_Y; marken[1].hoehe = 0; }   // Einstiegsring
+  else if(info && bl){ marken[1].x = info.wx + bl.x; marken[1].z = info.wz + bl.z; marken[1].y = 0; marken[1].hoehe = 4; }          // U-Boot (Turm)
 }
 function updateMarken(){
   if(!marken.length) return;
@@ -2401,88 +2407,28 @@ function updateMarken(){
   for(const m of marken){
     m.saeule.visible = m.pfeil.visible = zeigen;
     if(m.schild) m.schild.visible = zeigen;
-    if(!zeigen) continue;
-    if(m.schild){
-      const d = Math.hypot(camera.position.x - m.x, camera.position.z - m.z);
-      const s = Math.max(1, d / 45);                 // ab 45 m mitwachsen
-      m.schild.scale.set(12 * s, 3.75 * s, 1);
-      m.schild.position.set(m.x, m.y + m.hoehe + 3 + 2.2 * s, m.z);
-    }
-    m.saeule.position.set(m.x, m.y + 150, m.z);
-    m.pfeil.position.set(m.x, m.y + m.hoehe + Math.sin(t * 2.5) * 0.8, m.z);
-    m.pfeil.rotation.y = t * 1.5;
+    if(zeigen) stelleMarke(m, m.x, m.y, m.z, m.hoehe);
   }
 }
 
 // ---- HUD: zu Fuss "Kenji" statt Fahrzeugname, kein Astronauten-Symbol ------------------------
-// ---- Schubbalken (rechts, unter Radar und Gyro) -----------------------------------------------------
-// Live-Wunsch: in allen Fahrzeugen ein senkrechter Schubbalken. 11 Segmente von unten:
-//   1 rot = Umkehrschub (Bremse) · 2 senfgelb = 10 % · 3 gelbgruen = 20 % · 4 gruen = 30 % · 5-11 = 40-100 %, fliessend
-//   von gruen nach blau. Bei 0 % ist der Balken leer. Nur nicht zu Fuss und im Kran (kein Schub).
-// Die Prozentzahl steht schon oben links im HUD (nicht doppelt).
-const SCHUB_N = 11;
-const SCHUB_FEST = ['#e8352b', '#d4a017', '#9acd32', '#2ecc40'];   // rot, senfgelb, gelbgruen, gruen
-function schubFarbe(i){                                    // i = 0..10 (Segment von unten)
-  if(i < SCHUB_FEST.length) return SCHUB_FEST[i];
-  const k = (i - 3) / 7;                                   // 40 % -> 0,14 .. 100 % -> 1
-  const a = [46, 204, 64], b = [40, 110, 255];             // gruen -> blau
-  return 'rgb(' + a.map((v, j) => Math.round(v + (b[j] - v) * k)).join(',') + ')';
-}
-let schubEl = null, schubSeg = [], schubAlt = '';
-function schubBalken(){
-  const zeigen = !eva && !(story.kran4 && story.kran4.aktiv)
-    && story.phase !== 'platzhalter' && story.phase !== 'reise' && planeGroup.visible;
-  if(!schubEl){
-    schubEl = document.createElement('div');
-    schubEl.style.cssText = 'position:absolute;right:62px;top:292px;width:24px;height:240px;padding:3px;border-radius:7px;'
-      + 'background:rgba(0,0,0,.45);display:flex;flex-direction:column-reverse;gap:2px;pointer-events:none;z-index:15;';
-    for(let i = 0; i < SCHUB_N; i++){
-      const s = document.createElement('div');
-      s.style.cssText = 'flex:1;border-radius:3px;background:' + schubFarbe(i) + ';opacity:.15;';
-      schubEl.appendChild(s); schubSeg.push(s);
+// ---- Schubbalken und Y im Flug: kommen aus der Engine (Flugspiel) ----------------------------------------
+// Beides wurde hier gebaut und dann ins Flugspiel uebernommen (07.10.2026). Hier nur noch die Story-Sperren:
+// kein Balken im Kran, im Platzhalter und auf der Globusreise; kein Geraderichten waehrend Startsequenz/Autostart.
+function hookSchubGerade(){
+  const schubOrig = schubBalken;
+  schubBalken = function(){
+    if((story.kran4 && story.kran4.aktiv) || story.phase === 'platzhalter' || story.phase === 'reise'){
+      if(schubEl && schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; }
+      return;
     }
-    document.body.appendChild(schubEl);
-  }
-  if(!zeigen){ if(schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; } return; }
-  // Boote/U-Boot haben keinen Gyro (die Engine blendet ihn aus): dann direkt unter dem Radar
-  const gyro = document.getElementById('gyro'), oben = gyro && gyro.style.display !== 'none' ? 292 : 154;
-  const g = state.throttle;
-  const an = g < 0 ? -1 : Math.round(g * 10);              // -1 = Umkehrschub, sonst 0..10 Stufen
-  const k = an + '|' + oben;
-  if(k === schubAlt) return;
-  schubAlt = k;
-  schubEl.style.display = 'flex'; schubEl.style.top = oben + 'px';
-  // Segment 0 leuchtet nur beim Umkehrschub; Segment i (1..10) ab i*10 %
-  schubSeg.forEach((s, i) => { s.style.opacity = (i === 0 ? an < 0 : i <= an) ? '1' : '.15'; });
-}
-// ---- Y im Flug: Maschine gerade richten ---------------------------------------------------------------
-// Live-Wunsch: Y hatte im Flug keine Funktion. Jetzt richtet es den Flieger in der Luft weich (GERADE_T s) in die
-// waagerechte Lage aus: Kurs bleibt, Nase und Fluegel waagerecht, die Fahrt bleibt erhalten (in die neue Nasen-
-// richtung umgelenkt). Am Boden, im Boot/U-Boot, zu Fuss und im Kran bleibt Y wie gehabt.
-const GERADE_T = 0.6;
-const gerade = { an: false, t: 0, von: new THREE.Quaternion(), nach: new THREE.Quaternion() };
-function geradeMoeglich(){
-  return !eva && !state.onGround && !state.crashed && !spec.boat && !spec.sub && !(story.kran4 && story.kran4.aktiv)
-    && !pf.aktiv && !auto.aktiv && story.phase !== 'platzhalter' && story.phase !== 'reise';
-}
-function geradeStart(){
-  gerade.von.copy(state.quat);
-  // Kurs aus der Nase; zeigt sie fast senkrecht, aus dem Flieger-Oben (dorthin kippt er beim Aufrichten)
-  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);
-  if(Math.hypot(f.x, f.z) < 0.15){ const u = new THREE.Vector3(0, 1, 0).applyQuaternion(state.quat); f.set(f.y > 0 ? -u.x : u.x, 0, f.y > 0 ? -u.z : u.z); }
-  gerade.nach.setFromEuler(new THREE.Euler(0, Math.atan2(-f.x, -f.z), 0, 'YXZ'));
-  gerade.an = true; gerade.t = 0;
-}
-function geradeSchritt(dt){
-  if(!gerade.an) return;
-  if(!geradeMoeglich()){ gerade.an = false; return; }
-  gerade.t = Math.min(1, gerade.t + dt / GERADE_T);
-  const k = gerade.t * gerade.t * (3 - 2 * gerade.t);
-  state.quat.copy(gerade.von).slerp(gerade.nach, k);
-  // Fahrt in die Nasenrichtung umlenken (Betrag bleibt)
-  const v = state.vel.length();
-  state.vel.set(0, 0, -v).applyQuaternion(state.quat);
-  if(gerade.t >= 1) gerade.an = false;
+    return schubOrig.apply(this, arguments);
+  };
+  const geradeOrig = geradeMoeglich;
+  geradeMoeglich = function(){
+    return geradeOrig.apply(this, arguments) && !spec.sub && !(story.kran4 && story.kran4.aktiv)
+      && !pf.aktiv && !auto.aktiv && story.phase !== 'platzhalter' && story.phase !== 'reise';
+  };
 }
 function hookHud(){
   // Das grosse Bestaetigungssymbol in der Bildmitte zeigt beim Aussteigen einen Astronauten –
@@ -2497,7 +2443,6 @@ function hookHud(){
   const hudOrig = updateHUD;
   updateHUD = function(){
     const r = hudOrig.apply(this, arguments);
-    schubBalken();
     if(eva){
       if(mdlEl && mdlEl.textContent !== 'Kenji') mdlEl.textContent = 'Kenji';
       if(sw.aktiv){
@@ -2715,7 +2660,7 @@ window.STORY_HOOK = function(){
   hookVerdreht();
   hookKunstflugKamera();
   hookModellHalter();
-  hookGerade();
+  hookSchubGerade();
   hookLoop();
 };
 window.STORY_START = function(){

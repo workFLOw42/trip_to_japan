@@ -239,9 +239,9 @@ function baueKulisse(){
   const boje = new THREE.MeshLambertMaterial({ color: 0xffd23f });
   for(const s of [-1, 1]){ const b = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 2.6, 10), boje);
     b.position.set(mitteX(KANAL_Z1) + s * 22, 1.3, ZIEL_Z); w.add(b); }
-  const saeule = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 160, 12, 1, true),
+  const saeule = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 30, 12, 1, true),            // 30 m (Live-Wunsch)
     new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  saeule.position.set(mitteX(KANAL_Z1), 80, ZIEL_Z); saeule.renderOrder = 995; w.add(saeule);
+  saeule.position.set(mitteX(KANAL_Z1), 15, ZIEL_Z); saeule.renderOrder = 995; w.add(saeule);
   baueHaeuser(w);
   baueMeerSchiffe(w);
   // Schnellboot am Kai (Kulisse, solange man nicht drin ist)

@@ -347,8 +347,8 @@ story.zielFuer = function(et){ return et === 2 ? { x: 2500, z: 9000 } : (zielVor
 const e2m = [];
 function e2Marken(){
   if(e2m.length || !story.baueMarke) return;
-  e2m.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: XWING_PARK.x, z: XWING_PARK.z, h: 9 });
-  e2m.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: PARK.Transall.x, z: PARK.Transall.z, h: 14 });
+  e2m.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: XWING_PARK.x, z: XWING_PARK.z, h: 3.3 });   // h = Fahrzeug-Oberkante (story.setzeMarke)
+  e2m.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: PARK.Transall.x, z: PARK.Transall.z, h: 5.9 });
 }
 function updateE2Marken(){
   e2Marken();

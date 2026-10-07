@@ -4571,6 +4571,7 @@ function buttonB(){
 // Eine Taste fuer alles, was man an einem Fahrzeug tun kann: aussteigen, einsteigen, umsteigen.
 // Die Reihenfolge zaehlt: wer in einem Fahrzeug sitzt, will heraus; wer daneben steht, hinein.
 function buttonY(){
+  if(geradeMoeglich()){ geradeStart(); return; }             // in der Luft: Flieger gerade richten
   if(eva){ evaBoardY(); return; }
   // Im FEUERWEHRBOOT: Y steigt AM UFER aus — man faehrt an den Strand und geht von Bord, nicht
   // mitten auf dem Meer. Das muss VOR evaAllowed stehen, denn das sperrt Boote grundsaetzlich
@@ -11251,9 +11252,10 @@ function readInput() {
       const rx = deadzone(gp.axes[2] || 0), ry2 = gp.axes[3] || 0;
       if(eva && !eva.boat && !eva.rover && !eva.jet){
         lookX = rx;
-        // Vorzeichen umgedreht: der Stick liefert für "oben" einen negativen Wert (wie der linke).
-        // Ohne das senkte "Stick nach oben" die Kamera, statt sie zu heben.
-        lookY = -deadzone(ry2);
+        // Ohne Vorzeichenwechsel (Live-Test im Spiel: mit dem Minus war die senkrechte Achse vertauscht). Der Stick
+        // liefert fuer "oben" einen negativen Wert, und lookY > 0 senkt den Blick (die Kamera geht hoch und schaut
+        // herab) – Stick hoch = Blick hoch, wie bei einer Flug-Kamera ohne Invertierung.
+        lookY = deadzone(ry2);
       } else {
         lookX = 0; lookY = 0;
         if(ry2 < -0.5) thrDir = +1; else if(ry2 > 0.5) thrDir = -1;
@@ -12504,6 +12506,74 @@ function setTxt(el, val){
   if(!el) return;
   const s = '' + val;
   if(el.textContent !== s) el.textContent = s;
+}
+// ---- Schubbalken (rechts, unter Radar und Gyro) -----------------------------------------------------
+// Uebernommen aus "Trip to Japan": in allen Fahrzeugen ein senkrechter Schubbalken. 11 Segmente von unten:
+//   1 rot = Umkehrschub (Bremse) · 2 senfgelb = 10 % · 3 gelbgruen = 20 % · 4 gruen = 30 % · 5-11 = 40-100 %, fliessend
+//   von gruen nach blau. Bei 0 % ist der Balken leer. Zu Fuss (auch am Jetpack) nicht.
+// Die Prozentzahl steht schon oben links im HUD (nicht doppelt).
+const SCHUB_N = 11;
+const SCHUB_FEST = ['#e8352b', '#d4a017', '#9acd32', '#2ecc40'];   // rot, senfgelb, gelbgruen, gruen
+function schubFarbe(i){                                    // i = 0..10 (Segment von unten)
+  if(i < SCHUB_FEST.length) return SCHUB_FEST[i];
+  const k = (i - 3) / 7;                                   // 40 % -> 0,14 .. 100 % -> 1
+  const a = [46, 204, 64], b = [40, 110, 255];             // gruen -> blau
+  return 'rgb(' + a.map((v, j) => Math.round(v + (b[j] - v) * k)).join(',') + ')';
+}
+let schubEl = null, schubSeg = [], schubAlt = '';
+function schubBalken(){
+  const zeigen = !eva && planeGroup.visible;
+  if(!schubEl){
+    schubEl = document.createElement('div');
+    schubEl.style.cssText = 'position:absolute;right:62px;top:292px;width:24px;height:240px;padding:3px;border-radius:7px;'
+      + 'background:rgba(0,0,0,.45);display:flex;flex-direction:column-reverse;gap:2px;pointer-events:none;z-index:15;';
+    for(let i = 0; i < SCHUB_N; i++){
+      const s = document.createElement('div');
+      s.style.cssText = 'flex:1;border-radius:3px;background:' + schubFarbe(i) + ';opacity:.15;';
+      schubEl.appendChild(s); schubSeg.push(s);
+    }
+    document.body.appendChild(schubEl);
+  }
+  if(!zeigen){ if(schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; } return; }
+  // Boote/U-Boot haben keinen Gyro (er wird ausgeblendet): dann direkt unter dem Radar
+  const gyro = document.getElementById('gyro'), oben = gyro && gyro.style.display !== 'none' ? 292 : 154;
+  const g = state.throttle;
+  const an = g < 0 ? -1 : Math.round(g * 10);              // -1 = Umkehrschub, sonst 0..10 Stufen
+  const k = an + '|' + oben;
+  if(k === schubAlt) return;
+  schubAlt = k;
+  schubEl.style.display = 'flex'; schubEl.style.top = oben + 'px';
+  // Segment 0 leuchtet nur beim Umkehrschub; Segment i (1..10) ab i*10 %
+  schubSeg.forEach((s, i) => { s.style.opacity = (i === 0 ? an < 0 : i <= an) ? '1' : '.15'; });
+}
+// ---- Y im Flug: Maschine gerade richten ---------------------------------------------------------------
+// Uebernommen aus "Trip to Japan": Y hatte in der Luft keine Funktion (aussteigen geht nur am Boden). Jetzt richtet
+// es den Flieger weich (GERADE_T s) in die waagerechte Lage aus: Kurs bleibt, Nase und Fluegel waagerecht, die Fahrt
+// bleibt erhalten (in die neue Nasenrichtung umgelenkt). Am Boden, im Boot/U-Boot, zu Fuss und im All bleibt Y wie gehabt.
+const GERADE_T = 0.6;
+const gerade = { an: false, t: 0, von: new THREE.Quaternion(), nach: new THREE.Quaternion() };
+function geradeMoeglich(){
+  return !eva && !state.onGround && !state.crashed && !state.ejected && !state.falling && !parachute
+    && !isWaterCraft() && locale !== 'space';
+}
+function geradeStart(){
+  gerade.von.copy(state.quat);
+  // Kurs aus der Nase; zeigt sie fast senkrecht, aus dem Flieger-Oben (dorthin kippt er beim Aufrichten)
+  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);
+  if(Math.hypot(f.x, f.z) < 0.15){ const u = new THREE.Vector3(0, 1, 0).applyQuaternion(state.quat); f.set(f.y > 0 ? -u.x : u.x, 0, f.y > 0 ? -u.z : u.z); }
+  gerade.nach.setFromEuler(new THREE.Euler(0, Math.atan2(-f.x, -f.z), 0, 'YXZ'));
+  gerade.an = true; gerade.t = 0;
+}
+function geradeSchritt(dt){
+  if(!gerade.an) return;
+  if(!geradeMoeglich()){ gerade.an = false; return; }
+  gerade.t = Math.min(1, gerade.t + dt / GERADE_T);
+  const k = gerade.t * gerade.t * (3 - 2 * gerade.t);
+  state.quat.copy(gerade.von).slerp(gerade.nach, k);
+  // Fahrt in die Nasenrichtung umlenken (Betrag bleibt)
+  const v = state.vel.length();
+  state.vel.set(0, 0, -v).applyQuaternion(state.quat);
+  if(gerade.t >= 1) gerade.an = false;
 }
 function repeatSym(sym, count, max){
   const nRaw = Math.round(count);
@@ -13843,7 +13913,7 @@ function loop(now){
     return;
   }
   if(eva) updateEva(dt, inp);   // draußen unterwegs: der Flieger steht, der Astronaut läuft
-  else stepPhysics(dt,inp);
+  else { stepPhysics(dt,inp); geradeSchritt(dt); }
   // Großes Symbol in der Bildmitte ausblenden. Das gehört HIERHER und nicht in die Physik: dort
   // stand es in stepPhysics und stepBoat, und während der EVA läuft keines von beiden — das
   // 🧑‍🚀 blieb deshalb für immer stehen.
@@ -13915,6 +13985,7 @@ function loop(now){
   dtCam = dt;                // für die EVA-Kamera (updateCamera nimmt kein dt)
   updateCamera();
   updateHUD();
+  schubBalken();
   renderer.render(scene,camera);
   requestAnimationFrame(loop);
 }

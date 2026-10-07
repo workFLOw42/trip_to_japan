@@ -434,8 +434,8 @@ const marken = [];
 function updateMarken(){
   if(!marken.length && story.baueMarke){
     const xp = xwingPlatz(), rp = ringPlatz();
-    marken.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: xp.x, z: xp.z, h: 9 });
-    marken.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: rp.x, z: rp.z, h: 6 });
+    marken.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: xp.x, z: xp.z, h: 3.3 });   // h = Fahrzeug-Oberkante (story.setzeMarke)
+    marken.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: rp.x, z: rp.z, h: 2.8 });
   }
   const zeigen = e3() && !!eva && locale === 'earth' && !story.phase;
   for(const o of marken) story.setzeMarke(o.m, o.x, WIESE_Y, o.z, o.h, zeigen);

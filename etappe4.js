@@ -751,8 +751,8 @@ story.etappe4Start = hafenStart;
 const marken = [];
 function updateMarken(){
   if(!marken.length && story.baueMarke){
-    marken.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: SCHNELLBOOT.x - 6, z: SCHNELLBOOT.z, h: 6 });
-    marken.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: -6, z: -4, h: 6 });
+    marken.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: SCHNELLBOOT.x - 6, z: SCHNELLBOOT.z, h: 0 });   // h = Oberkante ueber Kai (Ring; Boot liegt tiefer)
+    marken.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: -6, z: -4, h: 4.1 });
   }
   const zeigen = e4() && !!eva && locale === 'earth' && !story.phase;
   for(const o of marken) story.setzeMarke(o.m, o.x, KAI_Y, o.z, o.h, zeigen);

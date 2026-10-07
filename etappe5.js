@@ -198,11 +198,11 @@ function torSaeule(t){
       new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     saeule.renderOrder = 995; story.welt(5).add(saeule);
   }
-  saeule.visible = !!t;
-  if(!t) return;
-  // ab der Oberkante des Tors bis 800 m: der Durchflug selbst bleibt frei
+  saeule.visible = !!t && ar.laeuft;                           // Live-Wunsch: erst nach der Startsequenz
+  if(!saeule.visible) return;
+  // ab der Oberkante des Tors 30 m hoch (Live-Wunsch): der Durchflug selbst bleibt frei
   const unten = t.T.typ === 'ring' ? t.L.m.y + (t.T.dir === 'hoch' ? 6 : t.T.r + 4) : (t.pyl[0] ? t.pyl[0].h + 4 : 30);
-  const h = Math.max(50, 800 - unten);
+  const h = 30;
   saeule.scale.set(1, h, 1); saeule.position.set(t.L.m.x, unten + h / 2, t.L.m.z);
 }
 // Nur das aktuelle (leuchtend) und das naechste Tor zeigen; vor dem Rennen die ersten beiden
@@ -212,7 +212,7 @@ let torSichtbarN = -1;
 function ausgangVersteckt(t){ return !!(t && t.T.loopAus && (ar.naechstes < t.i || ar.loopWinkel < Math.PI)); }
 function torSichtbar(immer){
   const n = ar.aktiv ? (ar.landen || ar.fertig ? -9 : ar.naechstes) : 0;
-  const k = n + (ausgangVersteckt(welt.tore[n]) || ausgangVersteckt(welt.tore[n + 1]) ? 0.5 : 0);   // Schluessel inkl. Versteck
+  const k = n + (ausgangVersteckt(welt.tore[n]) || ausgangVersteckt(welt.tore[n + 1]) ? 0.5 : 0) + (ar.laeuft ? 0.25 : 0);   // Schluessel inkl. Versteck, Rennen laeuft
   if(k === torSichtbarN && !immer) return;
   torSichtbarN = k;
   for(const t of welt.tore){
@@ -439,8 +439,8 @@ function ladeParkMustang(){
 const marken = [];
 function updateMarken(){
   if(!marken.length && story.baueMarke){
-    marken.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: MUSTANG.x, z: MUSTANG.z, h: 7 });
-    const rg = ubootRing(); marken.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: rg.x, z: rg.z, h: 6 });
+    marken.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: MUSTANG.x, z: MUSTANG.z, h: 3 });   // h = Fahrzeug-Oberkante (story.setzeMarke)
+    const rg = ubootRing(); marken.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: rg.x, z: rg.z, h: 0 });
   }
   const zeigen = e5() && !!eva && locale === 'earth' && !story.phase;
   for(const o of marken) story.setzeMarke(o.m, o.x, ISLAND_Y, o.z, o.h, zeigen);
