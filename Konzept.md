@@ -11,7 +11,17 @@ Mond-Trip, Transall-Flugschule) und Etappe 3 (Fluss mit Feuerwehrboot, X-Wing oh
 Tageszähler · Stimmen (Pilot männlich) · Offline-PWA · Highscores still gespeichert (noch ohne Anzeige).
 Details zum Gebauten in der [README](README.md); Stolperstellen der Engine in [ENGINE_RISIKEN.md](ENGINE_RISIKEN.md).
 
-**Als Nächstes:** Etappe 5 (Chinesisches Meer).
+**Als Nächstes:** Etappe 5, U-Boot-Schlucht (Risiko-Weg).
+
+- **Etappe 5 Air Race gebaut, live abgestimmt (weicht vom Text unten ab):** gewertet **auf Zeit** mit Strafsekunden
+  (Ziel 90 s), Startsequenz **ohne** Ansager-Erklärung. Figuren: Messerflug, Looping (Ein- und Ausgangsring, das Spiel
+  prüft den Flug dazwischen; auslassen kostet 15 s), Steilflug durch zwei Ringe (die Schraube dort war zu schwer),
+  Schraube zum Schluss, danach landen. Nur aktuelles + nächstes Tor sichtbar.
+- **Für alle Flieger (story.js):** Kunstflug-Kamera ohne Umklappen (Looping, 90°-Steigflug), **Y = gerade richten**
+  im Flug, **Schubbalken** rechts (10 % rot, 20/30 % grün, ab 40 % bis blau), Gas der Startsequenz startet den Flieger
+  nicht (erst nach Loslassen und neuem Druck).
+- **Entschieden für die U-Boot-Schlucht:** Code 14 02 wird nur in Etappe 1 (U-Boot-Weg) gezeigt, wer ihn nicht kennt,
+  rät (1 Versuch). 2 Felskontakte erlaubt, der dritte beendet die Fahrt, dazu ein Zeitlimit.
 
 - **Etappe 4 Schnellboot gebaut:** Kanal hinter dem Hafen (60 m, sieben Kurven), zwei Polizeiboote (von hinten + Seitenarm),
   eingeholt < 15 m oder 3 Felskontakte = Gefängnis-Geschichte, 7 Tage. Ohne Boots-Wissen aus Etappe 3 gibt es keinen

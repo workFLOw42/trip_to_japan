@@ -14,7 +14,7 @@ Technische Basis ist die Engine des **[Flugspiel](https://github.com/workFLOw42/
 
 ## Stand
 
-Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 4**, danach folgt
+Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 4** und in Etappe 5 das **Air Race** (U-Boot-Schlucht folgt), danach folgt
 vorerst ein Platzhalter.
 
 **Startmenü:** *Neues Spiel* oder – zum Testen – direkt **E2 … E6** (linker Stick / ← → wählen, A / Enter starten).
@@ -83,6 +83,18 @@ Hafenbecken mit Kai (glattes Wasser), Frachtschiff längsseits (Ladung als Fäch
     Drehbereichs (nur mit vollem Seitenwind, dann fallen lassen = 1 Fehler, aber er sitzt), Lücke 4 hinten außen.
   - Geschafft → **4 Tage**, Zeit um oder 3. Fehler → **7 Tage**.
 
+### Etappe 5 – Chinesisches Meer (Hongkong)
+Startinsel mit Bahn im offenen Meer, dahinter eine Hochhaus-Skyline. Auf der Bahn starten und landen keine anderen
+Flieger (am Himmel fliegen trotzdem welche).
+- **Air Race mit der Mustang („4 Tage“):** Startsequenz ohne Zeitlimit und ohne Erklärung, dann ein Parcours über dem
+  Meer, gewertet **auf Zeit** (Ziel unter **90 s**): Slalom durch Pylonen-Tore, **Messerflug** durch ein schmales hohes
+  Tor (mind. 60° Querlage), **Looping** zwischen Eingangs- und Ausgangsring (das Spiel prüft den ganzen Looping; der
+  Ausgang erscheint erst ab der Hälfte), **Steilflug** senkrecht durch zwei Ringe übereinander, zum Schluss eine
+  **Schraube** bis zum Zielring. Sichtbar sind nur das aktuelle (leuchtend, mit Säule) und das nächste Tor; ein Pfeil
+  am Rand zeigt zum aktuellen, wenn es nicht im Bild ist.
+  Strafen: Tor verpasst +5 s, Pylon gestreift +3 s, zu hoch +2 s, Messerflug/Schraube vergessen +3 s, Looping ausgelassen
+  +15 s. Im Zielring stoppt die Zeit, danach **sauber auf der Insel landen** (20 % Schub). Absturz → **7 Tage**.
+- **U-Boot-Schlucht („1 Tag“):** folgt (Code 14 02 mit nur einem Versuch, dann Slalom durch eine Unterwasser-Schlucht).
 Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, gelb = Etappen, lila = Fukuoka).
 
 ## Steuerung zu Fuß
@@ -111,6 +123,7 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `etappe3.js` | Etappe 3 (Fluss, Feuerwehrboot, X-Wing ohne Kurzschluss) |
 | `etappe4.js` | Etappe 4: Hafen-Welt und Container-Kran |
 | `etappe4b.js` | Etappe 4: Schnellboot-Flucht (Kanal, Polizei) |
+| `etappe5.js` | Etappe 5: Insel, Skyline, Air Race mit der Mustang |
 | `flucht_glb.js` | Schnellboot und Polizeiboot (verkleinert) als Base64 |
 | `hafen_glb.js` | Frachtschiff (verkleinert), Container und Kran als Base64 |
 | `kenji_glb.js` | Kenji als eingebettetes GLB (aus `models/kenji.glb`) |

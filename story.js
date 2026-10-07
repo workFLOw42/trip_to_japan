@@ -60,6 +60,7 @@ function highscores(){
   try { return JSON.parse(localStorage.getItem(HS_KEY)) || {}; } catch(e){ return {}; }
 }
 // neueZeit(name, sekunden) -> true, wenn neuer Rekord
+story.neueZeit = (n, s) => neueZeit(n, s);
 function neueZeit(name, s){
   const hs = highscores();
   const alt = hs[name];
@@ -693,6 +694,7 @@ function springeZu(n){
     if(n === 2 && story.etappe2Start){ hinweis(''); story.etappe2Start(); return; }
     if(n === 3 && story.etappe3Start){ hinweis(''); story.etappe3Start(); return; }
     if(n === 4 && story.etappe4Start){ hinweis(''); story.etappe4Start(); return; }
+    if(n === 5 && story.etappe5Start){ hinweis(''); story.etappe5Start(); return; }
     platzhalter('Etappe ' + n + ' (folgt) – Tag ' + story.tage + ' von 42');
   });
 }
@@ -1325,6 +1327,96 @@ function himmelUpdate(dt){
 function himmelWeg(){ for(const e of himmel) removePlane(e); himmel.length = 0; }
 story.himmel = himmelUpdate;
 story.himmelWeg = himmelWeg;
+// ---- Verfolgerkamera fuer Kunstflug (Erde) -------------------------------------------------------
+// Live-Wunsch: im Steilflug verdrehte sich die Kamera, bei 90 Grad sprang sie einmal um den Flieger
+// herum (gemessen 125 Grad in einem Bild), im Looping klappte das Bild oben um (178 Grad). Ursache in der
+// Engine: sie zerlegt die Fluglage in Euler-Winkel (Gieren/Nicken, Nicken auf +-51 Grad gekappt) – bei
+// senkrechter Nase ist das Gieren unbestimmt, in Rueckenlage dreht das Gieren um 180 Grad.
+// Hier ohne Euler: das Kamera-Oben wird nur MITGESCHOBEN (senkrecht zur Blickrichtung gehalten), es dreht
+// nie mit der Rolle mit. Steil und in der Schraube steht die Kamera also still und der Flieger dreht sich
+// im Bild; im Looping faehrt sie ueber Kopf mit, ohne umzuklappen. Erst wenn der Flieger wieder flach UND
+// aufrecht fliegt, richtet sie sich auf den waagerechten Horizont aus und gibt an die Engine-Kamera ab
+// (gewohntes Bild in allen Etappen). Abstand und Nachziehen wie in der Engine.
+const KAM_EIN = 0.7;                                 // |sin Nicken| ~44 Grad: uebernehmen
+const KAM_FLACH = 0.35;                              // |sin Nicken| ~20 Grad: flach -> zurueck an die Engine
+const KAM_AUFRICHT = 1.6;                            // rad/s hoechstens beim Aufrichten (~90 Grad/s)
+const KAM_HALT = 0.87;                               // |sin Nicken| ~60 Grad: darueber steht das Kamera-Oben still
+const kam = { an: false, up: new THREE.Vector3(0, 1, 0), back: new THREE.Vector3(0, 0, 1), zurueck: 0,
+  pos: new THREE.Vector3(), quat: new THREE.Quaternion() };            // letzte eigene Lage (fuer die Rueckgabe)
+const _kF = new THREE.Vector3(), _kU = new THREE.Vector3(), _kW = new THREE.Vector3(), _kD = new THREE.Vector3();
+function kunstflugMoeglich(){
+  return !story.kunstflugAus && !eva && !parachute && sideView === 0 && locale === 'earth' && !isSub() && !spec.boat && !state.crashed && !state.onGround;
+}
+// true = diese Kamera hat das Bild gemacht (dann die Engine-Kamera nicht rufen)
+function kunstflugKamera(camOrig){
+  if(!kunstflugMoeglich()){ kam.an = false; kam.zurueck = 0; return false; }
+  _kF.set(0, 0, -1).applyQuaternion(state.quat);                 // Nase
+  _kU.set(0, 1, 0).applyQuaternion(state.quat);                  // Flieger-Oben
+  const steil = Math.abs(_kF.y);
+  if(!kam.an){
+    if(steil < KAM_EIN){
+      if(kam.zurueck <= 0) return false;
+      // Rueckgabe an die Engine: deren Bild rechnen lassen und ueber 0,5 s von der letzten eigenen Lage
+      // dorthin ueberblenden (sonst ruckt es um den Unterschied der beiden Kameras)
+      camOrig();
+      kam.zurueck = Math.max(0, kam.zurueck - (dtCam || 1 / 60) / 0.5);
+      const m = kam.zurueck * kam.zurueck * (3 - 2 * kam.zurueck);
+      camera.position.lerp(kam.pos, m); camera.quaternion.slerp(kam.quat, m);
+      return true;
+    }
+    // Uebernahme ab der aktuellen Kamera (kein Sprung): Rueck- und Oben-Richtung so, wie das Bild gerade
+    // WIRKLICH steht (camera.up ist nur der Wunsch an lookAt, das Bild-Oben steht in der Kameramatrix)
+    kam.an = true; kam.zurueck = 0;
+    kam.back.copy(camera.position).sub(planeCamRef()).normalize();
+    kam.up.set(0, 1, 0).applyQuaternion(camera.quaternion);
+  }
+  const dt = dtCam || 1 / 60;
+  // Blickrichtung: hinter dem Flieger entlang der Nase, weich nachgezogen
+  kam.back.lerp(_kD.copy(_kF).negate(), frameLerp(0.18, dt)).normalize();
+  // Oben mitschieben: senkrecht zur neuen Blickrichtung (Paralleltransport, keine Rollkopplung)
+  kam.up.addScaledVector(kam.back, -kam.up.dot(kam.back));
+  if(kam.up.lengthSq() < 1e-6) kam.up.copy(_kU);
+  kam.up.normalize();
+  // Zum Horizont aufrichten, sobald die Nase nicht mehr (fast) senkrecht steht: je flacher, desto schneller.
+  // Unabhaengig von der Rolllage des Fliegers â€“ nach einer Schraube liegt er sonst womoeglich auf dem Ruecken,
+  // und beim Abkippen klappte das Bild um (gemessen 165 Grad in einem Bild). Senkrecht (steil > KAM_HALT)
+  // bleibt die Kamera stehen, dort dreht sich die Welt um den Flieger.
+  // Im Looping (Nase waagerecht, Flieger auf dem Ruecken) richtet sie sich NICHT auf: dort zeigt kam.up
+  // nach unten, und der Horizont liegt gegenueber â€“ erst wenn der Flieger wieder aufrecht ist, geht es weiter.
+  const horizont = _kW.set(0, 1, 0).addScaledVector(kam.back, -kam.back.y);
+  if(horizont.lengthSq() > 1e-4 && steil < KAM_HALT){
+    horizont.normalize();
+    const ueberKopf = _kU.y < -0.3 && kam.up.y < 0;                // Looping oben: nicht umklappen
+    if(!ueberKopf){
+      const s = 1 - Math.max(0, (steil - KAM_FLACH) / (KAM_HALT - KAM_FLACH));   // 1 flach .. 0 senkrecht
+      // weich, aber hoechstens KAM_AUFRICHT rad/s – ein Lerp allein gab bei grossem Abstand bis 18 Grad je Bild
+      const winkel = Math.acos(Math.max(-1, Math.min(1, kam.up.dot(horizont))));
+      const schritt = Math.min(winkel * frameLerp(0.02 + 0.08 * s, dt), KAM_AUFRICHT * dt);
+      if(winkel > 1e-4) kam.up.lerp(horizont, schritt / winkel).normalize();
+      if(steil < KAM_FLACH && _kU.y > 0.3 && kam.up.dot(horizont) > 0.995){ kam.an = false; kam.zurueck = 1; return kunstflugKamera(camOrig); }
+    }
+  }
+  const cfg = viewConfigs[viewMode], cc = camCfg();
+  const ref = planeCamRef();
+  const desired = _kD.copy(ref).addScaledVector(kam.back, cfg.dist * cc.dist + camBackExtra()).addScaledVector(kam.up, cfg.height * cc.hgt);
+  if(desired.y < 2) desired.y = 2;
+  const k = frameLerp(Math.min(0.5, cfg.lerp * (1 + state.vel.length() / 120)), dt);
+  _camOff.copy(camera.position).sub(ref);
+  _camDes.copy(desired).sub(ref);
+  camera.position.copy(ref).add(_camOff.lerp(_camDes, k));
+  camera.up.copy(kam.up);
+  camera.lookAt(ref);
+  kam.pos.copy(camera.position); kam.quat.copy(camera.quaternion);
+  return true;
+}
+function hookGerade(){
+  const physOrig = stepPhysics;
+  stepPhysics = function(dt){ const r = physOrig.apply(this, arguments); geradeSchritt(dt); return r; };
+}
+function hookKunstflugKamera(){
+  const camOrig = updateCamera;
+  updateCamera = function(){ if(kunstflugKamera(camOrig)) return; return camOrig.apply(this, arguments); };
+}
 function hookLoop(){
   const loopOrig = loop;
   let tPrev = performance.now();
@@ -1352,6 +1444,7 @@ function hookLoop(){
     if(story.updateE2) story.updateE2(dt);
     if(story.updateE3) story.updateE3(dt);
     if(story.updateE4) story.updateE4(dt);
+    if(story.updateE5) story.updateE5(dt);
     if(story.etappe >= 2 && locale === 'earth') himmelUpdate(dt); else if(himmel.length) himmelWeg();
     introDt(dt);
     updateMarken();
@@ -1593,8 +1686,25 @@ function pfUpdate(dt, inp){
   if(!pf.ohneZeit && pf.t >= PF_ZEIT) pfFertig(false);
 }
 
+// Live-Wunsch: das Gas der Startsequenz ("Gas geben" = letzter Schritt) darf den Flieger nicht steuern, sonst fliegt
+// er beim Gruenwerden einfach los. Nach der Sequenz bleibt der Schub bei 0, bis das Gas einmal losgelassen wurde.
+let pfGasSperre = false;
+// Zwei Stufen: 'gehalten' (Sequenz-Gas noch gedrueckt) und 'los' (losgelassen). Auch nach dem Loslassen bleibt der
+// Schub 0 – X/Shift sind der Boost der Engine, und der setzt beim LOSLASSEN 50 % (Live-Test: mit X fuhr er sofort
+// los). Frei ist erst, wer das Gas neu drueckt oder den Schub anders verstellt (Stick, W/S).
+let pfGasStufe = 'gehalten';
+function pfGasSperreUpdate(inp){
+  if(!pfGasSperre) return;
+  const e = pfEingabe(inp || {});
+  if(pfGasStufe === 'gehalten'){ if(!e.gas) pfGasStufe = 'los'; }
+  else if(e.gas){ pfGasSperre = false; return; }       // neu gedrueckt: ab jetzt steuert das Gas
+  const stick = gamepadIndex !== null ? (navigator.getGamepads()[gamepadIndex] || { axes: [] }).axes[3] || 0 : 0;
+  if(keys['KeyW'] || keys['KeyS'] || Math.abs(stick) > 0.3){ if(pfGasStufe === 'los'){ pfGasSperre = false; return; } }
+  state.throttle = 0; boosting = false;
+}
 function pfFertig(ok){
   pf.aktiv = false;
+  pfGasSperre = true; pfGasStufe = 'gehalten';
   story.preflightZeit = ok ? pf.t : null;
   if(pf.danach){                                   // eigener Ablauf (z. B. Transall-Flugschule)
     const f = pf.danach; pf.danach = null;
@@ -1701,6 +1811,7 @@ function etappeEnde(tage, wie){
     if(story.etappe === 2 && story.etappe2Start){ hinweis(''); story.etappe2Start(); return; }
     if(story.etappe === 3 && story.etappe3Start){ hinweis(''); story.etappe3Start(); return; }
     if(story.etappe === 4 && story.etappe4Start){ hinweis(''); story.etappe4Start(); return; }
+    if(story.etappe === 5 && story.etappe5Start){ hinweis(''); story.etappe5Start(); return; }
     platzhalter('Etappe ' + story.etappe + ' (folgt) – Tag ' + story.tage + ' von 42');
   });
 }
@@ -2114,7 +2225,9 @@ function hookEinsteigen(){
     }
     if(auto.aktiv){ autoUpdate(dt); return; }
     if(story.phase === 'platzhalter' || story.phase === 'reise'){ state.vel.set(0, 0, 0); return; }   // Spiel steht hinter Schild/Globus
+    pfGasSperreUpdate(inp);                              // vor der Physik: Schub 0, solange das Sequenz-Gas noch gehalten wird
     const r = physOrig.apply(this, arguments);
+    pfGasSperreUpdate(inp);
     if(story.phase === 'freiflug') freiflugUpdate();
     if(story.phase === 'mars') marsUpdate(dt);
     if(ub.aktiv){ ubootUpdate(); boosting = false; }      // kein Boost im U-Boot
@@ -2136,6 +2249,7 @@ function hookEinsteigen(){
   // Aussteigen (Y) waehrend Startsequenz/Autostart/danach nicht erlaubt
   const buttonYOrig = buttonY;
   buttonY = function(){
+    if(geradeMoeglich()){ geradeStart(); return; }             // in der Luft: Flieger gerade richten
     if(!eva && (pf.aktiv || (story.phase && !(story.phase === 'mars' && GROUNDS[locale])))) return;
     return buttonYOrig.apply(this, arguments);
   };
@@ -2256,6 +2370,73 @@ function updateMarken(){
 }
 
 // ---- HUD: zu Fuss "Kenji" statt Fahrzeugname, kein Astronauten-Symbol ------------------------
+// ---- Schubbalken (rechts, unter Radar und Gyro) -----------------------------------------------------
+// Live-Wunsch: in allen Fliegern ein senkrechter Schubbalken. 10 Segmente: 10 % rot, 20/30 % gruen (Landeschub),
+// ab 40 % fliessend von gruen ueber tuerkis nach blau (100 %). Nur im Flieger: nicht zu Fuss, nicht in Boot,
+// U-Boot oder Kran. Umkehrschub (negativ) = "R".
+const SCHUB_N = 10;
+function schubFarbe(i){                                    // i = 1..10 (Segment = i*10 %)
+  if(i === 1) return '#e8352b';
+  if(i <= 3) return '#2ecc40';
+  const k = (i - 3) / 7;                                   // 40 % -> 0,14 .. 100 % -> 1
+  const a = [46, 204, 64], b = [40, 110, 255];             // gruen -> blau
+  return 'rgb(' + a.map((v, j) => Math.round(v + (b[j] - v) * k)).join(',') + ')';
+}
+let schubEl = null, schubSeg = [], schubAlt = '';
+// Die Prozentzahl steht schon oben links im HUD (Live-Wunsch: nicht doppelt) – hier nur der Balken, mittig unter
+// Radar und Gyro (beide 130 px breit, 12 px vom Rand). Umkehrschub: leer, rot umrandet.
+function schubBalken(){
+  const zeigen = !eva && !spec.boat && !spec.sub && !(story.kran4 && story.kran4.aktiv)
+    && story.phase !== 'platzhalter' && story.phase !== 'reise' && planeGroup.visible;
+  if(!schubEl){
+    schubEl = document.createElement('div');
+    schubEl.style.cssText = 'position:absolute;right:62px;top:292px;width:24px;height:222px;padding:3px;border-radius:7px;'
+      + 'background:rgba(0,0,0,.45);border:2px solid transparent;display:flex;flex-direction:column-reverse;gap:2px;pointer-events:none;z-index:15;';
+    for(let i = 1; i <= SCHUB_N; i++){
+      const s = document.createElement('div');
+      s.style.cssText = 'flex:1;border-radius:3px;background:' + schubFarbe(i) + ';opacity:.15;';
+      schubEl.appendChild(s); schubSeg.push(s);
+    }
+    document.body.appendChild(schubEl);
+  }
+  if(!zeigen){ if(schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; } return; }
+  const g = state.throttle, n = g < 0 ? 0 : Math.round(g * SCHUB_N);
+  const k = n + '|' + (g < 0 ? 'R' : '');
+  if(k === schubAlt) return;
+  schubAlt = k;
+  schubEl.style.display = 'flex';
+  schubEl.style.borderColor = g < 0 ? '#e8352b' : 'transparent';
+  schubSeg.forEach((s, i) => { s.style.opacity = i < n ? '1' : '.15'; });
+}
+// ---- Y im Flug: Maschine gerade richten ---------------------------------------------------------------
+// Live-Wunsch: Y hatte im Flug keine Funktion. Jetzt richtet es den Flieger in der Luft weich (GERADE_T s) in die
+// waagerechte Lage aus: Kurs bleibt, Nase und Fluegel waagerecht, die Fahrt bleibt erhalten (in die neue Nasen-
+// richtung umgelenkt). Am Boden, im Boot/U-Boot, zu Fuss und im Kran bleibt Y wie gehabt.
+const GERADE_T = 0.6;
+const gerade = { an: false, t: 0, von: new THREE.Quaternion(), nach: new THREE.Quaternion() };
+function geradeMoeglich(){
+  return !eva && !state.onGround && !state.crashed && !spec.boat && !spec.sub && !(story.kran4 && story.kran4.aktiv)
+    && !pf.aktiv && !auto.aktiv && story.phase !== 'platzhalter' && story.phase !== 'reise';
+}
+function geradeStart(){
+  gerade.von.copy(state.quat);
+  // Kurs aus der Nase; zeigt sie fast senkrecht, aus dem Flieger-Oben (dorthin kippt er beim Aufrichten)
+  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);
+  if(Math.hypot(f.x, f.z) < 0.15){ const u = new THREE.Vector3(0, 1, 0).applyQuaternion(state.quat); f.set(f.y > 0 ? -u.x : u.x, 0, f.y > 0 ? -u.z : u.z); }
+  gerade.nach.setFromEuler(new THREE.Euler(0, Math.atan2(-f.x, -f.z), 0, 'YXZ'));
+  gerade.an = true; gerade.t = 0;
+}
+function geradeSchritt(dt){
+  if(!gerade.an) return;
+  if(!geradeMoeglich()){ gerade.an = false; return; }
+  gerade.t = Math.min(1, gerade.t + dt / GERADE_T);
+  const k = gerade.t * gerade.t * (3 - 2 * gerade.t);
+  state.quat.copy(gerade.von).slerp(gerade.nach, k);
+  // Fahrt in die Nasenrichtung umlenken (Betrag bleibt)
+  const v = state.vel.length();
+  state.vel.set(0, 0, -v).applyQuaternion(state.quat);
+  if(gerade.t >= 1) gerade.an = false;
+}
 function hookHud(){
   // Das grosse Bestaetigungssymbol in der Bildmitte zeigt beim Aussteigen einen Astronauten –
   // Kenji ist keiner. Andere Symbole (z. B. U-Boot beim Einsteigen) bleiben.
@@ -2269,6 +2450,7 @@ function hookHud(){
   const hudOrig = updateHUD;
   updateHUD = function(){
     const r = hudOrig.apply(this, arguments);
+    schubBalken();
     if(eva){
       if(mdlEl && mdlEl.textContent !== 'Kenji') mdlEl.textContent = 'Kenji';
       if(sw.aktiv){
@@ -2378,7 +2560,7 @@ function aufgabeText(){
     ['Foto', fotoTaste() + ' (getaucht, Wrack vor dir)'],
     ['Sonar', 'B'],
   ]];
-  const a3 = (story.aufgabeE3 && story.aufgabeE3()) || (story.aufgabeE4 && story.aufgabeE4());
+  const a3 = (story.aufgabeE3 && story.aufgabeE3()) || (story.aufgabeE4 && story.aufgabeE4()) || (story.aufgabeE5 && story.aufgabeE5());
   if(a3) return a3;
   if(story.phase === 'freiflug') return ['Ziel', [
     ['Radar', 'fliege zum roten Punkt'],
@@ -2484,6 +2666,8 @@ window.STORY_HOOK = function(){
   hookWarp();
   hookMars();
   hookVerdreht();
+  hookKunstflugKamera();
+  hookGerade();
   hookLoop();
 };
 window.STORY_START = function(){
