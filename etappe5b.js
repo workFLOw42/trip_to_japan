@@ -409,10 +409,13 @@ function sonarKarte(dt){
 function hookE5b(){
   // Einsteigen ins Strand-U-Boot (Engine, ueber den Ring): in Etappe 5 startet die Schlucht
   const subOrig = evaBoardHarborSub;
+  // Der Ring liegt am lila Punkt, das echte Boot (und die Schlucht) am Engine-Liegeplatz: kurze Schwarzblende, im
+  // Schwarzen einsteigen. So faellt der Ortswechsel nicht auf (Live-Hinweis 08.10.2026).
   evaBoardHarborSub = function(){
-    const r = subOrig.apply(this, arguments);
-    if(hier() && !story.phase && isSub()) ubootEinsteigen5();
-    return r;
+    if(!hier() || story.phase || sb.blende){ const r = subOrig.apply(this, arguments); if(hier() && !story.phase && isSub()) ubootEinsteigen5(); return r; }
+    const args = arguments, self = this;
+    sb.blende = true;
+    story.schwarz('', 0.4, () => { sb.blende = false; subOrig.apply(self, args); if(hier() && !story.phase && isSub()) ubootEinsteigen5(); });
   };
   // Waehrend das Pad offen ist: keine Steuerung, kein Sonar (B gehoert dem Pad)
   const physOrig = stepPhysics;

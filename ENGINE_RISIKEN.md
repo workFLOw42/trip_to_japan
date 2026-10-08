@@ -61,6 +61,11 @@ Kategorie **akut** = betrifft Etappe 1/2 schon jetzt · **später** = betrifft g
 - R2: Taste V (`cycleView`) verstellte den Kameraabstand, auf den die Story-Kameras nicht ausgelegt sind → in der Story gesperrt (`cycleView` ist leer, `viewMode` bleibt 0). Damit ersetzt die Story eine Engine-Funktion mehr (R16).
 - R4: R / Start setzte mitten im Flug zurück (Ausweg aus einem 7-Tage-Absturz) → manueller Reset gesperrt. `resetPlane` wirkt nur noch nach einem Absturz (Engine-Löschsequenz oder R zum Abkürzen); in Flugaufgaben wird daraus das Etappen-Ende mit 7 Tagen.
 - R12: Wüstenboden wurde jedes Bild neu gerechnet (5,3 ms) → das Gitter rastet in der Wüste auf 62,5 m ein (`recycleWorld`-Wrapper), gerechnet wird nur bei einem Rasterwechsel. Gemessen: im Stand 0,01 ms, bei 240 m/s im Mittel 0,54 ms (einzelne Bilder mit Rasterwechsel weiter ~8 ms).
+- R8 (Etappe 6): Fuji nur 2.000 m hoch, Alpha Jet `maxAlt` per `STORY_HOOK` auf 3.000 m angehoben. Die Vulkanhöhle liegt als
+  eigene Szene weit außerhalb der Welt auf 100 m Höhe (keine Höhengrenze, kein Gelände). Der Fuji hat ein eigenes Material
+  ohne Nebel (`fog: false`), sonst verschwindet er bei 4,6 km im Engine-Nebel (3 km).
+- Performance Höhle: PointLights (56) und die ganze Röhre auf einmal → erstes Bild 2,9 s, 69 ms je Bild. Jetzt ohne
+  PointLights (selbstleuchtender Fels), Röhre in Abschnitten (400 m, 4 voraus, 1 dahinter sichtbar) → 23 ms / 16 ms.
 - R7: Story-`setTimeout`s liefen in Pause und Globus weiter → `story.spaeter(sek, fn)` zählt über die Spielzeit (steht bei offener Anleitung und im Globus). Anleitung hält zusätzlich Ansagen an, die Aufgabe nur die Ansagen (Spiel läuft). Beim Start einer Globus-Reise werden Ansagen und Timer der alten Etappe verworfen. Schwarzblende und Untertitel-Takt bleiben bei `setTimeout`.
 - R14: Etappe-1-Kulissen wurden nur ausgeblendet → `e1aufraeumen` entfernt Schule, Ring, Marken samt Schildern und Stein und gibt Geometrie, Material und Texturen frei (`story.entsorgen`, auch für spätere Etappen nutzbar).
 - R15: Globus-Fäden wurden jedes Bild neu gebaut, aber nie freigegeben → vor dem Neuzeichnen `entsorgen`. Gemessen: Geometrien im Globus bleiben stabil (416 → 417 in 3 s).

@@ -14,10 +14,11 @@ Technische Basis ist die Engine des **[Flugspiel](https://github.com/workFLOw42/
 
 ## Stand
 
-Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 4** und in Etappe 5 das **Air Race** (U-Boot-Schlucht folgt), danach folgt
+Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 5** (beide Wege) und in Etappe 6 der **Alpha Jet** (Shinkansen folgt), danach folgt
 vorerst ein Platzhalter.
 
-**Startmenü:** *Neues Spiel* oder – zum Testen – direkt **E2 … E6** (linker Stick / ← → wählen, A / Enter starten).
+**Startmenü:** *Neues Spiel* oder – zum Testen – direkt **E2 … E6** und **E6 Höhle** (springt direkt in den Autopiloten
+der Vulkanhöhle) (linker Stick / ← → wählen, A / Enter starten).
 
 ### Etappe 1 – Der Aufbruch am Strand
 - **Intro:** Kenji kommt aus der Schule, die Kamera fährt heran und schwenkt hinter ihn, die Erzählstimme
@@ -94,7 +95,30 @@ Flieger (am Himmel fliegen trotzdem welche).
   am Rand zeigt zum aktuellen, wenn es nicht im Bild ist.
   Strafen: Tor verpasst +5 s, Pylon gestreift +3 s, zu hoch +2 s, Messerflug/Schraube vergessen +3 s, Looping ausgelassen
   +15 s. Im Zielring stoppt die Zeit, danach **sauber auf der Insel landen** (20 % Schub). Absturz → **7 Tage**.
-- **U-Boot-Schlucht („1 Tag“):** folgt (Code 14 02 mit nur einem Versuch, dann Slalom durch eine Unterwasser-Schlucht).
+- **U-Boot-Schlucht („1 Tag“):** U-Boot und gelber Ring an der Küste neben einem kleinen Dorf (Pandas, Möwen). Nach dem
+  Einsteigen Schwarzblende, dann das Code-Feld: **14 02** mit nur **einem Versuch** (der Code stand nur in Etappe 1 im
+  U-Boot). Danach durch die Felsenschlucht: Wände, Decke, Felsbogen, Felsrippe, Sonar-Karte nach dem Ping (B).
+  Höchstens **2 Kontakte**, Zeitlimit **250 s**. Geschafft → **1 Tag**; falscher Code, 3. Kontakt oder Zeit um → **7 Tage**.
+
+### Etappe 6 – Japan (Fuji)
+Stadt auf der Startinsel mit Hochhäusern, Möwen und Mini-Godzillas; hinter Kenji stapft ein **Riesen-Godzilla** durch die
+Häuser. Links ein Bahnhof mit dem **Shinkansen**, rechts die Startbahn mit dem **Alpha Jet**. Voraus der **Mount Fuji**
+(2 km hoch, steht im Meer), dahinter ein zweiter **Flughafen am Strand** mit C-400, Mini-Godzillas, Samurai (sitzend und
+stehend) und Möwen. Musik „Ancient Japan“.
+- **Alpha Jet („1 Tag“):** keine Ansage, nur die Startsequenz mit Countdown. Verpasst → Flughafenpolizei, eine Woche
+  Gefängnis → **7 Tage**. Geschafft → selbst starten und dem roten Radarpunkt bis kurz vor den Fuji folgen. Dort
+  Schwarzblende, und der Jet steckt in einer **Höhle im Vulkan**:
+  - **Autopilot** fliegt die ersten ~18 s, dazu die Ansage *„Wie bist du hier reingeraten? … Drei, Zwei, Eins, LOS!“*.
+  - Danach **selbst fliegen** (~15 s), immer Vollgas, eng und kurvig; das Gyroskop ist ausgeblendet. Jede Berührung →
+    Schwarzblende, Krankenhaus → **7 Tage**; unter 100 % Schub → zu langsam → **7 Tage**.
+  - Am Ende ein **Ausgang ins Licht**, noch 0,5 s weiter, dann Schwarzblende und eine **Filmsequenz** (~3 s): der Jet
+    schießt mit Überschallknall und Dampfkegel senkrecht aus dem Krater, dicht gefolgt vom **Ausbruch**; die Kamera zieht
+    auf (Krater unteres Drittel, Jet oberes Drittel).
+  - Schwarzblende, dann normal weiter: 500 m Höhe, 50 % Schub auf der Strandseite des Fuji, die Ansage *„Du bist der
+    Wahnsinn – ein wahres Fliegerass! …“* und landen am Strand-Flughafen (Radarpunkt = Mitte der Bahn) → **1 Tag**.
+    Absturz → Krankenhaus → **7 Tage**.
+- **Shinkansen („4 Tage“):** folgt (im gelben Ring am Bahnsteig kommt vorerst nur der Hinweis „kommt bald“).
+
 Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, gelb = Etappen, lila = Fukuoka).
 
 ## Steuerung zu Fuß
@@ -123,15 +147,32 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `etappe3.js` | Etappe 3 (Fluss, Feuerwehrboot, X-Wing ohne Kurzschluss) |
 | `etappe4.js` | Etappe 4: Hafen-Welt und Container-Kran |
 | `etappe4b.js` | Etappe 4: Schnellboot-Flucht (Kanal, Polizei) |
-| `etappe5.js` | Etappe 5: Insel, Skyline, Air Race mit der Mustang |
+| `etappe5.js` | Etappe 5: Insel, Skyline, Küstendorf, Air Race mit der Mustang |
+| `etappe5b.js` | Etappe 5: U-Boot an der Küste, Code-Feld, Felsenschlucht mit Sonar-Karte |
+| `etappe6.js` | Etappe 6: Japan – Stadt mit Bahnhof (Shinkansen, 6a folgt) und Alpha Jet, Startsequenz, Hinflug, Fuji (2 km) im Meer, Strand-Flughafen |
+| `etappe6b.js` | Etappe 6b: Höhle im Vulkan als eigene Szene (Autopilot, kurvige Röhre in Abschnitten, Ausgang ins Licht), Filmsequenz mit Ausbruch, Landung am Strand. Der frühere Senkrechtschacht liegt in `_intern/archiv/e6b_senkrechtschacht/` |
 | `flucht_glb.js` | Schnellboot und Polizeiboot (verkleinert) als Base64 |
 | `hafen_glb.js` | Frachtschiff (verkleinert), Container und Kran als Base64 |
 | `kenji_glb.js` | Kenji als eingebettetes GLB (aus `models/kenji.glb`) |
+| `schildkroete_glb.js` | Schildkröten für Etappe 3 (verkleinert und aufgehellt, 1,5 MB) |
+| `krokodil_glb.js` | Krokodile im Fluss (Etappe 3), unverändert (Lizenz ND), 7,7 MB |
+| `tiere.js` | Tiere und Inseln: fliegende Möwen (Etappe 1, 4, 5, 6 und an jeder Insel), Hunde (1), Pandas (5), Godzillas und Samurai (6), Mount Fuji statt der Kegel-Hügel |
+| `fuji_glb.js` | Mount Fuji für alle Inselberge (vereinfacht: 2.752 Dreiecke, Höhe und Farbe vom Original abgetastet) |
+| `zug_glb.js` | Shinkansen (Etappe 6): Triebwagen und Mittelwagen aus dem Original geschnitten, hinterer Triebwagen gedreht (3,3 MB statt 26 MB) |
+| `godzilla_glb.js` | Godzilla (Etappe 6): Mini-Godzillas (1 m) in der Stadt und am Strand-Flughafen, Riesen-Godzilla (60 m) hinter der Stadt; verkleinert und aufgehellt |
+| `samurai_glb.js` | Samurai am Strand-Flughafen (Etappe 6), sitzend und stehend |
+| `moewe_glb.js` | Möwen sitzend und fliegend (Etappe 1, 4, 5) |
+| `panda_glb.js` | Panda (Etappe 5) |
+| `hund_glb.js` | Labrador (Etappe 1), verkleinert (4,4 MB statt 9,3 MB) |
+| `musik_snd.js` | Musik für Etappe 1 („Summer Vacation“, unter der Intro-Ansage leiser), 4 („Atlas Thailand“), 5 („Chinese Flute“) und 6 („Ancient Japan“), spielt zu Beginn leise (`story.etappenMusik`) |
+| `fluss_snd.js` | Musik für Etappe 3 („Atlas Maldives“, 2:35), spielt zu Beginn leise wie die Wüstenmusik |
+| `kamel_glb.js` | Kamel für die Herden in Etappe 2 (verkleinert: nur Grundfarbe als 512er JPEG, 1,7 MB) |
+| `c400_glb.js` | Transall-Modell: C-400 als eingebettetes GLB (aus `models/c400.glb`, Nase gedreht); die alte C-160 (`transall_glb.js`) ist aus dem Spiel entfernt, `tools/build_engine.ps1` kopiert sie nicht mehr. Flugwerte bleiben die der Transall |
 | `wueste_snd.js` | Wüsten-Sounds (Musik, Wind) als Base64 |
 | `sw.js`, `manifest.json` | Offline-Cache und App-Installation (PWA) |
 | `ENGINE_RISIKEN.md` | bekannte Stolperstellen der Engine-Übernahme |
 
-Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `etappe2.js` → `etappe3.js` → `hafen_glb.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `engine/engine.js`. Die Engine ruft am Ende
+Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `schildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `engine/engine.js`. Die Engine ruft am Ende
 ihres Boot-Blocks `STORY_HOOK` (Wrapper setzen) und `STORY_START` (Startszene) auf – die zwei Zeilen fügt das Build-Skript ein.
 
 **Welten:** Jede Etappe baut ihre Kulisse in eine eigene Gruppe – `story.welt(n).add(obj)`, nie `scene.add(obj)`.
@@ -177,6 +218,10 @@ Dieses Spiel wäre ohne die großartige Arbeit vieler Künstlerinnen und Künstl
 | [Intermediate Advanced Snowboard](https://sketchfab.com/3d-models/intermediate-advanced-snowboard-267e04a025434d7d8587ec2ee60ad62e) | **Final Render Animation Studio** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – skaliert, Material auf PBR umgestellt |
 | Arabic Islamic Music (46 s) | **bombinsound** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
 | Desert Wind 2 | **tanweraman** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
+| Atlas Maldives (2:35, Etappe 3) · Atlas Thailand (Etappe 4) | **vadim_makes_sound** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
+| Chinese Flute Relaxing Music (short, Etappe 5) | **nourishedbymusic** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
+| Summer Vacation (Etappe 1) | **kulakovka** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
+| Ancient Japan (Etappe 6) | **alec_koff** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
 | [Building crane low poly](https://sketchfab.com/3d-models/building-crane-low-poly-52d3ffdc37f844a892bebbd7e76f1939) | **Mostafa Hamed** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – Haken und Laufkatze ersetzt |
 | [Cargo Ship 06 without containers](https://sketchfab.com/3d-models/cargo-ship-06-without-containers-c73ae6cc314941069a0e3a7ca6acc26d) | **gogiart** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – verkleinert (Dreiecke, Texturen) |
 | [Container](https://sketchfab.com/3d-models/container-92bd84031ebc4ddcbf3b3d3689c4bf31) | **H.A.K_Niazi** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – skaliert, eingefärbt |
@@ -190,7 +235,17 @@ Rigging und Animationen der Spielfigur: **[Mixamo](https://www.mixamo.com)** (Ad
 | Modell | Künstler/in (Sketchfab) |
 |---|---|
 | X-Wing 2.0 | **GaryPhelps** |
-| Transall C-160 · Dornier Alpha Jet A | **42manako** |
+| C-400 (als Transall) · Dornier Alpha Jet A | **42manako** |
+| Bactrian Camel (Low Poly), CC-BY-NC-SA-4.0 | **Nyilonelycompany** |
+| Tortoise - turtle, CC-BY-4.0 | **Daniel Zuleta Art** |
+| Ring-Billed Gull · Ring-Billed Gull – in Flight, CC-BY-4.0 | **Oregon State University Ecampus** |
+| Panda, CC-BY-4.0 | **firoh** (Assets 4 Games) |
+| Labrador Dog, CC-BY-4.0 | **kenchoo** |
+| Nile Crocodile Swimming, CC-BY-NC-ND-4.0 (unverändert) | **Monster** |
+| Mount Fuji – Honshu, Japan, CC-BY-4.0 (vereinfacht) | **Rafael Kenji Horota** |
+| N700-3000 Series Shinkansen, CC-BY-4.0 (gekürzt) | **Layo** (bciarfello) |
+| Godzilla, CC-BY-4.0 (verkleinert) | **savounited** |
+| Susanoo (Samurai), CC-BY-4.0 | **tranb95** |
 | P-51 Mustang | **UlissesVinicios** |
 | Canadair CL-215 | **AlessioPassera** |
 | Airbus A380-800 | **OUTPISTON** |

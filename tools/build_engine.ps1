@@ -38,6 +38,8 @@ $engine = "// AUTOMATISCH ERZEUGT aus ../Flugspiel/Flugspiel.html (tools/build_e
 $head = @()
 $assets = @()
 foreach($ln in $lines[0..($start-1)]){
+  # Transall-Modell: im Spiel die C-400 (c400_glb.js im Projekt-Root) statt der C-160 – die alte Datei wird gar nicht erst kopiert
+  if($ln -match '<script src="transall_glb\.js"></script>'){ $head += '<script src="c400_glb.js"></script>'; continue }
   if($ln -match '<script src="([^"]+)"></script>'){ $assets += $Matches[1]; $head += ($ln -replace 'src="', 'src="engine/'); continue }
   $ln = $ln -replace '<title>Flugspiel</title>', '<title>Reise nach Japan</title>'
   $ln = $ln -replace 'content="Flugspiel"', 'content="Reise nach Japan"'
@@ -54,14 +56,29 @@ $out = ($head -join "`n") + "`n" +
   '<script src="kenji_glb.js"></script>' + "`n" +
   '<script src="story.js"></script>' + "`n" +
   '<script src="wueste_snd.js"></script>' + "`n" +
+  '<script src="kamel_glb.js"></script>' + "`n" +
   '<script src="etappe2.js"></script>' + "`n" +
+  '<script src="schildkroete_glb.js"></script>' + "`n" +
+  '<script src="fluss_snd.js"></script>' + "`n" +
+  '<script src="krokodil_glb.js"></script>' + "`n" +
   '<script src="etappe3.js"></script>' + "`n" +
   '<script src="hafen_glb.js"></script>' + "`n" +
+  '<script src="musik_snd.js"></script>' + "`n" +
+  '<script src="moewe_glb.js"></script>' + "`n" +
+  '<script src="hund_glb.js"></script>' + "`n" +
+  '<script src="panda_glb.js"></script>' + "`n" +
+  '<script src="fuji_glb.js"></script>' + "`n" +
+  '<script src="tiere.js"></script>' + "`n" +
   '<script src="etappe4.js"></script>' + "`n" +
   '<script src="flucht_glb.js"></script>' + "`n" +
   '<script src="etappe4b.js"></script>' + "`n" +
   '<script src="etappe5.js"></script>' + "`n" +
   '<script src="etappe5b.js"></script>' + "`n" +
+  '<script src="zug_glb.js"></script>' + "`n" +
+  '<script src="godzilla_glb.js"></script>' + "`n" +
+  '<script src="samurai_glb.js"></script>' + "`n" +
+  '<script src="etappe6.js"></script>' + "`n" +
+  '<script src="etappe6b.js"></script>' + "`n" +
   '<script src="engine/engine.js"></script>' + "`n" +
   "</body>`n</html>`n"
 [IO.File]::WriteAllText((Join-Path $root 'index.html'), $out, $utf8)

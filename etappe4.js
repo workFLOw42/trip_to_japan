@@ -214,6 +214,120 @@ function baueHafen(){
   });
   // Kran
   ladeGlb(window.HAFEN_KRAN_GLB, (g) => baueKran(g, w));
+  ladeMoewen(w);
+  baueHinterland(w);
+}
+
+// ---- Sitzende Moewen am Kai (die fliegenden kommen aus tiere.js) ---------------------------------------
+// Modell: Ring-Billed Gull by Oregon State University Ecampus, CC-BY-4.0 (moewe_glb.js), Skelett + "Head Turn" 2,5 s;
+// jedes Tier ein eigener Klon (cloneSkinned der Engine) mit eigenem Mixer und Zeitversatz. Kopf im Modell auf +Z.
+// Live-Wunsch: "etwas zu wenig und fallen auf dem Weg zum Rennboot nicht auf" -> 0,7 m statt 0,45 m (echt ~45 cm,
+// aus der Verfolgerkamera aber kaum zu sehen) und doppelt so viele, die meisten an der Kaikante zwischen Kenjis
+// Ankunft (-30, -30) und dem Rennboot-Ring (6, -110). kante: true = lockere Reihe an der Kante, Blick aufs Wasser.
+const MOEWE_SITZ_L = 0.7;
+const MOEWEN_SITZ = [
+  { x: 10.6, z: -40, n: 6, kante: true }, { x: 10.6, z: -68, n: 5, kante: true }, { x: 10.6, z: -92, n: 4, kante: true },
+  { x: -8, z: -58, n: 5 }, { x: -20, z: -84, n: 4 }, { x: -2, z: -128, n: 5 },          // auf dem Weg zum Ring
+  { x: 10.6, z: 40, n: 5, kante: true }, { x: 10.6, z: 120, n: 6, kante: true }, { x: 10.6, z: -150, n: 4, kante: true },
+  { x: -18, z: -12, n: 3 }, { x: -45, z: 60, n: 4 },
+];
+const moewen = [];
+function moeweVorlage(gltf, mass){
+  const obj = gltf.scene;
+  obj.traverse(o => { if(o.isMesh){ o.frustumCulled = false; o.castShadow = false; } });
+  // Groesse aus der gehaeuteten Haltung messen (Bindepose-Box stimmt bei Skinned Meshes nicht)
+  const mx = new THREE.AnimationMixer(obj); if(gltf.animations[0]) mx.clipAction(gltf.animations[0]).play(); mx.update(0.01);
+  obj.updateMatrixWorld(true);
+  const bb = new THREE.Box3(), v = new THREE.Vector3();
+  obj.traverse(m => { if(!m.isSkinnedMesh) return; const n = m.geometry.attributes.position.count;
+    for(let i = 0; i < n; i += 5){ m.boneTransform(i, v); v.applyMatrix4(m.matrixWorld); bb.expandByPoint(v); } });
+  obj.scale.setScalar(mass / bb.getSize(new THREE.Vector3()).z);
+  obj.position.y -= bb.min.y * obj.scale.x;          // Fuesse auf y = 0
+  mx.stopAllAction(); mx.uncacheRoot(obj);
+  const tpl = new THREE.Group(); tpl.add(obj);
+  return { tpl, clip: gltf.animations[0] };
+}
+function ladeMoewen(w){
+  moewen.length = 0;
+  let s = 53;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  ladeGlb(window.MOEWE_SITZ_GLB, (g) => {
+    if(!e4()) return;
+    const v = moeweVorlage(g, MOEWE_SITZ_L);
+    for(const gr of MOEWEN_SITZ){
+      const blick = gr.kante ? Math.PI / 2 : rnd() * Math.PI * 2;     // an der Kante: Blick aufs Wasser (+x; Kopf +Z -> yaw pi/2)
+      for(let i = 0; i < gr.n; i++){
+        const x = gr.kante ? gr.x + (rnd() - 0.5) * 0.8 : gr.x + (rnd() - 0.5) * 6;
+        const z = gr.kante ? gr.z + (i - (gr.n - 1) / 2) * (0.9 + rnd() * 0.8) : gr.z + (rnd() - 0.5) * 6;
+        const k = cloneSkinned(v.tpl);
+        k.position.set(Math.min(KAI_X - 0.4, x), KAI_Y, z);
+        k.rotation.y = blick + (rnd() - 0.5) * (gr.kante ? 1.2 : 2.5);
+        k.scale.setScalar(0.9 + rnd() * 0.2);
+        w.add(k);
+        let mixer = null;
+        if(v.clip){ mixer = new THREE.AnimationMixer(k); mixer.clipAction(v.clip).play(); mixer.setTime(rnd() * v.clip.duration); mixer.timeScale = 0.8 + rnd() * 0.4; }
+        moewen.push({ k, mixer });
+      }
+    }
+  });
+}
+const MOEWE_SICHT = 300, MOEWE_ANIM = 120;          // m: bis hier gezeichnet / bis hier animiert
+function updateMoewen(dt){
+  const cp = camera.position, auf = locale === 'earth';
+  for(const o of moewen){
+    const d = Math.hypot(o.k.position.x - cp.x, o.k.position.z - cp.z);
+    o.k.visible = auf && d < MOEWE_SICHT;
+    if(o.k.visible && o.mixer && d < MOEWE_ANIM) o.mixer.update(dt);
+  }
+}
+
+// ---- Hinter Kenji: Containerlager, dahinter eine grosse Stadt ----------------------------------------------
+// Live-Wunsch: hinter Kenji (er schaut zum Rennboot, also nach Nordost) lag nur leerer Beton. Jetzt erst ein
+// Containerlager (Stapel bis 4 hoch, Gassen dazwischen), dahinter eine Hochhaus-Stadt wie die Skyline in Etappe 5.
+// Containerfarben wie die Ladung (FARBEN); als InstancedMesh-Kisten mit Riffelstreifen (ein Aufruf je Farbe).
+// Lager: x -110..-60, z 0..150 (hinter Kenji, abseits von Kran, Ring und X-Wing bei (-80, 80) -> dort eine Gasse frei).
+const LAGER = { x0: -112, x1: -58, z0: 10, z1: 150 };
+function baueHinterland(w){
+  let s = 211;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const box = new THREE.BoxGeometry(1, 1, 1);
+  const proFarbe = FARBEN.map(() => []);
+  for(let x = LAGER.x0; x <= LAGER.x1; x += CONT.b * 4 + 5){              // Reihen zu je 4 Containern quer, 5 m Gasse
+    for(let z = LAGER.z0; z <= LAGER.z1; z += CONT.l + 1.2){
+      if(Math.hypot(x + 80, z - 80) < 22) continue;                        // X-Wing-Platz (-80, 80) frei
+      if(rnd() < 0.12) continue;                                           // Luecken im Lager
+      for(let q = 0; q < 4; q++){
+        const hoch = 1 + Math.floor(rnd() * 4);
+        for(let h = 0; h < hoch; h++){
+          const m = new THREE.Matrix4().compose(new THREE.Vector3(x + q * (CONT.b + 0.15), KAI_Y + CONT.h * (h + 0.5), z),
+            new THREE.Quaternion(), new THREE.Vector3(CONT.b, CONT.h, CONT.l));
+          proFarbe[Math.floor(rnd() * FARBEN.length)].push(m);
+        }
+      }
+    }
+  }
+  // Stadt: dicht hinter dem Lager, nach hinten hoeher (Hochhaeuser bis ~260 m), bis 1,6 km weit
+  const tuerme = [0x9aa7b4, 0x6f7f8f, 0xc9d2da, 0x4f5d6b, 0xb7c4cf, 0x8c97a1, 0xd8cbb0];
+  const proTurm = tuerme.map(() => []);
+  for(let i = 0; i < 520; i++){
+    const tief = Math.pow(rnd(), 0.8);                                      // 0 = gleich hinter dem Lager
+    const x = -150 - tief * 1500, z = -900 + rnd() * 2200;
+    if(x > -260 && z < -40) continue;                                       // vorn links frei (Kanalufer-Haeuser stehen dort)
+    const b = 18 + rnd() * 30, t = 18 + rnd() * 30;
+    const h = 20 + Math.pow(rnd(), 1.6) * (60 + 220 * Math.min(1, tief * 1.6));
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(x, KAI_Y + h / 2 - 1, z),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (rnd() - 0.5) * 0.3), new THREE.Vector3(b, h, t));
+    proTurm[Math.floor(rnd() * tuerme.length)].push(m);
+  }
+  const setze = (liste, farben) => liste.forEach((ms, i) => {
+    if(!ms.length) return;
+    const inst = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ color: farben[i] }), ms.length);
+    ms.forEach((m, k) => inst.setMatrixAt(k, m)); inst.frustumCulled = false; w.add(inst);
+  });
+  setze(proFarbe, FARBEN); setze(proTurm, tuerme);
+  // Betonflaeche bis zur Stadt (der Kai-Klotz endet bei x -120)
+  const flaeche = new THREE.Mesh(new THREE.BoxGeometry(1700, KAI_Y + 3, 2400), new THREE.MeshLambertMaterial({ color: 0x6e6a64 }));
+  flaeche.position.set(-120 - 850, (KAI_Y - 3) / 2, 300); w.add(flaeche);
 }
 
 // Kran: Teile des Modells benutzen – Null_1 dreht (Ausleger), Cube = Laufkatze, Sweep_3 = Haken (weg).
@@ -801,11 +915,13 @@ function hookKran(){
 }
 
 function updateE4(dt){
+  story.etappenMusik(4, window.MUSIK_SND && window.MUSIK_SND.e4, dt || 0);   // story.js: zu Beginn leise, wie Etappe 2
   if(!e4()) return;
   updateMarken();
   if(hafen.ring) hafen.ring.zeigen(!!eva && locale === 'earth' && !story.phase);
   if(hafen.ringBoot) hafen.ringBoot.zeigen(!!eva && locale === 'earth' && !story.phase);
   if(!kran.aktiv) kranZeigen();
+  updateMoewen(dt || 0);
   if(story.meerSchiffe4 && locale === 'earth') story.meerSchiffe4(dt);
 }
 story.updateE4 = updateE4;

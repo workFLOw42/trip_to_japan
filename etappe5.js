@@ -19,8 +19,31 @@ const RW_HALB = 130;
 const MUSTANG = { x: 0, z: RW_HALB - 20, yaw: 0 };   // +z-Ende der Bahn, Nase nach -z (die ganze Bahn voraus)
 // U-Boot-Ring = der Strandring aus Etappe 1 (dieselbe Startinsel): Engine-Einstieg ueber harborSubNear/imRing.
 // Kenji kommt zwischen Mustang und Ring an, damit beide gleich weit weg sind (der Ring liegt am anderen Ufer).
-function ubootRing(){ return (story.ubootRingPlatz && story.ubootRingPlatz()) || { x: 200, z: -260 }; }
-function ankunft(){ const r = ubootRing(); return { x: (MUSTANG.x + r.x) / 2 + 30, z: (MUSTANG.z + r.z) / 2 }; }
+// Einstieg U-Boot in Etappe 5: Ring am Nordwest-Ufer (lila Punkt, Screenshot 08.10.2026 11:26), story.js fragt ihn
+// ueber story.ringPlatzE5 ab (imRing, Marke, Radar). Das echte Boot (Engine-Liegeplatz) und die Schlucht bleiben, wo sie
+// waren: nach dem Einsteigen kommt eine Schwarzblende (etappe5b.js), die neue Szene darf woanders liegen.
+// Live-Feedback (08.10.2026): der lila Punkt lag zu weit weg (250 m). Jetzt 45 Grad links von Kenjis Blick: Sandkante
+// nach 208 m, offenes Wasser nach 246 m (C:\tmp\sfg\e5p\links.js); im Startbild am linken Rand.
+const RING5 = { x: -188, z: 171 };                 // Wiese, 8 m vor der Sandkante
+const UBOOT5 = { x: -284, z: 178, rot: 1.649 };    // Kulissen-U-Boot im Wasser, Bug aufs Meer (frei geprueft mit subBerthFree)
+const DORF5 = { x: -222, z: 122 };                 // Dorf bleibt am ersten Ringplatz (Live-Feedback: "lass das Dorf da stehen")
+function ubootRing(){ return RING5; }
+story.ringPlatzE5 = () => e5() ? RING5 : null;
+// Live-Wunsch (Screenshot 08.10.2026 11:26): Kenji steht seitlich der Bahn, die Mustang rechts vorn, das U-Boot links
+// hinten am Nordwest-Ufer (lila Punkt). Aus dem Screenshot zurueckgerechnet (C:\tmp\sfg\e5p\suche2.js, 11 px Rest):
+// Kenji (11, 155), Blick 49,5 Grad; der lila Punkt liegt bei Winkel ~110 Grad von der Inselmitte.
+const START5 = { x: 11, z: 155, yaw: 49.5 * Math.PI / 180 };
+function ankunft(){ return { x: START5.x, z: START5.z }; }
+// Kulissen-U-Boot am lila Punkt: Engine-Modell (shipTemplates.sub), Bug aufs Meer. Das Inselboot der Engine (am
+// Liegeplatz) blendet hookE5 in Etappe 5 aus, damit es nicht zweimal da liegt.
+const kulisseUboot = { obj: null };
+function stelleUboot5(){
+  if(kulisseUboot.obj || typeof shipTemplates === 'undefined' || !shipTemplates.sub) return;
+  const o = shipTemplates.sub.clone(true);
+  o.position.set(UBOOT5.x, 0, UBOOT5.z); o.rotation.y = UBOOT5.rot;
+  o.userData.fremd = true;                                          // Engine-Modell: Materialien geteilt
+  story.welt(5).add(o); kulisseUboot.obj = o;
+}
 
 // ---- Parcours ---------------------------------------------------------------------------------
 // Live-Wunsch: Looping, Steilflug und Messerflug gehoeren hinein (die Schraube im Steilflug ist wieder raus: zwischen
@@ -480,11 +503,12 @@ function etappe5Start(){
   evaExit();
   const an = ankunft(), rg = ubootRing();
   eva.group.position.set(an.x, ISLAND_Y, an.z);
-  const mx = (MUSTANG.x + rg.x) / 2 - an.x, mz = (MUSTANG.z + rg.z) / 2 - an.z;
-  eva.yaw = Math.atan2(-mx, -mz); eva.group.rotation.y = eva.yaw;
+  eva.yaw = START5.yaw; eva.group.rotation.y = eva.yaw;
   evaOrbit = 0; evaPitch = 0;
   snapCamera();
+  // Ring immer neu an den (Etappe-5-)Ringplatz; vorher blieb ein frueher gebauter am alten Platz stehen
   if(!welt.ringUboot) welt.ringUboot = story.einstiegsRing(rg.x, ISLAND_Y, rg.z);
+  baueUferdorf(DORF5);
   ladeParkMustang();
   if(park.obj) park.obj.visible = true;
   marken.length = 0;
@@ -496,8 +520,45 @@ function etappe5Start(){
 }
 story.etappe5Start = etappe5Start;
 
+// ---- Uferdorf beim U-Boot: Haeuser wie auf den Inseln (Wand + Walmdach), mit Kollision ---------------------------
+// Steht landeinwaerts hinter dem Einstiegsring, laesst den Weg Ring <-> Kenji frei. hitsBuilding kennt die Haeuser.
+const dorf = { haeuser: [], gebaut: false };
+function baueUferdorf(rg){
+  if(dorf.gebaut) return; dorf.gebaut = true;
+  const w = story.welt(5), info = islandInfo(0, 0);
+  const ix = (rg.x - info.wx), iz = (rg.z - info.wz), il = Math.hypot(ix, iz) || 1;
+  const rx = ix / il, rz = iz / il, tx = -rz, tz = rx;                  // radial nach aussen / tangential
+  let s = 307; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const wand = [0xe8ddc8, 0xd8c0a0, 0xcfe0ec, 0xf0d0c0].map(c => new THREE.MeshLambertMaterial({ color: c }));
+  const dach = [0xb04030, 0x8a5a3a, 0x9a4a4a].map(c => new THREE.MeshLambertMaterial({ color: c }));
+  const box = new THREE.BoxGeometry(1, 1, 1), kegel = new THREE.ConeGeometry(0.75, 1, 4);
+  // zwei Reihen: 28 und 50 m hinter dem Ring, seitlich -55..55 m, Luecke in der Mitte (Weg zu Kenji)
+  for(const [ab, n] of [[28, 6], [52, 5]]){
+    for(let i = 0; i < n; i++){
+      const q = -55 + 110 * (i + 0.5) / n + (rnd() - 0.5) * 6;
+      if(Math.abs(q) < 12) continue;                                     // Weg frei
+      const x = rg.x - rx * ab + tx * q, z = rg.z - rz * ab + tz * q;
+      if(!isOnLand(x, z) || (typeof isOnRunway === 'function' && isOnRunway(x, z))) continue;
+      const b = 7 + rnd() * 5, t = 7 + rnd() * 5, h = 5 + rnd() * 4;
+      const g = new THREE.Group();
+      const k = new THREE.Mesh(box, wand[Math.floor(rnd() * wand.length)]); k.scale.set(b, h, t); k.position.y = h / 2; g.add(k);
+      const d = new THREE.Mesh(kegel, dach[Math.floor(rnd() * dach.length)]); d.scale.set(Math.max(b, t), 3, Math.max(b, t));
+      d.rotation.y = Math.PI / 4; d.position.y = h + 1.5; g.add(d);
+      g.position.set(x, ISLAND_Y, z); g.rotation.y = Math.atan2(rx, rz) + (rnd() - 0.5) * 0.3;
+      w.add(g); dorf.haeuser.push({ x, z, r: Math.max(b, t) / 2 + 0.5, h: h + 3 });
+    }
+  }
+}
+story.e5dorf = dorf;
+story.e5ankunft = ankunft;                          // tiere.js: Pandas und Moewen bei Kenjis Ankunft
+
 // ---- Hooks ------------------------------------------------------------------------------------
 function hookE5(){
+  const hitsOrig = hitsBuilding;
+  hitsBuilding = function(x, y, z){
+    if(hier() && dorf.haeuser.some(hh => Math.hypot(x - hh.x, z - hh.z) < hh.r && y < ISLAND_Y + hh.h)) return true;
+    return hitsOrig.apply(this, arguments);
+  };
   // Auf der Race-Bahn darf niemand starten und landen: die Engine-Flotte sucht sich Inseln mit Bahn, und hier gibt es
   // nur diese eine. Am Himmel fliegen trotzdem Maschinen (story.js: himmelUpdate, nur Reiseflug, keine Landung).
   const updateTrafficOrig = updateTraffic, updateFlybyOrig = updateFlyby;
@@ -540,6 +601,12 @@ function hookE5(){
 }
 
 function updateE5(dt){
+  if(e5() && locale === 'earth'){
+    stelleUboot5();
+    if(kulisseUboot.obj) kulisseUboot.obj.visible = !isSub();       // eingestiegen: man sitzt im echten Boot
+    for(const [, isl] of islandCells) if(isl && isl.userData.harborSub) isl.userData.harborSub.visible = false;
+  }
+  story.etappenMusik(5, window.MUSIK_SND && window.MUSIK_SND.e5, dt || 0);   // story.js: zu Beginn leise, wie Etappe 2
   if(!e5()) return;
   ladeParkMustang();
   if(park.obj) park.obj.visible = locale === 'earth' && !(story.phase === 'airrace');

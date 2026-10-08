@@ -46,14 +46,15 @@ function flussLage(x, z){
   const d = (x - mitteX(z)) / n;              // senkrecht zur Flussrichtung
   return { d, rx: -dxdz / n, rz: -1 / n };    // Richtung flussabwaerts (nach -Z)
 }
+// Live-Wunsch: der Fluss laeuft in beide Richtungen endlos weiter (vorher endete er bei FLUSS_Z0 / FLUSS_Z1 in der
+// Wiese). Ausserhalb der Knicke ist mitteX konstant, der Fluss dort also gerade; FLUSS_Z0/Z1 begrenzen nur noch
+// Strecke, Felsen und das fein aufgeloeste Flussband.
 function imFluss(x, z, rand){
-  if(z > FLUSS_Z0 + 40 || z < FLUSS_Z1 - 40) return false;
   return Math.abs(flussLage(x, z).d) < FLUSS_B / 2 - (rand || 0);
 }
 // Bodenhoehe: Wiese 0,3 m (wie die Inseln), Ufer faellt ins Flussbett
 const WIESE_Y = 0.3, WASSER_Y = 0, BETT_Y = -3;
 function bodenY(x, z){
-  if(z > FLUSS_Z0 + 40 || z < FLUSS_Z1 - 40) return WIESE_Y;
   const a = Math.abs(flussLage(x, z).d);
   if(a >= FLUSS_B / 2 + UFER_SAND) return WIESE_Y;
   if(a >= FLUSS_B / 2) return WIESE_Y * (a - FLUSS_B / 2) / UFER_SAND;          // Sand faellt zum Wasser
@@ -151,8 +152,7 @@ function updateBoden(erzwingen){
     // Gitterpunkte in Flussnaehe liegen tief (unter dem Wasserband), sonst Wiese. Das Gitter ist
     // grob – daher grosszuegig absenken, das Wasserband deckt den Uebergang ab, die Ufer-Sandstreifen
     // liegen als eigenes Band darueber.
-    const imBereich = wz <= FLUSS_Z0 + 40 && wz >= FLUSS_Z1 - 40;
-    const nah = imBereich && Math.abs(wx - mitteX(wz)) < FERN
+    const nah = Math.abs(wx - mitteX(wz)) < FERN
       && Math.abs(flussLage(wx, wz).d) < FLUSS_B / 2 + UFER_SAND + SEA_STEP * 0.5;
     const y = nah ? BETT_Y : WIESE_Y;
     if(seaPos.getY(i) !== y){ seaPos.setY(i, y); hoeheNeu = true; }
@@ -173,7 +173,7 @@ function hookWelt3(){
   // Die Gelaende-Schicht gehoert zusammen (R10): alle Abfragen kennen denselben Fluss.
   isOnLand    = function(x, z){ return hier() ? !imFluss(x, z) && Math.abs(flussLage(x, z).d) >= FLUSS_B / 2 + UFER_SAND : isOnLandOrig.apply(this, arguments); };
   isOnBeach   = function(x, z){ if(!hier()) return isOnBeachOrig.apply(this, arguments);
-    const a = Math.abs(flussLage(x, z).d); return !imFluss(x, z) && a < FLUSS_B / 2 + UFER_SAND && z <= FLUSS_Z0 + 40 && z >= FLUSS_Z1 - 40; };
+    const a = Math.abs(flussLage(x, z).d); return !imFluss(x, z) && a < FLUSS_B / 2 + UFER_SAND; };
   isOpenWater = function(x, z){ return hier() ? imFluss(x, z) : isOpenWaterOrig.apply(this, arguments); };
   surfaceY    = function(x, z){ return hier() ? (imFluss(x, z) ? WASSER_Y : bodenY(x, z)) : surfaceYOrig.apply(this, arguments); };
   evaFootY    = function(x, z){ return hier() ? (imFluss(x, z) ? WASSER_Y : bodenY(x, z)) : evaFootYOrig.apply(this, arguments); };
@@ -224,31 +224,34 @@ function hookWelt3(){
 const kul = { baeume: null, felsen: [], feuer: [] };
 function baueKulisse(){
   const w = story.welt(3);
-  // Baeume beidseits des Flusses (fester Zufall), nicht auf dem Ufer. Live-Wunsch: mehr und hoeher, dichter
-  // am Fluss -> 1100 Stueck (vorher 420, 6-14 m) als InstancedMesh (drei Zeichenaufrufe statt 2200).
+  // Palmen beidseits des Flusses (fester Zufall), nicht auf dem Ufer. Live-Wunsch: Indischer Ozean statt
+  // Skandinavien -> Palmen statt Kegel-Nadelbaeumen. Ueber 8,7 statt 3,3 km Flusslaenge verteilt, weil der Fluss jetzt
+  // endlos ist. Live-Wunsch "mehr Palmen": 5000 statt 2900 (~1,7-fache Dichte wie vorher). InstancedMesh: Stamm + zwei Kronenfarben = drei Zeichenaufrufe.
+  // Ein Modell, je Palme gedreht (der Stamm neigt sich so in verschiedene Richtungen) und skaliert.
   let s = 7;
   const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  const stamm = new THREE.MeshLambertMaterial({ color: 0x6b4a2b });
-  const krone = new THREE.MeshLambertMaterial({ color: 0x2f6b2a });
-  const krone2 = new THREE.MeshLambertMaterial({ color: 0x3f7f30 });
+  const stamm = new THREE.MeshLambertMaterial({ color: 0x8b6a3e });
+  const krone = new THREE.MeshLambertMaterial({ color: 0x3f8a3a, side: THREE.DoubleSide });
+  const krone2 = new THREE.MeshLambertMaterial({ color: 0x55963a, side: THREE.DoubleSide });
+  const pg = palmenGeo();
   const g = new THREE.Group();
-  const N = 1100, stI = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.4, 0.6, 1, 6), stamm, N);
-  const krGeo = new THREE.ConeGeometry(1, 1, 7), krI = [new THREE.InstancedMesh(krGeo, krone, N), new THREE.InstancedMesh(krGeo, krone2, N)];
+  const Z_VON = FLUSS_Z0 + 3000, Z_LAENGE = FLUSS_Z0 - FLUSS_Z1 + 6000;
+  const N = 5000, stI = new THREE.InstancedMesh(pg.stamm, stamm, N);
+  const krI = [new THREE.InstancedMesh(pg.krone, krone, N), new THREE.InstancedMesh(pg.krone, krone2, N)];
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), yAchse = new THREE.Vector3(0, 1, 0);
   const frei = [xwingPlatz(), ankunft(), stegPlatz()];
   let nS = 0; const nK = [0, 0];
   for(let i = 0; i < N; i++){
-    const z = FLUSS_Z0 + 300 - rnd() * (FLUSS_Z0 - FLUSS_Z1 + 600);
+    const z = Z_VON - rnd() * Z_LAENGE;
     const seite = rnd() < 0.5 ? -1 : 1;
-    const ab = FLUSS_B / 2 + UFER_SAND + 12 + Math.pow(rnd(), 1.6) * 650;     // mehr nah am Fluss
+    const ab = FLUSS_B / 2 + UFER_SAND + 8 + Math.pow(rnd(), 1.6) * 650;      // mehr nah am Fluss
     const x = mitteX(z) + seite * ab;
-    const h = 10 + rnd() * 16, dick = 0.8 + h / 20, kk = rnd() < 0.5 ? 0 : 1, dreh = rnd() * 6.28;
-    if(Math.abs(flussLage(x, z).d) < FLUSS_B / 2 + UFER_SAND + 6) continue;   // in Kurven liegt der Fluss schraeg
+    const h = 8 + rnd() * 9, kk = rnd() < 0.5 ? 0 : 1, dreh = rnd() * 6.28;
+    if(Math.abs(flussLage(x, z).d) < FLUSS_B / 2 + UFER_SAND + 4) continue;   // in Kurven liegt der Fluss schraeg
     if(FEUER_DEF.some(f => Math.hypot(x - feuerPos(f).x, z - feuerPos(f).z) < 45)) continue;   // Feuerplatz frei
-    if(frei.some(p => Math.hypot(x - p.x, z - p.z) < 60)) continue;          // X-Wing, Ankunft, Steg frei
-    q.setFromAxisAngle(yAchse, dreh);
-    sc.set(dick, h * 0.45, dick); ps.set(x, WIESE_Y + h * 0.22, z); m4.compose(ps, q, sc); stI.setMatrixAt(nS++, m4);
-    sc.set(h * 0.32, h * 0.75, h * 0.32); ps.set(x, WIESE_Y + h * 0.62, z); m4.compose(ps, q, sc); krI[kk].setMatrixAt(nK[kk]++, m4);
+    if(frei.some(p => Math.hypot(x - p.x, z - p.z) < 45)) continue;          // X-Wing, Ankunft, Steg frei
+    q.setFromAxisAngle(yAchse, dreh); sc.setScalar(h / PALME_H); ps.set(x, WIESE_Y, z);
+    m4.compose(ps, q, sc); stI.setMatrixAt(nS++, m4); krI[kk].setMatrixAt(nK[kk]++, m4);
   }
   stI.count = nS; krI[0].count = nK[0]; krI[1].count = nK[1];
   for(const m of [stI, krI[0], krI[1]]){ m.frustumCulled = false; g.add(m); }   // Huelle gilt nur um den Ursprung
@@ -256,10 +259,16 @@ function baueKulisse(){
   // Fluss als Band entlang der Mittellinie: Wasser (WASSER_Y) und beidseits ein Sandstreifen, der
   // von der Wiese zum Wasser abfaellt. Fein aufgeloest (alle 8 m ein Querschnitt), damit das Ufer
   // scharf ist.
-  w.add(flussBand(-FLUSS_B / 2, FLUSS_B / 2, () => WASSER_Y, new THREE.MeshLambertMaterial({ color: 0x2c6a8f, transparent: true, opacity: 0.92 })));
+  const wasser = new THREE.MeshLambertMaterial({ color: 0x2c6a8f, transparent: true, opacity: 0.92 });
   const sand = new THREE.MeshLambertMaterial({ color: 0x8f7a4c });
-  w.add(flussBand(FLUSS_B / 2 - 2, FLUSS_B / 2 + UFER_SAND, (q) => 0.02 + WIESE_Y * q, sand));
-  w.add(flussBand(-FLUSS_B / 2 - UFER_SAND, -FLUSS_B / 2 + 2, (q) => 0.02 + WIESE_Y * (1 - q), sand));
+  const baender = [
+    [-FLUSS_B / 2, FLUSS_B / 2, () => WASSER_Y, wasser],
+    [FLUSS_B / 2 - 2, FLUSS_B / 2 + UFER_SAND, (q) => 0.02 + WIESE_Y * q, sand],
+    [-FLUSS_B / 2 - UFER_SAND, -FLUSS_B / 2 + 2, (q) => 0.02 + WIESE_Y * (1 - q), sand],
+  ];
+  for(const [d0, d1, hoehe, mat] of baender) w.add(flussBand(d0, d1, hoehe, mat));
+  baueFlussEnden(w, baender);
+  baueWiese(w);
   // Felsen im Fluss (sichtbar ueber Wasser)
   const fels = new THREE.MeshLambertMaterial({ color: 0x6f6a62 });
   for(const f of FELSEN){
@@ -276,9 +285,29 @@ function baueKulisse(){
 }
 // Band entlang des Flusses zwischen den Querabstaenden d0..d1 (Meter von der Mitte). hoehe(q) gibt
 // die Hoehe fuer q = 0 (bei d0) bis 1 (bei d1).
-function flussBand(d0, d1, hoehe, mat){
+// Palme in Bezugsgroesse PALME_H: leicht gebogener Stamm (neigt sich nach +X), Krone aus 9 flachen Wedeln, die
+// abwechselnd waagerecht und haengend vom Stammende abgehen (wie die Oasenpalmen in Etappe 2, nur flach statt rund).
+const PALME_H = 12, PALME_NEIG = 1.8;
+function palmenGeo(){
+  const stamm = new THREE.CylinderGeometry(0.22, 0.4, PALME_H, 6, 6, true).translate(0, PALME_H / 2, 0);
+  const p = stamm.attributes.position;
+  for(let i = 0; i < p.count; i++){ const f = p.getY(i) / PALME_H; p.setX(i, p.getX(i) + PALME_NEIG * f * f); }
+  stamm.computeVertexNormals();
+  const g = new THREE.Group();
+  for(let b = 0; b < 9; b++){
+    const w = new THREE.ConeGeometry(0.85, 5.5, 4, 1, true).translate(0, 2.75, 0).scale(1, 1, 0.22);
+    w.rotateX(b % 2 ? 1.95 : 1.6);                         // Spitze nach aussen, jeder zweite haengt
+    w.rotateY(b / 9 * Math.PI * 2 + (b % 2) * 0.2);
+    w.translate(PALME_NEIG, PALME_H - 0.2, 0);
+    g.add(new THREE.Mesh(w));
+  }
+  const krone = mergeGroup(g, null).geometry;              // Engine-Helfer: ein Puffer statt neun
+  for(const m of g.children) m.geometry.dispose();
+  return { stamm, krone };
+}
+function flussBand(d0, d1, hoehe, mat, zs){
   const STEP = 8, QUER = 4;
-  const zs = []; for(let z = FLUSS_Z0 + 60; z >= FLUSS_Z1 - 60; z -= STEP) zs.push(z);
+  if(!zs){ zs = []; for(let z = FLUSS_Z0 + 60; z >= FLUSS_Z1 - 60; z -= STEP) zs.push(z); }
   const pos = new Float32Array(zs.length * (QUER + 1) * 3), idx = [];
   zs.forEach((z, i) => {
     const L = flussLage(mitteX(z), z), nx = -L.rz, nz = L.rx, mx = mitteX(z);
@@ -296,6 +325,62 @@ function flussBand(d0, d1, hoehe, mat){
   geo.setIndex(idx); geo.computeVertexNormals();
   const m = new THREE.Mesh(geo, mat); m.material.side = THREE.DoubleSide;
   return m;
+}
+// Gerade Enden des Flusses: je ein ENDE_L langes Stueck ober- und unterhalb (dort ist der Fluss gerade, zwei
+// Querschnitte reichen). updateFlussEnden schiebt sie mit der Kamera, damit der Fluss nie aufhoert; an der
+// Strecke stossen sie genau an das feine Band (kein Ueberlappen, sonst wird das halbdurchsichtige Wasser dunkler).
+const ENDE_L = 12000, Z_OBEN = FLUSS_Z0 + 60, Z_UNTEN = FLUSS_Z1 - 60;
+const enden = [];
+function baueFlussEnden(w, baender){
+  enden.length = 0;
+  for(const [d0, d1, hoehe, mat] of baender){
+    const o = flussBand(d0, d1, hoehe, mat, [Z_OBEN + ENDE_L, Z_OBEN]); o.frustumCulled = false; w.add(o); enden.push({ m: o, oben: true });
+    const u = flussBand(d0, d1, hoehe, mat, [Z_UNTEN, Z_UNTEN - ENDE_L]); u.frustumCulled = false; w.add(u); enden.push({ m: u, oben: false });
+  }
+}
+// ---- Blumenwiese wie auf den Inseln (Etappe 1 und 5) -----------------------------------------------------------
+// Live-Wunsch: "die Wiese so blumig machen wie Etappe 1 und 5". Die Inseln tragen grassMat der Engine (gemalte Kachel
+// mit Blueten, GRASS_TILE_M je Kachel). Hier liegt diese Textur als je ein Streifen links und rechts des Flusses
+// knapp ueber dem Boden; der Streifen beginnt am Sandufer (FLUSS_B / 2 + UFER_SAND) und folgt dem Fluss in den
+// Kurven (Querschnitte wie das Flussband), gerade Enden laufen mit der Kamera wie updateFlussEnden.
+const WIESE_B = 1400;
+function wieseBand(seite, zs){
+  const Q = 6, pos = [], uv = [], idx = [];
+  zs.forEach((z, i) => {
+    const L = flussLage(mitteX(z), z), nx = -L.rz, nz = L.rx, mx = mitteX(z);
+    for(let k = 0; k <= Q; k++){
+      const d = seite * (FLUSS_B / 2 + UFER_SAND - 0.5 + WIESE_B * (k / Q) * (k / Q));      // innen dichter (Kurven)
+      const x = mx + nx * d, zz = z + nz * d;
+      pos.push(x, WIESE_Y + 0.03, zz); uv.push(x / GRASS_TILE_M, zz / GRASS_TILE_M);
+      if(i > 0 && k > 0){ const a = (i - 1) * (Q + 1) + k - 1, b = a + 1, c = i * (Q + 1) + k - 1, e = c + 1;
+        if(seite > 0) idx.push(a, b, c, b, e, c); else idx.push(a, c, b, b, c, e); }   // Normale nach oben (grassMat ist einseitig)
+    }
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, grassMat); m.frustumCulled = false; m.userData.fremd = true;   // Engine-Material: nicht freigeben
+  return m;
+}
+const wiesen = [];
+function baueWiese(w){
+  wiesen.length = 0;
+  const zs = []; for(let z = Z_OBEN; z >= Z_UNTEN; z -= 8) zs.push(z);
+  for(const seite of [-1, 1]){
+    w.add(wieseBand(seite, zs));
+    // gerade Enden: die UVs folgen der Weltposition nicht mit, deshalb in Kachelschritten verschieben
+    const o = wieseBand(seite, [Z_OBEN + ENDE_L, Z_OBEN]); w.add(o); wiesen.push({ m: o, oben: true });
+    const u = wieseBand(seite, [Z_UNTEN, Z_UNTEN - ENDE_L]); w.add(u); wiesen.push({ m: u, oben: false });
+  }
+}
+function updateFlussEnden(){
+  const cz = camera.position.z;
+  for(const e of wiesen){
+    let dz = e.oben ? Math.max(0, cz - Z_OBEN - ENDE_L / 2) : Math.min(0, cz - Z_UNTEN + ENDE_L / 2);
+    dz = Math.round(dz / GRASS_TILE_M) * GRASS_TILE_M;   // Kachelraster: das Muster springt nicht
+    e.m.position.z = dz;
+  }
+  for(const e of enden) e.m.position.z = e.oben ? Math.max(0, cz - Z_OBEN - ENDE_L / 2) : Math.min(0, cz - Z_UNTEN + ENDE_L / 2);
 }
 function feuerPos(f){
   const L = flussLage(mitteX(f.z), f.z);
@@ -344,8 +429,10 @@ function xwingPlatz(){
   const sp = stegPlatz();
   const L = flussLage(sp.x, sp.z);
   const nx = -L.rz, nz = L.rx;
-  // landeinwaerts hinter dem Ufer, etwas flussaufwaerts
-  return { x: sp.x + nx * 70 - L.rx * 40, z: sp.z + nz * 70 - L.rz * 40, yaw: Math.atan2(-L.rx, -L.rz) };
+  // Live-Wunsch (Screenshot 08.10.2026, lila Punkt): landeinwaerts knapp hinter dem Sandstreifen und 47 m flussabwaerts –
+  // rechts im Bild, wenn Kenji zum Fluss schaut. Vorher 70 m landeinwaerts und 40 m flussaufwaerts, also hinter Kenji.
+  // Der Punkt lag 22 m vom Steg (Sand endet bei 20 m); mit ~10 m Spannweite 28 m, damit kein Fluegel im Sand steht.
+  return { x: sp.x + nx * 28 + L.rx * 47, z: sp.z + nz * 28 + L.rz * 47, yaw: Math.atan2(-L.rx, -L.rz) };
 }
 function ankunft(){
   const sp = stegPlatz();
@@ -392,6 +479,8 @@ function flussStart(){
   if(typeof clearFire === 'function') clearFire();
   baueKulisse();
   baueFeuer();
+  ladeSchildkroeten();
+  ladeKrokodile();
   if(locale !== 'earth') enterEarth();
   // X-Wing parkt auf der Wiese, Kenji steht am Steg
   const xp = xwingPlatz();
@@ -407,9 +496,11 @@ function flussStart(){
   evaExit();
   const an = ankunft();
   eva.group.position.set(an.x, WIESE_Y, an.z);
-  // Blick zwischen Boot und X-Wing
-  const bp = bootPlatz();
-  const mx = (bp.x + xp.x) / 2 - an.x, mz = (bp.z + xp.z) / 2 - an.z;
+  // Blick quer ueber den Fluss (Live-Wunsch, Screenshot 08.10.2026): Boot und Steg links, X-Wing rechts vorn am Ufer.
+  // Vorher schaute Kenji zwischen Boot und X-Wing, der X-Wing stand dabei hinter ihm.
+  const La = flussLage(an.x, an.z), seite = Math.sign(La.d) || 1;
+  // senkrecht zur Flussrichtung zum Wasser hin, etwas flussaufwaerts gedreht (~11 Grad), damit Ring und Schild links im Bild sind
+  const mx = La.rz * seite - La.rx * 0.2, mz = -La.rx * seite - La.rz * 0.2;
   eva.yaw = Math.atan2(-mx, -mz); eva.group.rotation.y = eva.yaw;
   evaOrbit = 0; evaPitch = 0;
   snapCamera();
@@ -424,6 +515,133 @@ function flussStart(){
   story.spaeter(12, () => { if(eva && !story.phase) story.hinweis(''); });
 }
 story.etappe3Start = flussStart;
+
+// ---- Schildkroeten: kleine Gruppen auf der Wiese (wie die Kamele in Etappe 2) ------------------
+// Modell: Tortoise - turtle by Daniel Zuleta Art, CC-BY-4.0 (schildkroete_glb.js). Normal-Maps entfernt, Farbtexturen als
+// 512er JPEG und aufgehellt (im Original fast schwarz, Mittel ~25/255) -> 1,2 statt 5,2 MB. Ohne Animation: sie stehen.
+// Gruppe: z am Fluss, seite wie FEUER_DEF (+1 = Ufer mit Steg und Kenji), ab = m hinter dem Sandstreifen.
+const SK_LAENGE = 1.4;        // m Riesenschildkroete (~0,6 m hoch; Kenji 1,55 m)
+// Live-Wunsch "mehr Schildkroeten": 16 Gruppen mit je 3-6 Tieren (vorher 9 mit 3-4), drei davon nah am Start.
+const SK_GRUPPEN = [
+  { z: 330, seite: -1, ab: 30, n: 5 }, { z: 150, seite: 1, ab: 60, n: 5 }, { z: -250, seite: -1, ab: 25, n: 4 },
+  { z: -520, seite: 1, ab: 90, n: 5 }, { z: -1000, seite: 1, ab: 35, n: 4 }, { z: -1300, seite: -1, ab: 50, n: 5 },
+  { z: -1750, seite: -1, ab: 30, n: 4 }, { z: -2100, seite: 1, ab: 45, n: 4 },
+  { z: 420, seite: 1, ab: 45, n: 4 }, { z: 260, seite: 1, ab: 25, n: 3 }, { z: 0, seite: -1, ab: 40, n: 5 },
+  { z: -400, seite: -1, ab: 70, n: 4 }, { z: -800, seite: 1, ab: 55, n: 5 }, { z: -1500, seite: 1, ab: 30, n: 4 },
+  { z: -1950, seite: -1, ab: 60, n: 5 },
+  { vorKenji: true, n: 6 },    // direkt vor Kenji, auf dem Weg zum Boot
+];
+const SK_SICHT = 700;         // m: weiter weg nicht zeichnen (je Tier 26.000 Dreiecke)
+const schildkroeten = [];
+function skMitte(gr){
+  if(gr.vorKenji){
+    const an = ankunft(), bp = bootPlatz();
+    const dx = bp.x - an.x, dz = bp.z - an.z, l = Math.hypot(dx, dz) || 1;
+    return { x: an.x + dx / l * 9, z: an.z + dz / l * 9, r: 3 };
+  }
+  const L = flussLage(mitteX(gr.z), gr.z), nx = -L.rz, nz = L.rx, ab = FLUSS_B / 2 + UFER_SAND + gr.ab;
+  return { x: mitteX(gr.z) + nx * gr.seite * ab, z: gr.z + nz * gr.seite * ab, r: 8 };
+}
+function skFrei(x, z){
+  if(Math.abs(flussLage(x, z).d) < FLUSS_B / 2 + UFER_SAND + 3) return false;                    // nicht am Ufer
+  if(FEUER_DEF.some(f => Math.hypot(x - feuerPos(f).x, z - feuerPos(f).z) < 25)) return false;   // Feuerplatz
+  const xp = xwingPlatz(), rp = ringPlatz(), an = ankunft();
+  return Math.hypot(x - xp.x, z - xp.z) > 12 && Math.hypot(x - rp.x, z - rp.z) > 8 && Math.hypot(x - an.x, z - an.z) > 5;
+}
+function ladeSchildkroeten(){
+  schildkroeten.length = 0;
+  if(!window.SCHILDKROETE_GLB || !THREE.GLTFLoader) return;
+  const b64 = window.SCHILDKROETE_GLB.split(',')[1], bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  new THREE.GLTFLoader().parse(bytes.buffer, '', (gltf) => {
+    if(!e3()) return;
+    const obj = gltf.scene;
+    obj.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(obj), size = new THREE.Vector3(); box.getSize(size);
+    obj.scale.setScalar(SK_LAENGE / Math.max(size.x, size.z));
+    obj.updateMatrixWorld(true);
+    const b2 = new THREE.Box3().setFromObject(obj), c = new THREE.Vector3(); b2.getCenter(c);
+    obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= b2.min.y;
+    const tpl = new THREE.Group(); tpl.add(obj);
+    let s = 41;
+    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for(const gr of SK_GRUPPEN){
+      const m = skMitte(gr), blick = rnd() * Math.PI * 2;
+      for(let i = 0; i < gr.n; i++){
+        const a = rnd() * Math.PI * 2, r = 1.5 + rnd() * m.r;
+        const x = m.x + Math.cos(a) * r, z = m.z + Math.sin(a) * r;
+        if(!skFrei(x, z)) continue;
+        const k = tpl.clone(true);
+        k.position.set(x, bodenY(x, z), z);
+        k.rotation.y = blick + (rnd() - 0.5) * 2;
+        k.scale.setScalar(0.85 + rnd() * 0.3);
+        story.welt(3).add(k); schildkroeten.push(k);
+      }
+    }
+  }, (e) => console.warn('Schildkroeten-GLB', e));
+}
+// ---- Krokodile im Fluss -----------------------------------------------------------------------------------------
+// Modell: Nile Crocodile Swimming by Monster, CC-BY-NC-ND-4.0 (krokodil_glb.js) – ND: das Modell bleibt unveraendert
+// (keine verkleinerten Texturen), es wird nur im Spiel skaliert/gedreht. Skelett + "Swim" 5 s; jedes Tier ein eigener
+// Klon (cloneSkinned der Engine), eigener Mixer mit Zeitversatz. Im Modell 10,3 m lang, Kopf auf -Z.
+// Sie schwimmen in sanften Schlangenlinien auf und ab (mit und gegen die Stroemung), Ruecken knapp unter der
+// Oberflaeche – Augen und Panzer schauen heraus. Keine Kollision: sie sind Kulisse, das Boot faehrt durch.
+// KROKO_TIEF: Unterkante unter Wasser. Gemessen in der Schwimmhaltung (C:\tmp\sfg\kroko\nah.js): nur 0,63 m hoch – mit
+// 0,55 lag der Ruecken bei -0,01 m, also ganz unter Wasser (nur als Schatten). 0,25: Ruecken und Augen ~0,2 m darueber.
+const KROKO_L = 4.5, KROKO_TIEF = 0.25;            // m Laenge (grosses Nilkrokodil), m Unterkante unter Wasser
+const KROKO_PLAETZE = [                            // [z, Querlage (Anteil der halben Breite), Richtung +1 flussab]
+  [380, 0.45, 1], [250, -0.5, -1], [60, 0.3, 1], [-200, -0.35, -1], [-620, 0.5, 1], [-860, -0.4, 1],
+  [-1180, 0.35, -1], [-1500, -0.5, 1], [-1880, 0.4, -1], [-2150, -0.3, 1],
+];
+const krokodile = [];
+function ladeKrokodile(){
+  krokodile.length = 0;
+  if(!window.KROKODIL_GLB || !THREE.GLTFLoader) return;
+  const b64 = window.KROKODIL_GLB.split(',')[1], bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  new THREE.GLTFLoader().parse(bytes.buffer, '', (gltf) => {
+    if(!e3()) return;
+    const obj = gltf.scene, clip = gltf.animations[0];
+    obj.traverse(o => { if(o.isMesh){ o.frustumCulled = false; o.castShadow = false; } });
+    obj.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(obj), sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+    const k = KROKO_L / sz.z;
+    obj.scale.multiplyScalar(k); obj.position.set(-c.x * k, -bb.min.y * k, -c.z * k);
+    const tpl = new THREE.Group(); tpl.add(obj);
+    let s = 83;
+    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for(const [z, q, dir] of KROKO_PLAETZE){
+      const k2 = cloneSkinned(tpl);
+      k2.scale.setScalar(0.85 + rnd() * 0.3);
+      story.welt(3).add(k2);
+      let mixer = null;
+      if(clip){ mixer = new THREE.AnimationMixer(k2); mixer.clipAction(clip).play(); mixer.setTime(rnd() * clip.duration); mixer.timeScale = 0.7 + rnd() * 0.3; }
+      krokodile.push({ k: k2, mixer, z, q, dir, z0: z, t: rnd() * 20, v: 0.9 + rnd() * 0.6 });
+    }
+  }, (e) => console.warn('Krokodil-GLB', e));
+}
+function updateKrokodile(dt){
+  const cp = camera.position, auf = locale === 'earth';
+  for(const o of krokodile){
+    // auf ~250 m um den Startplatz hin und her, Querlage pendelt langsam (Schlangenlinie)
+    o.t += dt; o.z += o.dir * o.v * dt;
+    if(Math.abs(o.z - o.z0) > 120){ o.dir = -o.dir; o.z = o.z0 + Math.sign(o.z - o.z0) * 120; }
+    const quer = o.q + Math.sin(o.t * 0.25) * 0.15;
+    const L = flussLage(mitteX(o.z), o.z), nx = -L.rz, nz = L.rx;
+    const x = mitteX(o.z) + nx * quer * (FLUSS_B / 2 - 8), z = o.z + nz * quer * (FLUSS_B / 2 - 8);
+    o.k.position.set(x, WASSER_Y - KROKO_TIEF, z);
+    // Kopf (-Z) in Schwimmrichtung: flussab = (L.rx, L.rz), dazu das Pendeln
+    const fx = L.rx * o.dir, fz = L.rz * o.dir;
+    o.k.rotation.y = Math.atan2(-fx, -fz) + Math.cos(o.t * 0.25) * 0.12 * o.dir;
+    const d = Math.hypot(x - cp.x, z - cp.z);
+    o.k.visible = auf && d < 600;
+    if(o.k.visible && o.mixer && d < 200) o.mixer.update(dt);
+  }
+}
+function updateSchildkroeten(){
+  const cp = camera.position, auf = locale === 'earth';
+  for(const k of schildkroeten) k.visible = auf && Math.hypot(k.position.x - cp.x, k.position.z - cp.z) < SK_SICHT;
+}
 
 // Radarziel nach geschaffter Startsequenz: flussabwaerts weit voraus
 const zielVorher = story.zielFuer;
@@ -683,8 +901,12 @@ function hookBoot(){
 
 // Pro Bild (hookLoop von story.js ruft story.updateE3)
 function updateE3(dt){
+  story.etappenMusik(3, window.FLUSS_SND && window.FLUSS_SND.musik, dt || 0);   // story.js, wie Etappe 2
   if(!e3()) return;
   updateMarken();
+  updateSchildkroeten();
+  updateKrokodile(dt || 0);
+  if(enden.length) updateFlussEnden();
   if(park.boot) park.boot.visible = !boot.aktiv;
   if(park.ring) park.ring.zeigen(!!eva && locale === 'earth' && !story.phase);
 }

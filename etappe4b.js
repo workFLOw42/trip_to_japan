@@ -192,7 +192,8 @@ function baueKulisse(){
   // Wasser: Becken (Rechteck), Kanal (Band), Seitenarm (Rechteck)
   const becken = new THREE.Mesh(new THREE.PlaneGeometry(BECKEN.x1 - BECKEN.x0, BECKEN.z0 - BECKEN.z1), WASSER);
   becken.rotation.x = -Math.PI / 2; becken.position.set((BECKEN.x0 + BECKEN.x1) / 2, 0, (BECKEN.z0 + BECKEN.z1) / 2); w.add(becken);
-  w.add(band(-KANAL_B / 2, KANAL_B / 2, 0.01, WASSER, KANAL_Z0 + 30, KANAL_Z1 - 60));
+  // Kanal endet an der Muendung (vorher 60 m weit ins Meer -> harte Farbkante); dort uebernimmt der Verlauf
+  w.add(band(-KANAL_B / 2, KANAL_B / 2, 0.01, WASSER, KANAL_Z0 + 30, KANAL_Z1));
   const arm = new THREE.Mesh(new THREE.PlaneGeometry(KANAL_B / 2 + ARM.laenge, ARM.b), WASSER);
   arm.rotation.x = -Math.PI / 2; arm.position.set(mitteX(ARM.z) + (KANAL_B / 2 + ARM.laenge) / 2, 0.012, ARM.z); w.add(arm);
   // Kaimauern am Kanal (Beton)
@@ -228,6 +229,29 @@ function baueKulisse(){
   const meer = new THREE.Mesh(new THREE.PlaneGeometry(MEER.halb * 2, MEER.z0 - MEER.z1),
     new THREE.MeshLambertMaterial({ color: 0x1f5f86 }));
   meer.rotation.x = -Math.PI / 2; meer.position.set(mitteX(KANAL_Z1), 0.005, (MEER.z0 + MEER.z1) / 2); w.add(meer);
+  // Live-Wunsch: am Kanalausgang die Wasserfarben angleichen. Ein Faecher vor der Muendung (Vertexfarben): an der
+  // Muendung Kanalfarbe ueber Kanalbreite, nach VERLAUF_L m Meeresfarbe ueber VERLAUF_B m Breite – dazwischen weich.
+  // Liegt knapp ueber dem Meer (0,008) und unter dem Kanal (0,01), damit nichts flimmert.
+  {
+    const VERLAUF_L = 420, VERLAUF_B = 900, ST = 24, Q = 12;
+    const ck = WASSER.color, cm = meer.material.color, mx0 = mitteX(KANAL_Z1);
+    const pos = [], col = [], idx = [];
+    for(let i = 0; i <= ST; i++){
+      const u = i / ST, f = u * u * (3 - 2 * u);                     // weich (smoothstep)
+      const z = KANAL_Z1 - u * VERLAUF_L, halb = KANAL_B / 2 + (VERLAUF_B / 2 - KANAL_B / 2) * Math.pow(u, 0.7);
+      for(let k = 0; k <= Q; k++){
+        const q = k / Q * 2 - 1, rand = Math.abs(q);                   // zum Rand hin frueher Meeresfarbe
+        const g = Math.min(1, f + rand * rand * (1 - f));
+        pos.push(mx0 + q * halb, 0.008, z);
+        col.push(ck.r + (cm.r - ck.r) * g, ck.g + (cm.g - ck.g) * g, ck.b + (cm.b - ck.b) * g);
+        if(i > 0 && k > 0){ const a = (i - 1) * (Q + 1) + k - 1, b = a + 1, c = i * (Q + 1) + k - 1, e = c + 1; idx.push(a, c, b, b, c, e); }
+      }
+    }
+    const gg = new THREE.BufferGeometry();
+    gg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    gg.setIndex(idx); gg.computeVertexNormals();
+    w.add(new THREE.Mesh(gg, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+  }
   const L = lage(mitteX(KANAL_Z1), KANAL_Z1), nx = -L.rz, nz = L.rx;
   const mole = new THREE.MeshLambertMaterial({ color: 0x77736c }), feuer = [0xd23c2c, 0x2c9e4a];
   [-1, 1].forEach((s, i) => {
@@ -541,6 +565,8 @@ function hookFlucht(){
   stepPhysics = function(dt, inp){
     if(!(hier() && fl.aktiv)) return physOrig.apply(this, arguments);
     if(!fl.laeuft && !fl.fertig){ state.vel.set(0, 0, 0); state.throttle = 0; planeGroup.position.copy(state.pos); return; }
+    // Live-Feedback: nach dem Stopp durch die Polizei glitt das Boot weiter und liess sich lenken -> steht sofort
+    if(fl.fertig){ state.vel.set(0, 0, 0); state.throttle = 0; planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat); return; }
     const r = fluchtPhysik(dt, inp, (d, i) => physOrig.call(this, d, i));
     fluchtUpdate(dt);
     return r;

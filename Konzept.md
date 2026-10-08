@@ -4,14 +4,31 @@ Ein 3D-Abenteuerspiel im Browser auf Basis der WebGL/Three.js-Engine des „Flug
 
 ---
 
-## 📌 Arbeitsstand (02.10.2026)
+## 📌 Arbeitsstand (08.10.2026)
 
 **Gebaut und spielbar:** Etappe 1 (alle Wege inkl. Mars-Trip) und Etappe 2 (X-Wing-Falle mit Kurzschluss,
-Mond-Trip, Transall-Flugschule) und Etappe 3 (Fluss mit Feuerwehrboot, X-Wing ohne Kurzschluss) · Startmenü mit Etappen-Sprung (Test) · Globus-Reise zwischen den Etappen ·
+Mond-Trip, Transall-Flugschule) und Etappe 3 (Fluss mit Feuerwehrboot, X-Wing ohne Kurzschluss), Etappe 4 (Kran, Schnellboot-Flucht), Etappe 5 (Air Race,
+U-Boot-Schlucht) und in Etappe 6 der Alpha-Jet-Weg (Vulkanhöhle) · Startmenü mit Etappen-Sprung (Test) · Globus-Reise zwischen den Etappen ·
 Tageszähler · Stimmen (Pilot männlich) · Offline-PWA · Highscores still gespeichert (noch ohne Anzeige).
 Details zum Gebauten in der [README](README.md); Stolperstellen der Engine in [ENGINE_RISIKEN.md](ENGINE_RISIKEN.md).
 
-**Als Nächstes:** Etappe 5, U-Boot-Schlucht (Risiko-Weg).
+**Als Nächstes:** Etappe 6 live weiter testen (Höhle, Filmsequenz, Landung am Strand), dann **Etappe 6a Shinkansen**
+(Stellwerk-Entwurf unten, Fragen noch offen), danach Finale. Nach Etappe 6 geht es je nach verbrauchten Tagen weiter
+(„es gibt noch mehr“).
+
+- **Etappe 6b Alpha Jet gebaut, live abgestimmt (weicht vom Text unten ab):** keine Ansage am Start, nur Startsequenz mit
+  Countdown; verpasst = Flughafenpolizei, **7 Tage Gefängnis**. Dann Flug zum Fuji (2 km hoch, im Meer), Blende in eine
+  **Höhle** (eigene Szene, Länge egal): Autopilot ~18 s mit Ansage, dann ~15 s selbst, immer Vollgas, Gyroskop aus.
+  **Keine Engstellen, kein Messerflug-Felsen, kein Senkrechtschacht** mehr (Autopilot und Kamera kamen damit nicht klar;
+  der Schacht liegt archiviert in `_intern/archiv/e6b_senkrechtschacht/`). Statt Bremsen/Hochreißen: Ausgang ins Licht →
+  Filmsequenz (Jet senkrecht aus dem Krater, Überschallknall, Ausbruch) → 500 m / 50 % Schub → Ansage „Du bist der
+  Wahnsinn …“ → Landung am **Strand-Flughafen** = 1 Tag. Fels berührt oder Absturz = **7 Tage Krankenhaus**.
+  Alpha Jet `maxAlt` 3.000 m. Stadt mit Riesen-Godzilla, Mini-Godzillas, Samurai, Möwen.
+- **Etappe 5 U-Boot-Schlucht gebaut:** U-Boot und Ring an der Küste neben dem Dorf, Blende beim Einsteigen, Code mit einem
+  Versuch, 2 Kontakte erlaubt, 250 s.
+- **Tiere und Musik (07./08.10.2026):** Kamele (E2), Schildkröten und Krokodile (E3), Möwen (E1, E4, E5, E6, an jeder
+  Insel), Labrador (E1), Pandas (E5), Godzillas/Samurai (E6); Musik in jeder Etappe, zu Beginn leise. Transall-Modell
+  ist jetzt die **C-400** (Flugwerte der Transall). Berge der Engine sind ein vereinfachter **Mount Fuji**.
 
 - **Etappe 5 Air Race gebaut, live abgestimmt (weicht vom Text unten ab):** gewertet **auf Zeit** mit Strafsekunden
   (Ziel 90 s), Startsequenz **ohne** Ansager-Erklärung. Figuren: Messerflug, Looping (Ein- und Ausgangsring, das Spiel

@@ -1,6 +1,6 @@
 # Trip to Japan – alle gesprochenen Texte
 
-Stand: 07.10.2026, direkt aus dem Code gezogen (`story.js`, `etappe2.js` … `etappe5b.js`).
+Stand: 08.10.2026, direkt aus dem Code gezogen (`story.js`, `etappe2.js` … `etappe6b.js`).
 
 ## Stimmen
 
@@ -356,3 +356,57 @@ Mögliche **{Grund}**-Texte (der erste Buchstabe wird großgeschrieben):
 
 1. Im Ziel! Die Zeit ist gestoppt – jetzt noch sauber auf der Insel landen.
 2. Gas auf zwanzig Prozent, langsam runter und auf der Bahn aufsetzen.
+
+---
+
+## Etappe 6 – Japan (Fuji)
+
+| Situation | Stimme | Text |
+|---|---|---|
+| Hinweis nach der Ankunft (Text, nicht gesprochen) | – | Zwei Wege: Alpha Jet (weiß) oder Shinkansen (gelber Ring am Bahnsteig) – hinlaufen und Y drücken |
+| Shinkansen-Ring (Text) | – | Die Fahrt mit dem Shinkansen kommt bald – nimm heute den Alpha Jet! |
+
+### Risiko (1 Tag): Alpha Jet → Höhle im Fuji
+
+Keine Ansage beim Einsteigen, nur das Startsequenz-HUD mit Countdown (still).
+
+**Startsequenz verpasst → 7 Tage** · Stimme: männlich
+
+1. Die Startsequenz hat nicht geklappt – ohne Startsequenz darf hier keiner fliegen.
+2. Die Flughafenpolizei nimmt Kenji fest. Eine Woche Gefängnis.
+
+| Situation | Stimme | Text |
+|---|---|---|
+| Startsequenz geschafft (Text) | – | Folge dem roten Punkt im Radar – Start: X / Shift halten |
+
+**In der Höhle, Autopilot** · Stimme: männlich
+
+1. Wie bist du hier reingeraten? Egal!
+2. Du musst da schleunigst raus, der Vulkan bricht gleich aus.
+3. Immer Vollgas durch die Höhle.
+4. Drei
+5. Zwei
+6. Eins
+7. LOS!
+
+| Situation | Stimme | Text |
+|---|---|---|
+| Ab jetzt selbst fliegen (Text) | – | Vollgas! Durch die Höhle – nichts berühren! |
+| Fels berührt → 7 Tage | männlich | Krach – der Alpha ist am Fels zerschellt! · Kenji wird gerettet, muss aber eine Woche ins Krankenhaus. |
+| Unter 100 % Schub → 7 Tage | männlich | Zu langsam! Du musst immer Vollgas fliegen – der Vulkan war schneller. |
+
+**Nach der Filmsequenz, 2 s nach der Blende (500 m, 50 % Schub)** · Stimme: männlich
+
+1. Du bist der Wahnsinn – ein wahres Fliegerass!
+2. Jetzt noch landen, dann hast du es geschafft.
+
+Dazu der Hinweis (Text): *Lande am Flughafen am Strand (roter Punkt im Radar)*
+
+| Situation | Stimme | Text |
+|---|---|---|
+| Gelandet → 1 Tag | männlich | Sauber gelandet! Was für ein Flug! |
+| Abgestürzt (Hinflug oder nach der Höhle) → 7 Tage | männlich | Oh nein, abgestürzt! · Kenji kommt ins Krankenhaus und muss eine Woche bleiben. |
+
+### Sicher (4 Tage): Shinkansen
+
+Folgt.

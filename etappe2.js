@@ -140,8 +140,68 @@ function baueKulisse(){
   g.add(o);
   story.welt(2).add(g);
   kulisse.gruppe = g;
+  ladeKamele(g);
 }
 
+// ---- Kamele: kleine Herden in der Wueste und rund ums Rollfeld --------------------------------
+// Modell: Bactrian Camel (Low Poly) by Nyilonelycompany, CC-BY-NC-SA-4.0 (kamel_glb.js; nur die Grundfarbe als
+// 512er JPEG, Normal-/Rauheits-Map entfernt -> 1,7 statt 3,8 MB). Im Modell 2,1 m hoch, Animation "Idle" 8,9 s.
+// Live-Wunsch: neben Kenji (1,55 m) groesser -> KAMEL_GROESSE 1,3 (Hoecker ~2,7 m).
+// Jedes Tier ist ein eigener Klon mit eigenem Skelett (cloneSkinned der Engine) und eigenem Mixer mit
+// Zeitversatz, sonst kauen alle im Gleichschritt. Auf der Bahn (x -2..38, z -300..300) und am Abstellplatz
+// (X-Wing/Transall um z 320, Ankunft z 380) steht keins.
+const KAMEL_HERDEN = [
+  { x: -75, z: -180, n: 3 }, { x: 105, z: -40, n: 4 }, { x: -80, z: 120, n: 3 }, { x: 95, z: 250, n: 3 },   // ums Rollfeld
+  { x: -900, z: -600, n: 5 }, { x: 1200, z: 400, n: 4 }, { x: 300, z: -1700, n: 5 }, { x: -1400, z: -2200, n: 4 },
+  { x: 820, z: -3050, n: 4 },   // am Rand der Oase, ausserhalb des Abwurfziels
+  // Live-Wunsch: eine Herde direkt vor Kenji zwischen X-Wing (Fluegel bis x -13) und Transall (Fluegel ab x 9).
+  // Am Ende der Liste, damit der feste Zufall die anderen Herden nicht verschiebt.
+  { x: -2, z: 342, n: 3, r: 6, platz: true },
+];
+const KAMEL_GROESSE = 1.3;
+const KAMEL_SICHT = 2500, KAMEL_ANIM = 500;   // m: bis hier gezeichnet / bis hier animiert
+const kamele = [];
+function kamelFrei(x, z){
+  if(Math.abs(x - 18) < 20 + 12 && Math.abs(z) < 300 + 12) return false;   // Bahn + Rand
+  if(Math.hypot(x, z - 345) < 70) return false;                          // Abstellplatz und Ankunft
+  return true;
+}
+function ladeKamele(g){
+  if(!window.KAMEL_GLB || !THREE.GLTFLoader) return;
+  const b64 = window.KAMEL_GLB.split(',')[1], bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  new THREE.GLTFLoader().parse(bytes.buffer, '', (gltf) => {
+    const tpl = gltf.scene, clip = gltf.animations[0];
+    // Bindepose-Box gilt nicht fuer die verformte Haltung -> nicht wegschneiden (wie die Orcas der Engine)
+    tpl.traverse(o => { if(o.isMesh){ o.frustumCulled = false; o.castShadow = false; } });
+    let s = 29;
+    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for(const h of KAMEL_HERDEN){
+      const blick = rnd() * Math.PI * 2;                 // die Herde schaut grob in eine Richtung
+      for(let i = 0; i < h.n; i++){
+        const a = rnd() * Math.PI * 2, r = h.r ? 2 + rnd() * h.r : 4 + rnd() * 10;
+        const x = h.x + Math.cos(a) * r, z = h.z + Math.sin(a) * r;
+        if(!h.platz && !kamelFrei(x, z)) continue;
+        const k = cloneSkinned(tpl);
+        k.position.set(x, duene(x, z), z);
+        k.rotation.y = blick + (rnd() - 0.5) * 1.6;
+        k.scale.setScalar((0.9 + rnd() * 0.2) * KAMEL_GROESSE);
+        g.add(k);
+        let mixer = null;
+        if(clip){ mixer = new THREE.AnimationMixer(k); mixer.clipAction(clip).play(); mixer.setTime(rnd() * clip.duration); mixer.timeScale = 0.85 + rnd() * 0.3; }
+        kamele.push({ k, mixer });
+      }
+    }
+  }, (e) => console.warn('Kamel-GLB', e));
+}
+function updateKamele(dt){
+  const auf = locale === 'earth', cp = camera.position;
+  for(const o of kamele){
+    const d = Math.hypot(o.k.position.x - cp.x, o.k.position.z - cp.z);
+    o.k.visible = auf && d < KAMEL_SICHT;
+    if(o.k.visible && o.mixer && d < KAMEL_ANIM) o.mixer.update(dt);
+  }
+}
 // ---- Geparkte Fahrzeuge (Kulisse, bis man einsteigt) -----------------------------------------
 // Der X-Wing ist das "eigene" Fahrzeug (state/planeGroup) und braucht keine Kulisse. Nur die
 // Transall steht als Kulisse am Bahnende, bis man einsteigt.
@@ -348,7 +408,7 @@ const e2m = [];
 function e2Marken(){
   if(e2m.length || !story.baueMarke) return;
   e2m.push({ m: story.baueMarke(0xffffff, '1 Tag'),  x: XWING_PARK.x, z: XWING_PARK.z, h: 3.3 });   // h = Fahrzeug-Oberkante (story.setzeMarke)
-  e2m.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: PARK.Transall.x, z: PARK.Transall.z, h: 5.9 });
+  e2m.push({ m: story.baueMarke(0xffd23f, '4 Tage'), x: PARK.Transall.x, z: PARK.Transall.z, h: 6.7 });   // C-400
 }
 function updateE2Marken(){
   e2Marken();
@@ -365,6 +425,7 @@ function updateE2Marken(){
 //   flug       – Kenji fliegt selbst zur Oase (Radar), Hoehenband 270-330 m, B = Kiste abwerfen
 //   abwurf     – Kiste faellt (voller Schwung, kurz frei, dann Schirm); Treffer +-50 m -> 4 Tage, sonst 7
 // Landen muss man nicht – der Pilot erklaert es nur.
+const FS_SATZ_KURZSCHLUSS = 2;  // Index in FS_TEXT: 'Leuchtet dabei dieses rote Symbol …'
 const FS_HOEHE = 300;          // m ueber Grund
 const FS_TEXT = [
   'Hallo, willkommen an Bord! Ich bin dein Pilot. Wir bringen Hilfsgüter zu einer Oase in der Wüste. Pass gut auf, dann lernst du was.',
@@ -400,10 +461,12 @@ function fsEinsteigen(){
   snapCamera();
   if(story.hinweis) story.hinweis('');
   kiste = null;
-  fsch.rede = story.sprich(FS_TEXT, () => fsFrage(), 'pilot');
-  // waehrend der Kurzschluss-Erklaerung das Symbol kurz zeigen
-  story.spaeter(11, () => { if(fsch.schritt === 'erklaeren') fsSymbol(true); });
-  story.spaeter(20, () => fsSymbol(false));
+  // Kurzschluss-Symbol genau zu seinem Satz: an, bevor er beginnt; aus 1 s nachdem er zu Ende ist.
+  // Vorher feste 11 s / 20 s – je nach Stimme (oder Untertitel) kam es zu frueh und ging zu spaet.
+  fsch.rede = story.sprich(FS_TEXT, () => fsFrage(), 'pilot', 0, (i) => {
+    if(i === FS_SATZ_KURZSCHLUSS && fsch.schritt === 'erklaeren') fsSymbol(true);
+    if(i === FS_SATZ_KURZSCHLUSS + 1) story.spaeter(1, () => fsSymbol(false));
+  });
 }
 
 function fsSymbol(an){
@@ -498,7 +561,9 @@ function fsHud(){
       + 'border-radius:10px;background:rgba(0,0,0,.55);color:#fff;font:15px/1.6 system-ui,sans-serif;min-width:200px;z-index:20;';
     document.body.appendChild(fsHudEl);
   }
-  const agl = state.pos.y - duene(state.pos.x, state.pos.z);
+  // Dieselbe Hoehe wie das HUD oben links (Engine: ueber 0,3 m, nicht ueber der Duene) – vorher wich die Anzeige
+  // ueber den Duenen bis zu 14 m vom HUD ab.
+  const agl = Math.max(0, Math.round(state.pos.y - 0.3));
   const imBand = agl >= FS_BAND[0] && agl <= FS_BAND[1];
   const dist = Math.hypot(OASE.x - state.pos.x, OASE.z - state.pos.z);
   const schub = Math.round(Math.max(0, state.throttle) * 100);
@@ -614,6 +679,7 @@ function updateE2(dt){
 
   if(story.phase === 'flugschule'){ fsFrageEingabe(); fsAbwurfEingabe(); }
   updateE2Marken();
+  updateKamele(dt || 0);
   for(const name of Object.keys(PARK)){
     const p = PARK[name];
     if(p.obj) p.obj.visible = locale === 'earth' && (MODEL_NAMES[currentModel] !== name || !!eva) && !(p.weg);

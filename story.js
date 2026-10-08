@@ -212,6 +212,8 @@ function xwingStrandPlatz(){
 // steigt man an einem leuchtenden Ring am Strand direkt davor ein: im Ring Y = im U-Boot.
 const RING_R = 6;            // m Radius des Einstiegsrings
 function ubootRingPlatz(){
+  const r5 = story.ringPlatzE5 && story.ringPlatzE5();   // Etappe 5: Ring am lila Punkt (etappe5.js), nicht cachen
+  if(r5) return { x: r5.x, z: r5.z, nx: 0, nz: 1 };
   if(story.ring) return story.ring;
   const info = islandInfo(0, 0), bl = harborSubLocal(0, 0);
   if(!info || !bl) return null;
@@ -492,6 +494,7 @@ const reden = new Set();
 // synth.cancel() der einen loeschte die Warteschlange des Browsers samt dem Satz der anderen. Jetzt wartet eine neue
 // Ansage, bis die laufende fertig ist; abbrechen/pausieren schneidet nur noch die eigene Stimme ab.
 // warteMax (s, optional): so lange darf eine Ansage hoechstens warten, sonst verfaellt sie (fuer Rennansagen).
+// beiSatz(i) (optional): wird gerufen, bevor Satz i beginnt (z. B. ein Symbol genau zu seinem Satz zeigen).
 let sprecher = null;
 const wartend = [];
 function sprecherFrei(r){ if(sprecher === r) sprecher = null; const n = wartend.shift(); if(n) n(); }
@@ -506,7 +509,7 @@ function stimmeFuer(rolle){
   return (rolle === 'pilot' ? bevorzugt(STIMME_M) : bevorzugt(STIMME_W)) || de[0] || null;
 }      // Sprechtempo bei rate 1.0 (fuer Schaetzung und Untertitel-Takt)
 function satzDauer(s){ return 1200 + s.length / ZEICHEN_PRO_S * 1000; }   // ms, Untertitel-Takt
-function sprich(saetze, fertig, rolle, warteMax){
+function sprich(saetze, fertig, rolle, warteMax, beiSatz){
   let i = -1, done = false, timer = null, utt = null, wartetSeit = 0;
   let laut = false, pos0 = 0, t0 = 0, bPos = null;     // aktueller Satz: ab Zeichen pos0 seit t0
   let pausePos = -1;                                   // >= 0: angehalten an diesem Zeichen
@@ -557,7 +560,8 @@ function sprich(saetze, fertig, rolle, warteMax){
   function naechster(){
     clearTimeout(timer); utt = null;
     if(done) return;
-    if(++i >= saetze.length){ done = true; reden.delete(r); untertitel(''); sprecherFrei(r); if(fertig) fertig(); return; }
+    if(++i >= saetze.length){ done = true; reden.delete(r); untertitel(''); sprecherFrei(r); if(beiSatz) beiSatz(i); if(fertig) fertig(); return; }
+    if(beiSatz) beiSatz(i);
     weiterAb(0);
   }
   const r = {
@@ -627,14 +631,14 @@ function startbildschirm(weiter){
   el.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;'
     + 'justify-content:center;background:rgba(0,0,0,.55);color:#fff;font-family:system-ui,sans-serif;'
     + 'z-index:30;text-align:center;user-select:none;';
-  const OPT = [{ n: 1, t: 'Neues Spiel' }, { n: 2, t: 'E2' }, { n: 3, t: 'E3' }, { n: 4, t: 'E4' }, { n: 5, t: 'E5' }, { n: 6, t: 'E6' }];
+  const OPT = [{ n: 1, t: 'Neues Spiel' }, { n: 2, t: 'E2' }, { n: 3, t: 'E3' }, { n: 4, t: 'E4' }, { n: 5, t: 'E5' }, { n: 6, t: 'E6' }, { n: 6, t: 'E6 Höhle', hoehle: true }];
   el.innerHTML = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>'
     + '<div style="display:flex;gap:10px;justify-content:center;margin-top:34px">'
     + OPT.map((o, i) => '<button data-i="' + i + '" style="min-width:' + (i ? 54 : 170) + 'px;height:44px;border-radius:10px;'
       + 'border:2px solid rgba(255,255,255,.45);background:rgba(255,255,255,.1);color:#fff;font:600 18px system-ui;'
       + 'cursor:pointer;transition:all .12s">' + o.t + '</button>').join('') + '</div>'
     + '<div style="font-size:14px;margin-top:16px;opacity:.7">Linker Stick / ← → wählen · A / Enter starten'
-    + '<br><span style="font-size:12px;opacity:.8">E2–E6: Test – direkt zur Etappe</span></div>';
+    + '<br><span style="font-size:12px;opacity:.8">E2–E6: Test – direkt zur Etappe · E6 Höhle: direkt in den Autopiloten</span></div>';
   document.body.appendChild(el);
   const knoepfe = [...el.querySelectorAll('button')];
   let wahl = 0;
@@ -657,6 +661,7 @@ function startbildschirm(weiter){
     story.gestartet = true;
     if(!soundOn) toggleSound();      // die Geste erlaubt jetzt Audio: Ton an (D-Pad runter / N schaltet um)
     const n = OPT[wahl].n;
+    if(OPT[wahl].hoehle){ story.hoehleDirekt = true; springeZu(n); return; }   // Test: direkt in die Hoehle (etappe6.js)
     if(n > 1){ springeZu(n); return; }
     weiter();
   }
@@ -714,6 +719,7 @@ function springeZu(n){
     if(n === 3 && story.etappe3Start){ hinweis(''); story.etappe3Start(); return; }
     if(n === 4 && story.etappe4Start){ hinweis(''); story.etappe4Start(); return; }
     if(n === 5 && story.etappe5Start){ hinweis(''); story.etappe5Start(); return; }
+    if(n === 6 && story.etappe6Start){ hinweis(''); story.etappe6Start(); return; }
     platzhalter('Etappe ' + n + ' (folgt) – Tag ' + story.tage + ' von 42');
   });
 }
@@ -1313,6 +1319,48 @@ story.globusAktiv = () => gl.aktiv;
 const timerListe = [];
 function spaeter(sek, fn){ timerListe.push({ t: sek, fn }); }
 story.spaeter = spaeter;
+
+// ---- Etappen-Musik: zu Beginn leise, wie die Wuestenmusik in Etappe 2 -------------------------------
+// Eine Musik pro Etappe (3: fluss_snd.js, 4/5: musik_snd.js). Spielt einmal ab Ankunft, bis sie zu Ende ist oder
+// man einsteigt. Gleicher Pegel wie in Etappe 2 (Spitze normiert, Gain MUSIK_VOL). Jede Etappe ruft
+// story.etappenMusik(n, url, dt) in ihrem updateEn – auch wenn sie nicht aktiv ist, damit die Musik dort stoppt.
+// pegel() (optional): Ziel-Lautstaerke statt MUSIK_VOL, null = noch nicht starten (Etappe 1: erst nach dem Startbildschirm).
+const MUSIK_VOL = 0.12;
+const musiken = {};
+function etappenMusik(n, url, dt, pegel){
+  if(!audioCtx || audioCtx.state !== 'running' || !url) return;
+  const m = musiken[n] || (musiken[n] = { quelle: null, gain: null, aus: false, laedt: false });
+  const stop = () => { if(m.quelle){ try { m.quelle.stop(); } catch(e){} } m.quelle = m.gain = null; };
+  if(story.etappe !== n){ stop(); m.laedt = false; m.aus = false; return; }
+  const imGlobus = !!(story.globusAktiv && story.globusAktiv()) || story.phase === 'reise';
+  const soll = pegel ? pegel() : MUSIK_VOL;
+  if(soll === null && !m.gain) return;
+  if(!m.laedt && !imGlobus){
+    m.laedt = true;
+    decodeSound(url).then((buf) => {
+      if(story.etappe !== n || m.aus) return;
+      normalizePeak(buf, 0.9);
+      const s = audioCtx.createBufferSource(); s.buffer = buf;
+      const g = audioCtx.createGain(); g.gain.value = 0;
+      s.connect(g).connect(audioCtx.destination); s.start();
+      s.onended = () => { m.aus = true; };
+      m.quelle = s; m.gain = g;
+    }).catch((e) => console.warn('Musik Etappe ' + n + ':', e));
+  }
+  if(!m.gain) return;
+  if(!eva) m.aus = true;                              // eingestiegen: Musik aus
+  const ziel = locale === 'earth' && soundOn && !imGlobus && !m.aus ? (soll || 0) : 0;
+  m.gain.gain.value += (ziel - m.gain.gain.value) * Math.min(1, (m.aus ? 0.6 : 1.5) * dt);
+  if(m.aus && m.gain.gain.value < 0.001) stop();
+}
+story.etappenMusik = etappenMusik;
+// Etappe 1: 'Summer Vacation' (musik_snd.js). Live-Wunsch: unter der Intro-Ansage so leise, dass man die Stimme gut
+// versteht (MUSIK_INTRO), danach wie in den anderen Etappen (MUSIK_VOL). Startet erst nach dem Startbildschirm.
+const MUSIK_INTRO = 0.035;
+function musik1Pegel(){
+  if(intro.phase === 'warten') return null;
+  return intro.phase === 'laeuft' || intro.phase === 'frei' ? MUSIK_INTRO : MUSIK_VOL;
+}
 function timerTick(dt){
   if(!timerListe.length) return;
   const faellig = [];
@@ -1486,6 +1534,9 @@ function hookLoop(){
     if(story.updateE3) story.updateE3(dt);
     if(story.updateE4) story.updateE4(dt);
     if(story.updateE5) story.updateE5(dt);
+    if(story.updateE6) story.updateE6(dt);
+    etappenMusik(1, window.MUSIK_SND && window.MUSIK_SND.e1, dt, musik1Pegel);
+    if(story.tiereUpdate) story.tiereUpdate(dt);   // tiere.js: Moewen (1, 4, 5), Hunde (1), Pandas (5)
     if(story.etappe >= 2 && locale === 'earth') himmelUpdate(dt); else if(himmel.length) himmelWeg();
     introDt(dt);
     updateMarken();
@@ -1507,7 +1558,8 @@ function hookRadar(){
   };
   const activeOrig = activeTarget;
   activeTarget = function(){
-    if(story.etappe <= 4 && !eva && locale === 'earth')       // keine Brandherde o. Ae. aus der Engine
+    // Live-Feedback: in Etappe 6 kein roter Punkt (galt nur bis Etappe 4) -> in allen Etappen, sobald ein Ziel gesetzt ist
+    if(story.ziel && !eva && locale === 'earth')
       return story.ziel ? { x: story.ziel.x, z: story.ziel.z, col: COL_ZIEL } : null;
     return activeOrig();
   };
@@ -1636,6 +1688,8 @@ function schwarz(text, dauer, mitte){
   }, 900);
 }
 
+story.schwarz = schwarz;                             // etappe5b.js: Blende beim Einsteigen ins U-Boot
+
 // ---- Tage ------------------------------------------------------------------------------------
 function tageVergangen(n){
   story.tage += n;
@@ -1730,6 +1784,7 @@ function pfUpdate(dt, inp){
 // Live-Wunsch: das Gas der Startsequenz ("Gas geben" = letzter Schritt) darf den Flieger nicht steuern, sonst fliegt
 // er beim Gruenwerden einfach los. Nach der Sequenz bleibt der Schub bei 0, bis das Gas einmal losgelassen wurde.
 let pfGasSperre = false;
+story.pfGasLos = () => { pfGasSperre = false; };          // etappe6b.js: Weiterflug nach der Zwischenszene mit 50 %
 // Zwei Stufen: 'gehalten' (Sequenz-Gas noch gedrueckt) und 'los' (losgelassen). Auch nach dem Loslassen bleibt der
 // Schub 0 – X/Shift sind der Boost der Engine, und der setzt beim LOSLASSEN 50 % (Live-Test: mit X fuhr er sofort
 // los). Frei ist erst, wer das Gas neu drueckt oder den Schub anders verstellt (Stick, W/S).
@@ -1853,6 +1908,7 @@ function etappeEnde(tage, wie){
     if(story.etappe === 3 && story.etappe3Start){ hinweis(''); story.etappe3Start(); return; }
     if(story.etappe === 4 && story.etappe4Start){ hinweis(''); story.etappe4Start(); return; }
     if(story.etappe === 5 && story.etappe5Start){ hinweis(''); story.etappe5Start(); return; }
+    if(story.etappe === 6 && story.etappe6Start){ hinweis(''); story.etappe6Start(); return; }
     platzhalter('Etappe ' + story.etappe + ' (folgt) – Tag ' + story.tage + ' von 42');
   });
 }
@@ -2453,7 +2509,8 @@ function hookHud(){
         if(alt && alt.textContent !== String(t)) alt.textContent = String(t);
       }
       if(statEl){
-        const ein = evaCanBoard() || harborSubNear() || (story.transallNah && story.transallNah()) || (story.bootNah && story.bootNah()) || (story.kranNah && story.kranNah()) || (story.bootNah4 && story.bootNah4());
+        const ein = evaCanBoard() || harborSubNear() || (story.transallNah && story.transallNah()) || (story.bootNah && story.bootNah()) || (story.kranNah && story.kranNah()) || (story.bootNah4 && story.bootNah4())
+          || (story.ringNah6 && story.ringNah6());
         const s = marsSteinNah() ? 'Y: ' + TRIP[mars.ort || 'mars'].stein + ' aufheben' : (ein ? 'Y: einsteigen' : '');
         if(statEl.textContent !== s) statEl.textContent = s;
       }
@@ -2552,7 +2609,7 @@ function aufgabeText(){
     ['Foto', fotoTaste() + ' (getaucht, Wrack vor dir)'],
     ['Sonar', 'B'],
   ]];
-  const a3 = (story.aufgabeE3 && story.aufgabeE3()) || (story.aufgabeE4 && story.aufgabeE4()) || (story.aufgabeE5 && story.aufgabeE5());
+  const a3 = (story.aufgabeE3 && story.aufgabeE3()) || (story.aufgabeE4 && story.aufgabeE4()) || (story.aufgabeE5 && story.aufgabeE5()) || (story.aufgabeE6 && story.aufgabeE6());
   if(a3) return a3;
   if(story.phase === 'freiflug') return ['Ziel', [
     ['Radar', 'fliege zum roten Punkt'],
@@ -2643,6 +2700,8 @@ function startStrand(){
 }
 
 window.STORY_HOOK = function(){
+  // Live-Wunsch (08.10.2026): Alpha Jet bis 3000 m (Engine: 2200) – der Fuji ist 2 km hoch, der Lavaschacht endet darueber
+  if(PLANE_SPECS.AlphaJet) PLANE_SPECS.AlphaJet.maxAlt = 3000;
   hookWelt();
   hookKenji();
   hookIntro();
