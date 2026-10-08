@@ -2366,9 +2366,9 @@ story.baueMarke = function(farbe, text){
 };
 // Live-Wunsch (harmonisch): jeder Pfeil beginnt mit der Spitze PFEIL_LUFT m ueber dem Fahrzeug und endet oben bei PFEIL_OBEN m
 // ueber dem Boden – die Pfeile sind also verschieden lang, hoeren aber alle gleich auf. Alle Schilder sind gleich gross
-// (feste Weltgroesse, waechst nicht mehr mit dem Abstand) und haengen mit der Unterkante SCHILD_UNTEN m ueber dem Boden.
+// (feste Weltgroesse, waechst nicht mehr mit dem Abstand) und sitzen im Schaft, Unterkante SCHILD_UNTEN m ueber dem Boden.
 // fzg = Oberkante des Fahrzeugs ueber dem Boden y (gemessen, C:\tmp\sfg\md\chk_pfeile.js), 0 bei einem Einstiegsring.
-const PFEIL_LUFT = 3, PFEIL_OBEN = 30, SCHILD_UNTEN = 31, SCHILD_B = 14, SCHILD_H = SCHILD_B * 3.75 / 12;
+const PFEIL_LUFT = 3, PFEIL_OBEN = 30, SCHILD_UNTEN = 13, SCHILD_B = 14, SCHILD_H = SCHILD_B * 3.75 / 12;
 function stelleMarke(m, x, y, z, fzg){
   const t = performance.now() / 1000;
   m.pfeil.position.set(x, y + fzg + PFEIL_LUFT + 1.6 + Math.sin(t * 2.5) * 0.8, z);   // Kegel 3,2 m: Mitte 1,6 ueber der Spitze
@@ -2378,7 +2378,7 @@ function stelleMarke(m, x, y, z, fzg){
   m.pfeil.rotation.y = t * 1.5;
   if(m.schild){
     m.schild.scale.set(SCHILD_B, SCHILD_H, 1);
-    m.schild.position.set(x, y + SCHILD_UNTEN + SCHILD_H / 2, z);   // Unterkante fest ueber dem Boden
+    m.schild.position.set(x, y + SCHILD_UNTEN + SCHILD_H / 2, z);   // Schild sitzt im Pfeilschaft, Unterkante fest ueber dem Boden
   }
 }
 story.setzeMarke = function(m, x, y, z, fzg, zeigen){
