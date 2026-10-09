@@ -390,7 +390,7 @@ function kontakt(erster){
   if(typeof rumble === 'function') rumble(300, 1, 0.7);
   fl.kontakte++;
   if(fl.kontakte > KONTAKT_MAX){ fluchtEnde(false, 'zerschellt'); return; }
-  story.sprich([fl.kontakte === 1 ? erster : 'Noch einer! Beim nächsten ist das Boot hin.'], null, 'pilot');
+  story.sprich([fl.kontakte === 1 ? erster : 'Noch einer! Beim nächsten Treffer ist das Boot hin.'], null, 'pilot');
 }
 function fluchtUpdate(dt){
   if(!fl.aktiv) return;
@@ -517,8 +517,7 @@ function naechstePolizei(){ let b = Infinity; for(const p of fl.polizei) if(p.ak
 
 const GEFAENGNIS = [
   'Halt, Polizei! Das war\'s mit der Flucht.',
-  'Kenji muss mit auf die Wache. Ein geklautes Boot ist kein Spaß.',
-  'Nach einer Woche im Gefängnis darf er wieder gehen. Er hat viel Zeit gehabt, über alles nachzudenken.',
+  'Kenji muss mit auf die Wache. Ein geklautes Boot ist kein Spaß!',
 ];
 function fluchtEnde(ok, wie){
   if(fl.fertig) return;

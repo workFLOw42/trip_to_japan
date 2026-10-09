@@ -288,6 +288,8 @@ function baueKulisse(){
 // Palme in Bezugsgroesse PALME_H: leicht gebogener Stamm (neigt sich nach +X), Krone aus 9 flachen Wedeln, die
 // abwechselnd waagerecht und haengend vom Stammende abgehen (wie die Oasenpalmen in Etappe 2, nur flach statt rund).
 const PALME_H = 12, PALME_NEIG = 1.8;
+story.palmenGeo = () => palmenGeo();            // etappe6.js: dieselben Palmen am Fukuoka-Beach
+story.PALME_H = PALME_H;
 function palmenGeo(){
   const stamm = new THREE.CylinderGeometry(0.22, 0.4, PALME_H, 6, 6, true).translate(0, PALME_H / 2, 0);
   const p = stamm.attributes.position;
@@ -670,12 +672,12 @@ function hookRadar3(){
 
 // ---- Feuerwehrboot: Kapitaen, Aufgabe, Stroemung, Felsen --------------------------------------
 const KAPITAEN_TEXT = [
-  'Ahoi! Gut, dass du da bist. Weiter unten am Fluss brennt es an drei Stellen, und wir brauchen jede Hand.',
-  'Mit dem rechten Stick oder W und S gibst du Gas, gelenkt wird mit dem linken Stick oder den Pfeilen.',
-  'Pass auf: Ein Boot ist schwer. Es fährt in der Kurve weiter geradeaus, bevor es dreht, und je schneller du bist, desto schlechter gehorcht das Ruder. Vor jeder Kurve nimmst du also Gas zurück und lenkst früh ein.',
+  'Ahoi! Gut, dass du da bist! Weiter unten am Fluss brennt es an drei Stellen, und wir brauchen jede Hand.',
+  'Mit dem rechten Stick gibst du Gas. Gelenkt wird mit dem linken Stick.',
+  'Pass auf: Ein Boot ist schwer! Es fährt in der Kurve weiter geradeaus, bevor es dreht. Je schneller du bist, desto schlechter gehorcht das Ruder. Vor jeder Kurve nimmst du also Gas zurück… und lenkst früh ein!',
   'Die Strömung schiebt uns flussabwärts. Wer zu schnell ist, landet auf den Felsen.',
-  'Zum Löschen bremst du ab und stellst dich quer, mit der Nase zum Feuer am Ufer. Dann schaltest du mit B den Wasserstrahl ein.',
-  'Drei Feuer in zwei Minuten. Und höchstens zwei Mal an einen Felsen, sonst ist das Boot hin. Los geht\'s!',
+  'Zum Löschen bremst du ab und stellst dich quer, mit der Nase zum Feuer am Ufer. Dann schaltest du mit der Taste B den Wasserstrahl ein.',
+  'Drei Feuer in zwei Minuten! Und höchstens zwei Mal an einen Felsen stoßen, sonst ist das Boot hin. Los geht\'s!',
 ];
 const boot = story.boot3 = { aktiv: false, fertig: false, t: 0, kontakte: 0, rede: null, hudEl: null, fels: null, cool: 0 };
 function bootEinsteigen(){
@@ -804,7 +806,7 @@ function bootUpdate(dt){
       if(boot.laeuft || boot.schluss){
         boot.kontakte++;
         if(boot.kontakte > KONTAKT_MAX){ bootEnde(false, 'Boot am Felsen kaputt'); return; }
-        story.sprich([boot.kontakte === 1 ? 'Vorsicht, ein Felsen! Langsamer in den Kurven.' : 'Noch ein Felsen! Beim nächsten ist das Boot hin.'], null, 'pilot');
+        story.sprich([boot.kontakte === 1 ? 'Vorsicht, ein Felsen! Langsamer in den Kurven!' : 'Noch ein Felsen! Beim nächsten Treffer ist das Boot hin.'], null, 'pilot');
       }
     }
     planeGroup.position.copy(state.pos);
@@ -819,7 +821,7 @@ function bootUpdate(dt){
         f.loeschT = (f.loeschT || 0) + dt;
         if(f.loeschT > 1.2){ f.aus = true; story.entsorgen(f.g); if(typeof showThumb === 'function') showThumb();
           const n = kul.feuer.filter(q => q.aus).length;
-          if(n < 3) story.sprich([n === 1 ? 'Super, das erste Feuer ist aus!' : 'Klasse, nur noch eins!'], null, 'pilot');
+          if(n < 3) story.sprich([n === 1 ? 'Klasse, das erste Feuer ist aus!' : 'Sehr gut, nur noch eins!'], null, 'pilot');
         }
       }
     }
@@ -858,7 +860,7 @@ function bootEnde(ok, wie, schonGesagt){
   });
   if(schonGesagt){ weiter(); return; }           // Erfolg: der Satz ist schon durch (bootGeschafft)
   story.sprich([wie === 'Zeit abgelaufen' ? 'Oh nein, das hat zu lange gedauert. Die Feuerwehr vom Land übernimmt.'
-                                          : 'Autsch! Das Boot ist leck. Wir müssen abschleppen lassen.'], weiter, 'pilot');
+                                          : 'Autsch! Das Boot ist leck. Wir müssen uns abschleppen lassen.'], weiter, 'pilot');
 }
 
 // Feuer-Radar: im Boot der naechste Brand, sonst wie gehabt

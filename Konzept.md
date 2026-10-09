@@ -12,9 +12,15 @@ U-Boot-Schlucht) und in Etappe 6 der Alpha-Jet-Weg (Vulkanhöhle) · Startmenü 
 Tageszähler · Stimmen (Pilot männlich) · Offline-PWA · Highscores still gespeichert (noch ohne Anzeige).
 Details zum Gebauten in der [README](README.md); Stolperstellen der Engine in [ENGINE_RISIKEN.md](ENGINE_RISIKEN.md).
 
-**Als Nächstes:** Etappe 6 live weiter testen (Höhle, Filmsequenz, Landung am Strand), dann **Etappe 6a Shinkansen**
-(Stellwerk-Entwurf unten, Fragen noch offen), danach Finale. Nach Etappe 6 geht es je nach verbrauchten Tagen weiter
-(„es gibt noch mehr“).
+**Als Nächstes:** **Etappe 1 umbauen** (Festland nach dem Vorbild Fukuoka-Beach: Strand, Nadelbäume, Schule „AEG“ als
+festes Gebäude, Stadt dahinter, Ariane schräg hinter der Schule, kleiner X-Wing-Parkplatz, U-Boot-Ring, Sonar mit Küste),
+danach Finale. Nach Etappe 6 geht es je nach verbrauchten Tagen weiter („es gibt noch mehr“).
+
+- **Etappe 6 fertig (09.10.2026):** spielt in **Tokio**, Ziel ist **Fukuoka** (Globus: Faden Tokio → Fukuoka, lila Punkt
+  wird zur 🌊). **6c Shinkansen gebaut** (ersetzt den Stellwerk-Entwurf unten): Gleise wählen nach zwei Weichensymbolen je
+  Gleis, streng (falsch = 7 Tage), 0 → 300 → 0 km/h, 3 Gleise erst beim Bremsen. Alpha mit Startsequenz-Ansage, Landung
+  bis ~30 % Schub. Ende beider Wege am **Fukuoka-Beach** (Torii, Meoto-Iwa, Surfbrett „Surfen“, Lagerfeuer, Samurai,
+  Godzillas, C-400 mit Pfeil). Details in der README, Texte in SPRECHTEXTE.md.
 
 - **Etappe 6b Alpha Jet gebaut, live abgestimmt (weicht vom Text unten ab):** keine Ansage am Start, nur Startsequenz mit
   Countdown; verpasst = Flughafenpolizei, **7 Tage Gefängnis**. Dann Flug zum Fuji (2 km hoch, im Meer), Blende in eine

@@ -304,27 +304,29 @@ function hookInseln(){
   buildIsland = function(cx, cz){
     const g = buildOrig.apply(this, arguments);
     if(g && window.MOEWE_FLUG_GLB) inselMoewenAn(g, cx, cz);
-    if(g && story.etappe === 6) strandTiereAn(g, cx, cz);
     return g;
   };
 }
 const hookVorher = window.STORY_HOOK;
 window.STORY_HOOK = function(){ if(hookVorher) hookVorher(); hookInseln(); };
 
-// ---- Etappe 6: Stadt (Moewen) und Strand-Flughafen (Godzillas, Samurai, Moewen) --------------------------------------
+// ---- Etappe 6: Stadt (Moewen) und Festland hinter dem Fuji (Godzillas, Samurai, Moewen) --------------------------------
 // Mini-Godzilla: Godzilla by savounited, CC-BY-4.0 (godzilla_glb.js, verkleinert) – 1 m hoch (Live-Wunsch), Gruppen,
 // nicht auf dem Flugfeld. Samurai: Susanoo by tranb95, CC-BY-4.0 (samurai_glb.js, unveraendert: Transparenz/Outline),
 // Animationen "Idle Sit", "Talk Sit", "Idle Stand"; sitzende und stehende Gruppen.
 function aufbau6(){
   const info = islandInfo(0, 0); if(!info) return false;
+  const FL = story.e6festland, e = story.e6; if(!FL || !FL.g || !e) return false;   // Festland (etappe6.js) noch nicht gebaut
   const w = story.welt(6);
   story.moewenKreise(6, w, [
+    { x: e.FEST.x + 100, z: e.FEST.z + 200, r: 150, y: 22, n: 4 }, { x: e.FEST.x + 80, z: e.FEST.z - 500, r: 90, y: 16, n: 3 },
+    { x: e.FLUGFELD.x, z: e.FLUGFELD.z, r: 220, y: 35, n: 3 },
     { x: info.wx, z: info.wz, r: info.radius * 0.8, y: 32, n: 3 }, { x: -60, z: 60, r: 45, y: 18, n: 3 },
     { x: info.wx - info.radius, z: info.wz, r: 70, y: 16, n: 2 }, { x: info.wx, z: info.wz - info.radius, r: 60, y: 22, n: 3 },
   ]);
   // Live-Feedback: "keine Mini-Godzillas rumlaufen" -> auch in der Stadt, Gruppen auf der Wiese, eine direkt vor Kenji.
   // Nicht auf der Bahn (|x| < 30), nicht am Bahnhof, nicht in Haeusern (hitsBuilding kennt die Stadt).
-  const e = story.e6, frei = (x, z) => { if(!isOnLand(x, z) || Math.hypot(x, z) > 225) return false;
+  const frei = (x, z) => { if(!isOnLand(x, z) || Math.hypot(x, z) > 225) return false;
     if(Math.abs(x) < 30 && Math.abs(z) < 160) return false;
     if(e && Math.abs(x - e.BAHNHOF.x) < 22 && Math.abs(z - e.BAHNHOF.z) < e.BAHNHOF.laenge / 2 + 15) return false;
     return !hitsBuilding(x, ISLAND_Y + 0.5, z, false); };
@@ -343,14 +345,22 @@ function aufbau6(){
     const k = cloneSkinned(v.tpl); k.scale.setScalar(RIESE.h); w.add(k);
     let mixer = null; if(v.clip){ mixer = new THREE.AnimationMixer(k); mixer.clipAction(v.clip).play(); mixer.timeScale = 0.35; }
     riese.o = { k, mixer, x: -RIESE.weg, dir: 1, t: 0 };
+    // Live-Wunsch 09.10.2026: auch durch Fukuoka laeuft ein Riese – hinten in der Stadt hinter dem Bahnhof, laengs z
+    // (parallel zur Kueste), so sieht man ihn vom Strand aus ueber den Daechern
+    const S = story.e6 && story.e6.STADT; if(S){
+      const k2 = cloneSkinned(v.tpl); k2.scale.setScalar(130); w.add(k2);   // ueberragt die Tuerme (bis ~140 m, meist weniger)
+      let m2 = null; if(v.clip){ m2 = new THREE.AnimationMixer(k2); m2.clipAction(v.clip).play(); m2.timeScale = 0.33; m2.setTime(1.3); }
+      riese2.o = { k: k2, mixer: m2, x: S.riese, z: (S.z0 + S.z1) / 2 + 250, weg: 260, dir: 1, t: 0, s: 0 };   // vor Kenjis Strandplatz (z +250) hin und her
+    }
   });
+  festlandTiere();
   return true;
 }
 const RIESE = { h: 60, z: 205, weg: 210, v: 6 };          // Hoehe m, Laufbahn z, halbe Breite m, Tempo m/s
-const riese = { o: null };
+const riese = { o: null }, riese2 = { o: null };
 function updateRiese(dt){
   const o = riese.o; if(!o) return;
-  if(story.etappe !== 6){ riese.o = null; return; }
+  if(story.etappe !== 6){ riese.o = null; riese2.o = null; return; }
   o.t += dt; o.x += o.dir * RIESE.v * dt;
   if(Math.abs(o.x) > RIESE.weg){ o.dir = -o.dir; o.x = Math.sign(o.x) * RIESE.weg; }
   // Kopf +Z: laeuft er nach +x, schaut er nach +x (yaw pi/2), sonst -x; dazu ein schweres Schwanken
@@ -358,20 +368,22 @@ function updateRiese(dt){
   o.k.rotation.set(0, o.dir > 0 ? Math.PI / 2 : -Math.PI / 2, Math.sin(o.t * 1.1) * 0.04);
   o.k.visible = locale === 'earth';
   if(o.mixer) o.mixer.update(dt);
+  const p = riese2.o; if(!p) return;
+  p.t += dt; p.s += p.dir * RIESE.v * dt;
+  if(Math.abs(p.s) > p.weg){ p.dir = -p.dir; p.s = Math.sign(p.s) * p.weg; }
+  // Kopf +Z: laeuft er nach +z, yaw 0, sonst pi; leichtes Schwanken quer
+  p.k.position.set(p.x + Math.sin(p.t * 0.4) * 6, ISLAND_Y, p.z + p.s);
+  p.k.rotation.set(0, p.dir > 0 ? 0 : Math.PI, Math.sin(p.t * 1.1) * 0.04);
+  p.k.visible = locale === 'earth';
+  if(p.mixer) p.mixer.update(dt);
 }
-// Am Bau der Strand-Insel: Godzillas und Samurai als eigene Liste (lokal zur Insel), Update wie die Bodentiere
+// Festland hinter dem Fuji (etappe6.js: story.e6festland, Gruppe im Weltursprung): Godzillas und Samurai rund um das
+// Flugfeld als eigene Liste, Update wie die Bodentiere. frei = Wiese, nicht auf Bahn, Vorfeld oder Bahnhof.
 const strandTiere = [];
-function strandFrei(info){ return (x, z) => {
-  const lx = x - info.wx, lz = z - info.wz;
-  if(Math.hypot(lx, lz) > info.radius - 35) return false;                 // nicht am Strand/im Wasser
-  if(Math.abs(lx) < 30 && Math.abs(lz) < Math.min(260, info.radius * 1.4) / 2 + 20) return false;   // Bahn frei
-  if(Math.abs(lx - 45) < 22 && Math.abs(lz - 30) < 20) return false;       // C-400-Parkplatz
-  return !hitsBuilding(x, ISLAND_Y + 0.5, z, false);
-}; }
-function strandTiereAn(g, cx, cz){
-  const e6 = story.e6; if(!e6 || cx !== e6.STRAND.cx || cz !== e6.STRAND.cz) return;
-  const info = islandInfo(cx, cz); if(!info) return;
-  const frei = strandFrei(info), rnd = zufall(4711);
+function festlandTiere(){
+  const FL = story.e6festland, e6 = story.e6; if(!FL || !FL.g || !e6) return;
+  const g = FL.g, frei = FL.frei, rnd = zufall(4711);
+  const info = { wx: e6.FLUGFELD.x, wz: e6.FLUGFELD.z };
   const setze = (v, n, gx, gz, gr, clip, kopf) => {
     for(let i = 0; i < n; i++){
       let x = gx, z = gz; for(let t = 0; t < 14; t++){ const a = rnd() * Math.PI * 2, r = rnd() * gr; x = gx + Math.cos(a) * r; z = gz + Math.sin(a) * r; if(frei(x, z)) break; }
@@ -380,21 +392,39 @@ function strandTiereAn(g, cx, cz){
       o.k.position.set(x - info.wx, ISLAND_Y, z - info.wz);
       o.k.rotation.y = rnd() * Math.PI * 2 + (kopf === '-z' ? Math.PI : 0);
       o.k.scale.setScalar(0.9 + rnd() * 0.2);
-      o.insel = g; o.zelle = cx + ',' + cz; o.lauf = !clip; o.heim = { x: x - info.wx, z: z - info.wz }; o.yaw = o.k.rotation.y; o.warte = 1 + rnd() * 5; o.rnd = rnd;
+      o.insel = g; o.lauf = !clip; o.heim = { x: x - info.wx, z: z - info.wz }; o.yaw = o.k.rotation.y; o.warte = 1 + rnd() * 5; o.rnd = rnd;
       o.frei = (lx, lz) => frei(lx + info.wx, lz + info.wz);
       strandTiere.push(o);
     }
   };
   // Godzillas: 4 Gruppen beiderseits der Bahn (heller: siehe godzillaHell)
   vorlage('godzilla', window.GODZILLA_GLB, 1.0, 'y', null, (v) => {
-    if(islandCells.has(cx + ',' + cz) && islandCells.get(cx + ',' + cz) !== g) return;
+    if(FL.g !== g || !g.parent) return;
     for(const [dx, dz, n] of [[-70, -60, 4], [80, -90, 3], [-90, 70, 4], [70, 110, 3]]) setze(v, n, info.wx + dx, info.wz + dz, 9, null, 'z');
+    // Live-Feedback: auch am Strand (Kenji steht nach der Etappe dort): zwei kleine Gruppen links und rechts von ihm
+    const S = e6.STRANDPLATZ; if(S){ setze(v, 3, S.x - 2, S.z + 30, 5, null, 'z'); setze(v, 3, S.x + 2, S.z - 34, 5, null, 'z'); }
   });
   // Samurai: sitzende Runden (Idle Sit / Talk Sit) und stehende Gruppen (Idle Stand)
   vorlage('samurai', window.SAMURAI_GLB, 1.75, 'y', 'Armature|Idle Stand', (v) => {
-    if(islandCells.has(cx + ',' + cz) && islandCells.get(cx + ',' + cz) !== g) return;
+    if(FL.g !== g || !g.parent) return;
     for(const [dx, dz, n, clip] of [[-60, 10, 4, 'Armature|Idle Sit'], [55, -30, 3, 'Armature|Talk Sit'], [-40, -110, 3, 'Armature|Idle Stand'], [60, 60, 4, 'Armature|Idle Stand'], [-110, -10, 3, 'Armature|Talk Sit']])
       setze(v, n, info.wx + dx, info.wz + dz, 6, clip, 'z');
+    // am Strand: eine sitzende Runde links vom Torii (schaut aufs Meer), eine stehende Gruppe rechts hinter dem Surfbrett
+    const S = e6.STRANDPLATZ; if(S){ setze(v, 4, S.x - 4, S.z + 16, 3, 'Armature|Talk Sit', 'z'); setze(v, 3, S.x - 3, S.z - 22, 3, 'Armature|Idle Stand', 'z'); }
+    // Live-Wunsch: eine kleine Gruppe stehender Samurai auf einer freien Strandflaeche (schauen zur Mitte der Gruppe)
+    const SG = e6.SAMURAI_GRUPPE; if(SG) for(const [dx, dz] of [[-2.4, 0.4], [2.2, -0.6], [0.3, 2.5], [-0.4, -2.6], [2.6, 2.2]]){
+      const x = SG.x + dx, z = SG.z + dz, o = tierNeu(v, g, rnd, 'Armature|Idle Stand');
+      o.k.position.set(x - info.wx, ISLAND_Y, z - info.wz); o.k.rotation.y = Math.atan2(SG.x - x, SG.z - z); o.yaw = o.k.rotation.y;
+      o.insel = g; o.lauf = false; o.heim = { x: x - info.wx, z: z - info.wz }; o.warte = 1e9; o.rnd = rnd; o.frei = () => false;
+      strandTiere.push(o);
+    }
+    // Live-Wunsch: zwei sitzende Samurai am Lagerfeuer, Blick zum Feuer (Kopf +Z -> yaw = atan2(dx, dz))
+    const F = e6.FEUER; if(F) for(const [dx, dz, clip] of [[-2.2, 1.2, 'Armature|Talk Sit'], [2.1, 1.6, 'Armature|Idle Sit']]){
+      const x = F.x + dx, z = F.z + dz, o = tierNeu(v, g, rnd, clip);
+      o.k.position.set(x - info.wx, ISLAND_Y, z - info.wz); o.k.rotation.y = Math.atan2(F.x - x, F.z - z); o.yaw = o.k.rotation.y;
+      o.insel = g; o.lauf = false; o.heim = { x: x - info.wx, z: z - info.wz }; o.warte = 1e9; o.rnd = rnd; o.frei = () => false;
+      strandTiere.push(o);
+    }
   });
 }
 // Godzilla am Strand: wie die Bodentiere – warten, dann ein Stueck zu einem Punkt nahe der Gruppe tappen (Kopf +Z)
@@ -417,7 +447,7 @@ function updateStrandTiere(dt){
   const cp = camera.position;
   for(let i = strandTiere.length - 1; i >= 0; i--){
     const o = strandTiere[i];
-    if(islandCells.get(o.zelle) !== o.insel){ if(islandCells.has(o.zelle) || !o.insel.parent) strandTiere.splice(i, 1); continue; }
+    if(!o.insel.parent){ strandTiere.splice(i, 1); continue; }                // Welt 6 entsorgt
     if(o.lauf) strandLaufen(o, dt);
     const ip = o.insel.position, d = Math.hypot(ip.x + o.k.position.x - cp.x, ip.z + o.k.position.z - cp.z);
     o.k.visible = locale === 'earth' && d < SICHT;

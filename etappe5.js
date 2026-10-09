@@ -46,7 +46,7 @@ function stelleUboot5(){
 }
 
 // ---- Parcours ---------------------------------------------------------------------------------
-// Live-Wunsch: Looping, Steilflug und Messerflug gehoeren hinein (die Schraube im Steilflug ist wieder raus: zwischen
+// Live-Wunsch: Looping und Steilflug gehoeren hinein (der Messerflug ist seit 09.10.2026 wieder raus) (die Schraube im Steilflug ist wieder raus: zwischen
 // den Ringen drehte die Maschine weg, der Weg war zu kurz zum Abfangen). Jedes Tor ist eine Flaeche im
 // Raum mit Mitte, Durchflugrichtung (3D) und Form; gezaehlt wird, wenn die Mustang die Torebene in
 // Durchflugrichtung durchstoesst – innerhalb der Flaeche = geschafft, daneben = verpasst.
@@ -63,13 +63,13 @@ const TORE = [
   { typ: 'pylon', x:    0, z:  -600, b: 40, d:  0.0 },
   { typ: 'pylon', x:  100, z: -1150, b: 36, d:  0.2 },
   { typ: 'pylon', x:  -60, z: -1700, b: 34, d: -0.3 },
-  // Messerflug: gerade anfliegen, 90 Grad rollen, durch, zurueckrollen
-  { typ: 'messer', x:   0, z: -2250, d: 0.0, text: 'Messerflug! Leg die Mustang auf die Seite.' },
+  // (hier stand das Messerflug-Tor; Live-Wunsch 09.10.2026: kein Messerflug -> normales Pylonen-Tor, Abstaende bleiben)
+  { typ: 'pylon', x:    0, z: -2250, b: 38, d:  0.0 },
   // Looping: Eingangsring und Ausgangsring tief ueber dem Wasser, beide nach -z (Live-Test: ein Ring oben im Scheitel
   // war nicht zu treffen, die Tore lagen zu dicht). Dazwischen prueft das Spiel den Flug (loopingPruefen): die Nase
   // muss einmal ganz herum (>= 300 Grad Nicken) und man muss dabei auf dem Ruecken gewesen sein. Ein Looping hat bei
   // 300-500 km/h 50-85 m Radius und versetzt kaum nach vorn – 350 m bis zum Ausgangsring reichen zum Ausrichten.
-  { typ: 'ring',  x:    0, y:  25, z: -2850, r: 22, dir: 'nz', loopEin: true, text: 'Jetzt der Looping! Durch den Ring, dann voll ziehen und durch den zweiten Ring wieder raus.' },
+  { typ: 'ring',  x:    0, y:  25, z: -2850, r: 22, dir: 'nz', loopEin: true, text: 'Jetzt der Looping! Durch den Ring, voll ziehen… und durch den zweiten Ring wieder raus.' },
   { typ: 'ring',  x:    0, y:  25, z: -3200, r: 22, dir: 'nz', loopAus: true },
   // Steilflug: unten durch den liegenden Ring hochziehen, senkrecht weiter, oben durch den zweiten
   { typ: 'ring',  x:    0, y:  80, z: -3600, r: 28, dir: 'hoch', text: 'Steilflug! Unter dem Ring senkrecht hochziehen und durch beide Ringe nach oben.' },
@@ -250,13 +250,13 @@ function torSichtbar(immer){
 const ar = story.airRace = { aktiv: false, laeuft: false, t: 0, naechstes: 0, strafe: 0, fehler: [], hudEl: null, fertig: false,
   seite: null, rede: null, loopWinkel: 0, loopKopf: false, naseVor: null, rolle: 0, obenVor: null, landen: false, zeitZiel: 0 };
 const AR_TEXT = [
-  'Willkommen beim Air Race über dem Chinesischen Meer! Ich bin heute dein Ansager.',
-  'Du fliegst die Mustang durch ' + TORE.length + ' Tore: zwischen den Pylonen hindurch, unter der Spitze, und durch die Ringe.',
-  'Dazu kommen drei Figuren: ein Messerflug durch ein ganz schmales Tor, ein Looping und ein Steilflug senkrecht hoch durch zwei Ringe übereinander. Zum Schluss eine Schraube, und nach dem Ziel landest du auf der Insel.',
-  'Gewertet wird die Zeit. Ein verpasstes Tor kostet fünf Sekunden, ein gestreifter Pylon oder eine vergessene Figur drei.',
-  'Schaffst du es unter ' + ZIELZEIT + ' Sekunden, geht es schon morgen weiter nach Japan.',
-  'Es leuchtet immer das Tor, durch das du als Nächstes musst, dahinter siehst du schon das folgende. Ich sage dir an, wenn eine Figur kommt.',
-  'Erst die Startsequenz, dann geht es los!',
+  'Willkommen beim Air Race über dem Chinesischen Meer!',
+  'Du fliegst die Mustang durch ' + TORE.length + ' Tore: zwischen den Pylonen hindurch, unter der Spitze… und durch die Ringe!',
+  'Dazu kommen drei Figuren: ein Looping, ein Steilflug senkrecht hoch… und zum Schluss eine Schraube! Nach dem Ziel landest du auf der Insel.',
+  'Gewertet wird die reine Zeit. Ein verpasstes Tor kostet fünf Sekunden… ein gestreifter Pylon oder eine vergessene Figur drei Sekunden.',
+  'Schaffst du es unter ' + ZIELZEIT + ' Sekunden, geht es schon morgen weiter nach Japan!',
+  'Es leuchtet immer das Tor, durch das du als Nächstes musst. Ich sage dir rechtzeitig an, wenn eine Figur kommt.',
+  'Erst die Startsequenz… dann geht es los!',
 ];
 
 function mustangEinsteigen(){
@@ -323,7 +323,7 @@ function arUpdate(dt){
     _arV.copy(p).sub(L.m);
     const u = _arV.dot(L.quer), v = _arV.dot(L.hoch);
     if(imTor(t.T, u, v)){
-      if(t.T.typ === 'pylon' && p.y > PYLON_H) strafe('hoch', 'Zu hoch! Plus zwei Sekunden.');
+      if(t.T.typ === 'pylon' && p.y > PYLON_H) strafe('hoch', 'Zu hoch geflogen! Plus zwei Sekunden.');
       if(t.T.typ === 'messer'){
         // Querlage: Fluegel-Oben steht waagerecht (Oben quer zur Welt-Senkrechten)
         if(Math.abs(_arU.y) > Math.cos(MESSER_QUER)) strafe('messer', 'Nicht auf der Seite! Plus drei Sekunden.');
@@ -378,8 +378,7 @@ function zielDurch(){
   story.ziel = { x: MUSTANG.x, z: 0 };                       // Radar: zur Startbahn
   torSichtbar(true);
   // Zeit erst nach der Landung ansagen (Live-Wunsch: nicht doppelt); 20 % Schub reichen, die Sinkrate ist nur etwas hoeher
-  story.sprich(['Im Ziel! Die Zeit ist gestoppt – jetzt noch sauber auf der Insel landen.',
-    'Gas auf zwanzig Prozent, langsam runter und auf der Bahn aufsetzen.'], null, 'pilot');
+  story.sprich(['Im Ziel! Die Zeit ist gestoppt. Jetzt noch sauber auf der Bahn landen: Gas auf zwanzig Prozent, langsam runter und aufsetzen!'], null, 'pilot');
 }
 function landungPruefen(){
   if(!ar.landen || ar.fertig) return;
@@ -619,7 +618,7 @@ function updateE5(dt){
 story.updateE5 = updateE5;
 story.aufgabeE5 = () => (story.aufgabeE5b && story.aufgabeE5b()) || (ar.aktiv ? ['Air Race', [
   ['Ziel', 'alle ' + TORE.length + ' Tore zwischen den Pylonen, unter ' + ZIELZEIT + ' s'],
-  ['Figuren', 'Messerflug (auf die Seite), Looping, Steilflug durch 2 Ringe, zum Schluss eine Schraube'],
+  ['Figuren', 'Looping, Steilflug durch 2 Ringe, zum Schluss eine Schraube'],
   ['Danach', 'Zeit stoppt im Zielring, dann auf der Insel landen'],
   ['Strafen', 'Tor verpasst +5 s · Pylon/Figur +3 s · zu hoch +2 s'],
   ['Weg', 'das leuchtende Tor, dahinter das nächste'],

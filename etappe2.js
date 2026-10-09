@@ -428,17 +428,17 @@ function updateE2Marken(){
 const FS_SATZ_KURZSCHLUSS = 2;  // Index in FS_TEXT: 'Leuchtet dabei dieses rote Symbol …'
 const FS_HOEHE = 300;          // m ueber Grund
 const FS_TEXT = [
-  'Hallo, willkommen an Bord! Ich bin dein Pilot. Wir bringen Hilfsgüter zu einer Oase in der Wüste. Pass gut auf, dann lernst du was.',
-  'Vor jedem Flug machen wir die Startsequenz: Bremse halten, Ruder links und rechts, Nase hoch und runter, Bremse los, Gas geben.',
-  'Leuchtet dabei dieses rote Symbol mit den zwei Pfeilen, hat der Flieger einen Kurzschluss. Dann ist alles vertauscht, und du musst umgekehrt steuern.',
-  'Zum Starten gibst du nach der Startsequenz Vollgas. Ab etwa hundertfünfzig Kilometern pro Stunde ziehst du die Nase sanft hoch.',
-  'Wir fliegen auf dreihundert Metern. Halte die Höhe zwischen zweihundertsiebzig und dreihundertdreißig.',
-  'Die Kisten fallen mit unserem Schwung nach vorne. Je schneller wir sind, desto früher musst du sie abwerfen.',
-  'Merk dir: Schub in Prozent mal fünf gleich Meter vor dem Ziel. Bei sechzig Prozent wirfst du also dreihundert Meter vorher ab, bei hundert Prozent fünfhundert Meter.',
-  'Abgeworfen wird mit B. Die Entfernung zur Oase steht in der Anzeige.',
+  'Hallo, willkommen an Bord! Ich bin dein Pilot. Wir bringen Hilfsgüter zu einer Oase in der Wüste. Pass gut auf, dann lernst du was!',
+  'Vor jedem Flug machen wir die Startsequenz: Bremse halten… Ruder links und rechts… Nase hoch und runter… Bremse loslassen… und Gas geben!',
+  'Leuchtet dabei das rote Symbol mit den zwei Pfeilen, hat der Flieger einen Kurzschluss. Dann ist alles vertauscht… und du musst umgekehrt steuern.',
+  'Zum Starten gibst du nach der Startsequenz Vollgas. Ab etwa hundertfünfzig Kilometern pro Stunde ziehst du die Nase ganz sanft hoch.',
+  'Wir fliegen auf dreihundert Metern Höhe. Halte dich zwischen zweihundertsiebzig… und dreihundertdreißig Metern!',
+  'Die Kisten fliegen mit unserem Schwung nach vorne. Je schneller wir sind, desto früher musst du sie abwerfen.',
+  'Merk dir die Regel: Schub in Prozent… mal fünf… ergibt den Abstand in Metern vor dem Ziel! Bei sechzig Prozent Schub wirfst du also dreihundert Meter vorher ab… bei hundert Prozent genau fünfhundert Meter vorher.',
+  'Abgeworfen wird mit der Taste B. Die Entfernung zur Oase steht in deiner Anzeige.',
   // gemessen (C:\tmp\sfg\landung.js): 30 % = gleichmaessig ~2 m/s sinken, Gyro-Ring durchgehend gruen;
   // 60 % haelt die Hoehe
-  'Und zum Landen: Gas auf dreißig Prozent und langsam runter. Halte die Nase und die Flügel gerade. Wird der Ring im Gyroskop rechts grün, bist du im richtigen Winkel. Dann aufsetzen und bremsen.',
+  'Und zum Landen: Gas runter auf zwanzig oder dreißig Prozent… und langsam sinken lassen. Halte die Nase und die Flügel gerade! Wird der Ring im Gyroskop rechts grün, fliegst du im perfekten Winkel. Dann aufsetzen… und bremsen!',
 ];
 const fsch = story.flugschule = { schritt: null, rede: null, frageEl: null, symbolEl: null };
 fsch.zurFrage = () => { if(fsch.rede) fsch.rede.abbrechen(); fsSymbol(false); fsFrage(); };   // Erklaerung ueberspringen
@@ -483,7 +483,7 @@ function fsSymbol(an){
 // Frage mit JA / NEIN (Stick links-rechts, A / Enter / Klick)
 function fsFrage(){
   fsch.schritt = 'frage';
-  story.sprich(['Und, du kannst doch fliegen, oder?'], null, 'pilot');
+  story.sprich(['Und… du kannst doch fliegen, oder?'], null, 'pilot');
   if(!fsch.frageEl){
     fsch.frageEl = document.createElement('div'); fsch.frageEl.dataset.etappeHud = '1';
     fsch.frageEl.style.cssText = 'position:absolute;left:50%;bottom:16%;transform:translateX(-50%);display:flex;gap:18px;z-index:22;';
@@ -512,13 +512,13 @@ function fsAntwort(){
   window.removeEventListener('keydown', fsTaste, true);
   if(fsch.wahl === 1){
     fsch.schritt = 'nein';
-    story.sprich(['Oh man! Für Anfänger ist das leider nichts. Bitte steige wieder aus.'], () => {
+    story.sprich(['Oh man! Für Anfänger ist das leider nichts. Bitte steig wieder aus.'], () => {
       story.etappeEnde(7, 'ausgestiegen');
     }, 'pilot');
     return;
   }
   fsch.schritt = 'sequenz';
-  story.sprich(['Super! Dann zeig mal, was du kannst. Erst die Startsequenz.'], null, 'pilot');
+  story.sprich(['Klasse! Dann zeig mal, was du kannst. Erst die Startsequenz!'], null, 'pilot');
   story.pfStart({ kurzschluss: false, ohneZeit: true, still: true, danach: () => {
     fsch.schritt = 'flug';
     story.ziel = { x: OASE.x, z: OASE.z };              // roter Punkt im Radar
@@ -620,8 +620,8 @@ function updateKiste(dt){
 function fsErgebnis(abstand){
   fsHudAus();
   const treffer = abstand <= FS_TREFFER;
-  story.sprich([treffer ? (abstand < 20 ? 'Perfekt! Mitten in die Oase!' : 'Gut gemacht! Die Kiste ist angekommen.')
-                        : 'Oh, daneben. Die Leute müssen die Kiste jetzt suchen.'], null, 'pilot');
+  story.sprich([treffer ? (abstand < 20 ? 'Perfekt! Volltreffer, mitten in die Oase!' : 'Gut gemacht! Die Kiste ist sicher angekommen.')
+                        : 'Oh je, daneben! Die Leute müssen die Kiste jetzt im Sand suchen.'], null, 'pilot');
   story.spaeter(4, () => {
     if(story.hinweis) story.hinweis('');
     story.etappeEnde(treffer ? 4 : 7, treffer ? 'Kiste getroffen' : 'Kiste daneben');

@@ -204,7 +204,7 @@ function padFertig(){
     story.sprich(['Code richtig! Das U-Boot ist frei. Abtauchen und durch die Felsenschlucht – vorsichtig, die Wände sind nah.'], () => schluchtStart(), 'pilot');
   } else {
     story.sprich(['Falscher Code. Das U-Boot bleibt gesperrt.',
-      'Ein Fischer nimmt Kenji schließlich mit – sein Kutter ist langsam, und die Fahrt dauert eine ganze Woche.'], () => {
+      'Ein Fischer nimmt Kenji mit – sein Kutter ist langsam, die Fahrt dauert eine Woche.'], () => {
       story.spaeter(1, () => { sb.aktiv = false; story.etappeEnde(7, 'falscher Code'); });
     }, 'pilot');
   }
@@ -244,7 +244,7 @@ function ubootEinsteigen5(){
   state.vel.set(0, 0, 0); state.throttle = 0;
   story.hinweis('');
   // Wie in Etappe 1: jemand hilft per Funk – aber den Code sagt diesmal niemand
-  sb.rede = story.sprich(['Hallo! Dieses U-Boot braucht einen Code, sonst fährt es nicht los.', 'Du hast nur einen Versuch. Kennst du ihn? Mit Raute bestätigst du, mit Stern löschst du die letzte Ziffer.'], () => {
+  sb.rede = story.sprich(['Hallo! Bitte den Universal-Code für U-Boote eingeben.', 'Du hast nur einen Versuch.', 'Mit Raute bestätigst du, mit Stern löschst du die letzte Ziffer.'], () => {
     pad.offen = true; pad.wahl = 0; pad.eingabe = ''; pad.prev = { b: true }; padZeigen();
   }, 'pilot');
 }
@@ -327,7 +327,7 @@ function ende(ok, wie){
   sb.fertig = true; sb.laeuft = false; story.ziel = null; state.throttle = 0;
   hud();
   const txt = ok ? ['Geschafft! Durch die ganze Schlucht – das war Maßarbeit!']
-    : wie === 'zerschellt' ? ['Krach! Der Rumpf ist leck, das U-Boot muss auftauchen.', 'Bis es repariert ist, vergeht eine ganze Woche.']
+    : wie === 'zerschellt' ? ['Krach! Der Rumpf ist leck, das U-Boot muss auftauchen.', 'Bis es repariert ist, vergeht eine Woche.']
     : ['Die Zeit ist um – der Sauerstoff wird knapp, das U-Boot muss auftauchen.', 'Die Fahrt dauert jetzt viel länger: eine ganze Woche.'];
   story.sprich(txt, () => story.spaeter(1, () => { sb.aktiv = false; hud(); story.etappeEnde(ok ? 1 : 7, ok ? 'U-Boot-Schlucht' : (wie === 'zerschellt' ? 'U-Boot leck' : 'Schlucht zu langsam')); }), 'pilot');
 }

@@ -14,7 +14,7 @@ Technische Basis ist die Engine des **[Flugspiel](https://github.com/workFLOw42/
 
 ## Stand
 
-Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 5** (beide Wege) und in Etappe 6 der **Alpha Jet** (Shinkansen folgt), danach folgt
+Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 6** (beide Wege), danach folgt
 vorerst ein Platzhalter.
 
 **Startmenü:** *Neues Spiel* oder – zum Testen – direkt **E2 … E6** und **E6 Höhle** (springt direkt in den Autopiloten
@@ -100,26 +100,29 @@ Flieger (am Himmel fliegen trotzdem welche).
   U-Boot). Danach durch die Felsenschlucht: Wände, Decke, Felsbogen, Felsrippe, Sonar-Karte nach dem Ping (B).
   Höchstens **2 Kontakte**, Zeitlimit **250 s**. Geschafft → **1 Tag**; falscher Code, 3. Kontakt oder Zeit um → **7 Tage**.
 
-### Etappe 6 – Japan (Fuji)
-Stadt auf der Startinsel mit Hochhäusern, Möwen und Mini-Godzillas; hinter Kenji stapft ein **Riesen-Godzilla** durch die
-Häuser. Links ein Bahnhof mit dem **Shinkansen**, rechts die Startbahn mit dem **Alpha Jet**. Voraus der **Mount Fuji**
-(2 km hoch, steht im Meer), dahinter ein zweiter **Flughafen am Strand** mit C-400, Mini-Godzillas, Samurai (sitzend und
-stehend) und Möwen. Musik „Ancient Japan“.
-- **Alpha Jet („1 Tag“):** keine Ansage, nur die Startsequenz mit Countdown. Verpasst → Flughafenpolizei, eine Woche
-  Gefängnis → **7 Tage**. Geschafft → selbst starten und dem roten Radarpunkt bis kurz vor den Fuji folgen. Dort
-  Schwarzblende, und der Jet steckt in einer **Höhle im Vulkan**:
-  - **Autopilot** fliegt die ersten ~18 s, dazu die Ansage *„Wie bist du hier reingeraten? … Drei, Zwei, Eins, LOS!“*.
-  - Danach **selbst fliegen** (~15 s), immer Vollgas, eng und kurvig; das Gyroskop ist ausgeblendet. Jede Berührung →
-    Schwarzblende, Krankenhaus → **7 Tage**; unter 100 % Schub → zu langsam → **7 Tage**.
-  - Am Ende ein **Ausgang ins Licht**, noch 0,5 s weiter, dann Schwarzblende und eine **Filmsequenz** (~3 s): der Jet
-    schießt mit Überschallknall und Dampfkegel senkrecht aus dem Krater, dicht gefolgt vom **Ausbruch**; die Kamera zieht
-    auf (Krater unteres Drittel, Jet oberes Drittel).
-  - Schwarzblende, dann normal weiter: 500 m Höhe, 50 % Schub auf der Strandseite des Fuji, die Ansage *„Du bist der
-    Wahnsinn – ein wahres Fliegerass! …“* und landen am Strand-Flughafen (Radarpunkt = Mitte der Bahn) → **1 Tag**.
-    Absturz → Krankenhaus → **7 Tage**.
-- **Shinkansen („4 Tage“):** folgt (im gelben Ring am Bahnsteig kommt vorerst nur der Hinweis „kommt bald“).
+### Etappe 6 – Japan (Tokio, Fuji) → Fukuoka
+Stadt **Tokio** auf der Startinsel mit Hochhäusern, Möwen und Mini-Godzillas; hinter Kenji stapft ein **Riesen-Godzilla**
+durch die Häuser. Links der Bahnhof **東京 Tokio** mit dem **Shinkansen** (das Gleis läuft als Ring um die Insel), rechts die
+Startbahn mit dem **Alpha Jet**. Voraus der **Mount Fuji** (2 km hoch, steht im Meer). Musik „Ancient Japan“.
+- **Alpha Jet („1 Tag“):** Startsequenz mit Ansage und 10-s-Countdown wie beim X-Wing. Verpasst → Flughafenpolizei → **7 Tage**.
+  Geschafft → dem roten Radarpunkt bis kurz vor den Fuji folgen, Blende, **Höhle im Vulkan**: Autopilot ~18 s mit Ansage,
+  dann ~15 s selbst, immer Vollgas, ohne Gyroskop. Berührung oder unter 100 % → **7 Tage** (ohne Ansage). Am **Ausgang ins
+  Licht** sofort (weißer Blitz) die **Filmsequenz**: nur Vulkan und Meer, der Jet schießt mit Überschallknall senkrecht aus
+  dem Krater, Ausbruch mit Rauchsäule, Lavaströmen und Grollen (kein Motorton), langsame Abblende. Danach 500 m / 50 %,
+  *„Du bist der absolute Wahnsinn! …“*, landen auf dem Flugfeld am **Fukuoka-Beach** (Jets setzen bis ~30 % Schub auf, bremsen
+  mit Umkehrschub) → **1 Tag**. Absturz → **7 Tage**.
+- **Shinkansen („4 Tage“), `etappe6c.js`:** Stellwerk ausgefallen, Weichen defekt – Kenji wählt die Gleise. ~98 s Fahrt
+  0 → 300 → 0 km/h, 23 Runden: oben im HUD je Gleis zwei Symbole (grün ok / rot durchgestrichen), genau ein Gleis ist bei
+  beiden grün. L-Stick: ein Druck = ein Gleis. Wahlzeit 2 / 1,5 / 1 s (bis 150 / bis 250 / darüber), dann **2 s Ruhe** (HUD
+  leer), Signale erst nach der Wahl sichtbar. **3 Gleise erst beim Bremsen ab ~195 km/h** (das neue Gleis zweigt in der Mitte
+  ab). Kamera über dem Triebwagen. Falsches Gleis → Notbremsung → **7 Tage**; alles richtig → Einfahrt Fukuoka-Beach → **4 Tage**.
+- **Ende (beide Wege):** Globus – der Faden wächst von Tokio nach **Fukuoka**, der lila Punkt wird zur 🌊. Danach steht Kenji
+  am **Fukuoka-Beach**: Meer mit weißem **Torii** und den **Meoto-Iwa** (Vorbild Sakurai-Futamigaura), Strand mit Palmen,
+  Surfbrett im Sand (Ring „Surfen“, kommt bald), Lagerfeuer mit Samurai, eine Samurai-Gruppe, Godzillas; dahinter das Vorfeld
+  mit der C-400 (Pfeil, Schild noch leer), die Landebahn, der Bahnhof **Fukuoka-Beach** (Gleis entlang der Küste) und die
+  Stadt mit einem 130 m hohen Riesen-Godzilla.
 
-Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, gelb = Etappen, lila = Fukuoka).
+Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, gelb = Etappen, lila = Fukuoka; am Ende von Etappe 6 wird daraus die 🌊).
 
 ## Steuerung zu Fuß
 
@@ -149,7 +152,8 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `etappe4b.js` | Etappe 4: Schnellboot-Flucht (Kanal, Polizei) |
 | `etappe5.js` | Etappe 5: Insel, Skyline, Küstendorf, Air Race mit der Mustang |
 | `etappe5b.js` | Etappe 5: U-Boot an der Küste, Code-Feld, Felsenschlucht mit Sonar-Karte |
-| `etappe6.js` | Etappe 6: Japan – Stadt mit Bahnhof (Shinkansen, 6a folgt) und Alpha Jet, Startsequenz, Hinflug, Fuji (2 km) im Meer, Strand-Flughafen |
+| `etappe6.js` | Etappe 6: Tokio mit Bahnhof (Ringgleis) und Alpha Jet, Startsequenz, Hinflug, Fuji (2 km) im Meer; Fukuoka-Beach (Festland: Strand, Torii, Meoto-Iwa, Surfbrett, Palmen, Lagerfeuer, Vorfeld, Bahn, Bahnhof, Stadt), Ende mit Globus |
+| `etappe6c.js` | Etappe 6c: Shinkansen – Weichen wählen (eigene Strecke, 2 → 3 Gleise, HUD, Notbremsung, Einfahrt) |
 | `etappe6b.js` | Etappe 6b: Höhle im Vulkan als eigene Szene (Autopilot, kurvige Röhre in Abschnitten, Ausgang ins Licht), Filmsequenz mit Ausbruch, Landung am Strand. Der frühere Senkrechtschacht liegt in `_intern/archiv/e6b_senkrechtschacht/` |
 | `flucht_glb.js` | Schnellboot und Polizeiboot (verkleinert) als Base64 |
 | `hafen_glb.js` | Frachtschiff (verkleinert), Container und Kran als Base64 |
@@ -160,7 +164,9 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `fuji_glb.js` | Mount Fuji für alle Inselberge (vereinfacht: 2.752 Dreiecke, Höhe und Farbe vom Original abgetastet) |
 | `zug_glb.js` | Shinkansen (Etappe 6): Triebwagen und Mittelwagen aus dem Original geschnitten, hinterer Triebwagen gedreht (3,3 MB statt 26 MB) |
 | `godzilla_glb.js` | Godzilla (Etappe 6): Mini-Godzillas (1 m) in der Stadt und am Strand-Flughafen, Riesen-Godzilla (60 m) hinter der Stadt; verkleinert und aufgehellt |
-| `samurai_glb.js` | Samurai am Strand-Flughafen (Etappe 6), sitzend und stehend |
+| `samurai_glb.js` | Samurai am Fukuoka-Beach (Etappe 6), sitzend und stehend |
+| `surfboard_glb.js` | Surfbrett (Etappe 6: steckt am Fukuoka-Beach im Sand) |
+| `campfire_glb.js` | Lagerfeuer, animiert (Etappe 6, Fukuoka-Beach) |
 | `moewe_glb.js` | Möwen sitzend und fliegend (Etappe 1, 4, 5) |
 | `panda_glb.js` | Panda (Etappe 5) |
 | `hund_glb.js` | Labrador (Etappe 1), verkleinert (4,4 MB statt 9,3 MB) |
@@ -172,7 +178,7 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `sw.js`, `manifest.json` | Offline-Cache und App-Installation (PWA) |
 | `ENGINE_RISIKEN.md` | bekannte Stolperstellen der Engine-Übernahme |
 
-Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `schildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `engine/engine.js`. Die Engine ruft am Ende
+Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `schildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `surfboard_glb.js` → `campfire_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `etappe6c.js` → `engine/engine.js`. Die Engine ruft am Ende
 ihres Boot-Blocks `STORY_HOOK` (Wrapper setzen) und `STORY_START` (Startszene) auf – die zwei Zeilen fügt das Build-Skript ein.
 
 **Welten:** Jede Etappe baut ihre Kulisse in eine eigene Gruppe – `story.welt(n).add(obj)`, nie `scene.add(obj)`.
@@ -246,6 +252,7 @@ Rigging und Animationen der Spielfigur: **[Mixamo](https://www.mixamo.com)** (Ad
 | N700-3000 Series Shinkansen, CC-BY-4.0 (gekürzt) | **Layo** (bciarfello) |
 | Godzilla, CC-BY-4.0 (verkleinert) | **savounited** |
 | Susanoo (Samurai), CC-BY-4.0 | **tranb95** |
+| Stage Campfire, CC-BY-4.0 (unverändert) | **daedaljs** |
 | P-51 Mustang | **UlissesVinicios** |
 | Canadair CL-215 | **AlessioPassera** |
 | Airbus A380-800 | **OUTPISTON** |

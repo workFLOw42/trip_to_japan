@@ -616,7 +616,7 @@ function kranB(){
   c.obj.position.set(luecke.x, DECK_Y + CONT.h / 2, luecke.z); c.obj.rotation.set(0, -luecke.grad * Math.PI / 180 + Math.PI / 2, 0);
   kran.voll++;
   if(kran.voll >= 4){ kranGeschafft(); return; }
-  story.sprich([['Sehr gut, der erste sitzt!', 'Prima, schon zwei!', 'Super, nur noch einer!'][kran.voll - 1]], null, 'pilot');
+  story.sprich([['Sehr gut, der erste sitzt!', 'Prima, schon zwei!', 'Klasse, nur noch einer!'][kran.voll - 1]], null, 'pilot');
 }
 function legeZurueck(c){
   const i = kran.lager.indexOf(c), p = STAPEL[i];
@@ -632,13 +632,13 @@ function fehler(grund){
 
 // ---- Ablauf -----------------------------------------------------------------------------------
 const KRAN_TEXT = [
-  'Hallo! Wir müssen vier Container auf das Schiff bringen, und es weht ganz schön.',
-  'Mit dem linken Stick oder den Pfeilen links und rechts drehst du den Ausleger, jedes Mal um fünf Grad. Mit R T fährt die Laufkatze einen Marker nach außen, mit L T einen nach innen. Auf der Tastatur sind das E und Q.',
-  'Mit dem rechten Stick oder W und S hebst und senkst du den Haken. Mit B hängst du einen Container an und löst ihn wieder.',
-  'Der Container hängt am Seil wie eine Schaukel. Wer schnell hintereinander fährt, bringt ihn zum Pendeln. Ganz oben hängt er fest unter der Katze, dort beruhigt er sich sofort.',
-  'Rechts siehst du den Ladeplan: das Schiff von oben, die vier Lücken, und wo dein Haken gerade ist. Dazu für jede Lücke Winkel und Marker. Mit P blendest du ihn aus und ein.',
-  'Oben siehst du, wie hoch dein Container über dem hängt, was darunter ist. Grün heißt aufgesetzt. Im Plan stehen die Seillängen zum Greifen und Absetzen.',
-  'Sechs Minuten hast du, und höchstens zwei Fehler. Lass dir Zeit, Geduld ist hier die Kunst. Los geht\'s!',
+  'Hallo! Wir müssen vier Container auf das Schiff laden, und es weht ganz schön.',
+  'Mit dem linken Stick drehst du den Ausleger, jedes Mal um fünf Grad. Mit der rechten Schultertaste fährt die Laufkatze einen Marker nach außen… mit der linken nach innen.',
+  'Mit dem rechten Stick hebst und senkst du den Haken. Mit der Taste B hängst du einen Container an… oder löst ihn wieder.',
+  'Der Container hängt am Seil wie eine Schaukel! Wer schnell hintereinander fährt, bringt ihn zum Pendeln. Ganz oben hängt er fest unter der Katze, dort beruhigt er sich sofort.',
+  'Rechts siehst du den Ladeplan: das Schiff von oben, die vier Lücken… und wo dein Haken gerade ist. Dazu für jede Lücke Winkel und Marker. Mit der Taste P blendest du den Plan aus und ein.',
+  'Oben siehst du, wie hoch dein Container über dem Ziel hängt. Grün heißt: perfekt aufgesetzt! Im Plan stehen die Seillängen zum Greifen und Absetzen.',
+  'Sechs Minuten hast du Zeit… und höchstens zwei Fehler! Lass dir Zeit. Los geht\'s!',
 ];
 function kranEinsteigen(){
   story.phase = 'kran';

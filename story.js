@@ -631,14 +631,14 @@ function startbildschirm(weiter){
   el.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;'
     + 'justify-content:center;background:rgba(0,0,0,.55);color:#fff;font-family:system-ui,sans-serif;'
     + 'z-index:30;text-align:center;user-select:none;';
-  const OPT = [{ n: 1, t: 'Neues Spiel' }, { n: 2, t: 'E2' }, { n: 3, t: 'E3' }, { n: 4, t: 'E4' }, { n: 5, t: 'E5' }, { n: 6, t: 'E6' }, { n: 6, t: 'E6 Höhle', hoehle: true }];
+  const OPT = [{ n: 1, t: 'Neues Spiel' }, { n: 2, t: 'E2' }, { n: 3, t: 'E3' }, { n: 4, t: 'E4' }, { n: 5, t: 'E5' }, { n: 6, t: 'E6' }, { n: 6, t: 'E6 Höhle', hoehle: true }, { n: 6, t: 'E6 Zug', zug: true }, { n: 6, t: 'E6 Vulkan', vulkan: true }];
   el.innerHTML = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>'
     + '<div style="display:flex;gap:10px;justify-content:center;margin-top:34px">'
     + OPT.map((o, i) => '<button data-i="' + i + '" style="min-width:' + (i ? 54 : 170) + 'px;height:44px;border-radius:10px;'
       + 'border:2px solid rgba(255,255,255,.45);background:rgba(255,255,255,.1);color:#fff;font:600 18px system-ui;'
       + 'cursor:pointer;transition:all .12s">' + o.t + '</button>').join('') + '</div>'
     + '<div style="font-size:14px;margin-top:16px;opacity:.7">Linker Stick / ← → wählen · A / Enter starten'
-    + '<br><span style="font-size:12px;opacity:.8">E2–E6: Test – direkt zur Etappe · E6 Höhle: direkt in den Autopiloten</span></div>';
+    + '<br><span style="font-size:12px;opacity:.8">E2–E6: Test – direkt zur Etappe · E6 Höhle: direkt in den Autopiloten · E6 Zug: direkt in den Shinkansen · E6 Vulkan: Szene am Höhlenausgang, dann landen</span></div>';
   document.body.appendChild(el);
   const knoepfe = [...el.querySelectorAll('button')];
   let wahl = 0;
@@ -661,7 +661,9 @@ function startbildschirm(weiter){
     story.gestartet = true;
     if(!soundOn) toggleSound();      // die Geste erlaubt jetzt Audio: Ton an (D-Pad runter / N schaltet um)
     const n = OPT[wahl].n;
-    if(OPT[wahl].hoehle){ story.hoehleDirekt = true; springeZu(n); return; }   // Test: direkt in die Hoehle (etappe6.js)
+    if(OPT[wahl].hoehle){ story.hoehleDirekt = true; springeZu(n); return; }
+    if(OPT[wahl].zug){ story.zugDirekt = true; springeZu(n); return; }         // Test: direkt in den Shinkansen (etappe6c.js)
+    if(OPT[wahl].vulkan){ story.vulkanDirekt = true; springeZu(n, 5); return; } // Test: Szene am Hoehlenausgang, bisher 5 Tage   // Test: direkt in die Hoehle (etappe6.js)
     if(n > 1){ springeZu(n); return; }
     weiter();
   }
@@ -700,7 +702,8 @@ function startbildschirm(weiter){
 // ---- TEST: direkt zu Etappe n springen ------------------------------------------------------
 // Etappe 1 laeuft normal. Fuer Etappe n > 1 tut das Spiel so, als waeren die Etappen davor mit dem
 // sicheren Weg (4 Tage) geschafft: Reise und Tage vorbelegt, dann die Globus-Reise nach Etappe n.
-function springeZu(n){
+// tageBisher (optional): so viele Tage sind nach der Globus-Reise vergangen (Test "E6 Vulkan": 5 = jede Etappe 1 Tag)
+function springeZu(n, tageBisher){
   intro.phase = 'aus';
   hudSichtbar(true);
   if(intro.rede) intro.rede.abbrechen();
@@ -709,10 +712,11 @@ function springeZu(n){
   for(let i = 0; i < n - 1; i++) story.reise.push(i);     // 0 .. n-2 schon besucht
   story.e1weg = story.e1weg || 'uboot';
   story.e2weg = story.e2weg || 'transall';
-  story.tage = (n - 2) * 4;                                // die Etappen vor der letzten Reise
+  const letzte = tageBisher ? 1 : 4;
+  story.tage = tageBisher ? tageBisher - letzte : (n - 2) * 4;   // die Etappen vor der letzten Reise
   story.etappe = n - 1;
   story.phase = 'reise';
-  const text = tageVergangen(4) + ' (Test-Sprung) · noch ' + (42 - story.tage) + ' von 42 Tagen';
+  const text = tageVergangen(letzte) + ' (Test-Sprung) · noch ' + (42 - story.tage) + ' von 42 Tagen';
   story.globusReise(n - 1, text, () => {
     story.etappe = n;
     if(n === 2 && story.etappe2Start){ hinweis(''); story.etappe2Start(); return; }
@@ -768,12 +772,13 @@ function baueSchule(x, z, yaw){
 }
 
 // ---- Intro -----------------------------------------------------------------------------------
+// Text vom User ueberarbeitet (09.10.2026, SPRECHTEXTE.md). "…" gibt in der Sprachausgabe eine kurze Pause.
 const INTRO_TEXT = [
-  'Endlich Ferien!',
-  'Kenji wurde eingeladen, den Sommer mit seinem Freund in Japan zu verbringen.',
-  'Da er aber kein Geld hat und seine Eltern ihm keines geben wollen, muss er versuchen, auf eigene Faust den Weg zu meistern.',
-  'Er hat volle sechs Wochen Zeit, sein Ziel zu erreichen, muss aber schwierige Aufgaben meistern.',
-  'Am Ende winkt ein Abenteuer, das er so noch nie erlebt hat – und vielleicht der größte Spaß seines Lebens.',
+  'Endlich… Ferien!',
+  'Kenji hat ein riesiges Ziel: Er ist eingeladen, den Sommer bei einem Freund in Japan zu verbringen!',
+  'Das Problem? Er hat kein Geld für ein Flugticket… und seine Eltern helfen ihm nicht.',
+  'Also nimmt Kenji die Sache selbst in die Hand. Er macht sich auf eigene Faust auf den Weg!',
+  'Sechs ganze Wochen hat er Zeit. Vor ihm liegen knifflige Rätsel, wilde Fahrzeuge… und das vielleicht größte Abenteuer seines Lebens!',
 ];
 const INTRO_GEH = 0.3;     // Stick-Ausschlag beim Gehen im Intro (EVA_SPEED * 0.3 ≈ 1,8 m/s)
 const INTRO_WEG = 7;       // m: so weit geht er von der Schultuer weg, dann bleibt er stehen
@@ -1136,7 +1141,8 @@ const ORTE = [
   { name: 'Etappe 3: Der Indische Ozean',lat:  8.0, lon:  73.0 },
   { name: 'Etappe 4: Südostasien',       lat:  3.0, lon: 101.0 },
   { name: 'Etappe 5: Chinesisches Meer', lat: 22.3, lon: 114.2 },
-  { name: 'Etappe 6: Japan – Fukuoka',   lat: 33.59, lon: 130.40 },  // Ziel: dort wohnt Kenjis Freund
+  { name: 'Etappe 6: Japan – Tokio',     lat: 35.68, lon: 139.69 },  // Fuji, Hoehle, Shinkansen (Live-Wunsch 09.10.2026)
+  { name: 'Ziel: Fukuoka',               lat: 33.59, lon: 130.40 },  // Ziel: dort wohnt Kenjis Freund (Strand, lila Punkt)
 ];
 story.reise = [0];                 // besuchte Orte (Index in ORTE), Start ist immer dabei
 const GLOBUS_R = 1;
@@ -1221,14 +1227,37 @@ function globusZeichnen(anteil){
   const r = story.reise;
   for(let i = 1; i < r.length; i++){
     const letztes = i === r.length - 1;
-    fadenStueck(ORTE[r[i - 1]], ORTE[r[i]], letztes ? anteil : 1);
+    // beim Morph endet der letzte Faden kurz vor Japan, sonst schaut er unter der Welle hervor
+    // beim Morph endet der Faden nach Fukuoka kurz davor, sonst schaut er unter der Welle hervor
+    fadenStueck(ORTE[r[i - 1]], ORTE[r[i]], (letztes ? anteil : 1) * (gl.morph && r[i] === ORTE.length - 1 ? 0.92 : 1));
   }
   punkt(ORTE[0], 0x3b82ff, true);                                   // Start blau
   for(let i = 1; i < r.length; i++){
     if(i === r.length - 1 && anteil < 1) continue;                  // neuer Punkt erst bei Ankunft
     if(r[i] !== ORTE.length - 1) punkt(ORTE[r[i]], 0xffd23f, false); // Etappen gelb
   }
-  punkt(ORTE[ORTE.length - 1], 0xb04cff, true);                     // Ziel Japan lila
+  if(!gl.morph) punkt(ORTE[ORTE.length - 1], 0xb04cff, true);       // Ziel Japan lila
+  else morphZeichnen();
+}
+// Ende Etappe 6 (Live-Wunsch 09.10.2026): auf dem Globus wird der lila Punkt Japan zum 🌊 (der Strand am Fuji).
+// Punkt schrumpft, die Welle (Sprite mit Emoji, bleibt bestehen) waechst – zwischen 0,8 und 2,4 s.
+function morphZeichnen(){
+  const u = Math.max(0, Math.min(1, (gl.t - GLOBUS_FAHRT + 0.3) / 1.4)), m = u * u * (3 - 2 * u);
+  const J = ORTE[ORTE.length - 1];
+  if(m < 1){
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.028 * (1 - m) + 0.0001, 16, 12), new THREE.MeshBasicMaterial({ color: 0xb04cff }));
+    p.position.copy(latLon(J.lat, J.lon, GLOBUS_R * 1.012)); gl.punkte.add(p);
+  }
+  if(!gl.welle){
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+    const cx = cv.getContext('2d'); cx.font = '104px system-ui, "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+    cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('🌊', 64, 70);
+    gl.welle = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true }));
+    gl.welle.renderOrder = 5; gl.erde.add(gl.welle);
+  }
+  gl.welle.position.copy(latLon(J.lat, J.lon, GLOBUS_R * 1.04));
+  gl.welle.scale.setScalar(0.0001 + 0.14 * m);
+  gl.welle.visible = m > 0;
 }
 
 // Kamera: schaut auf einen Punkt zwischen "von" und "nach", sanft dazwischen
@@ -1300,7 +1329,7 @@ function globusUpdate(dt){
   if(gl.t > GLOBUS_FAHRT + GLOBUS_HALT && !gl.ende){
     gl.ende = true;
     schwarz('', 0.6, () => {
-      gl.aktiv = false; gl.ende = false;
+      gl.aktiv = false; gl.ende = false; gl.morph = false; if(gl.welle) gl.welle.visible = false;
       globusText('');
       hudSichtbar(true);
       masterBlende(1, 1.5);                   // neue Etappe: Ton wieder ein
@@ -1310,6 +1339,33 @@ function globusUpdate(dt){
   }
 }
 story.globusReise = globusReise;
+// Ende Etappe 6: gleicher Ablauf wie globusReise, aber ohne neuen Faden (Kenji bleibt in Japan) – Kamera auf Japan,
+// der lila Punkt wird zum 🌊. Text = Ort + Tage.
+function globusAnkunft(ortText, tageText, fertig){
+  etappenHudsAus();
+  globusBauen();
+  masterBlende(0, 0.9);
+  if(schwarzEl){ schwarzEl.innerHTML = ''; schwarzEl.style.transition = 'opacity .8s'; }
+  schwarz('', 0.1, () => {
+    hudSichtbar(false);
+    if(typeof clearRescue === 'function') clearRescue();
+    if(typeof clearParachute === 'function') clearParachute();
+    if(typeof clearBoatSpray === 'function') clearBoatSpray();
+    if(typeof clearFire === 'function') clearFire();
+    state.crashed = false; state.crashTimer = 0;
+    // die Erfolgs-Ansage (gelandet / Zug angekommen) darf auf dem Globus zu Ende laufen (Live-Wunsch: Globus gleich nach
+    // dem Stillstand) – nur die Timer der Etappe enden hier
+    timerListe.length = 0;
+    // letzte Reise: Tokio -> Fukuoka (roter Faden waechst wie zwischen den Etappen), dann wird der lila Punkt zur 🌊
+    gl.von = story.reise[story.reise.length - 1]; gl.nach = ORTE.length - 1;
+    if(gl.von !== gl.nach) story.reise.push(gl.nach);
+    gl.aktiv = true; gl.t = 0; gl.fertig = fertig; gl.morph = true;
+    globusZeichnen(0); globusKamera(0);
+    globusText(ortText + '<div style="font-size:20px;font-weight:400;margin-top:6px;opacity:.85">' + (tageText || '') + '</div>');
+    gl.textEl.style.opacity = '0';
+  });
+}
+story.globusAnkunft = globusAnkunft;
 story.globusAktiv = () => gl.aktiv;
 
 // ---- Story-Timer (R7) ------------------------------------------------------------------------
@@ -1930,18 +1986,19 @@ function platzhalter(text){
 // - war schon auf dem Mars: kurz ("Du schon wieder ...")
 // - U-Boot oder Startsequenz geschafft: wie der Mars-Text, nur fuer den Mond (mit Flugerklaerung)
 const MOND_KURZ = [
-  'Du schon wieder. Wohl immer noch ein wenig nervös, was?',
-  'Diesmal war es aber nicht deine Schuld. Der Flieger hatte einen Kurzschluss, deshalb war die Startsequenz nicht wie gewohnt.',
-  'Wir haben das wieder automatisch geregelt. Alles andere kennst du schon.',
-  'Der Unterschied ist: Diesmal fliegst du zum Mond und holst von dort einen Stein. Bis in einer Woche dann!',
+  'Du schon wieder! Wohl immer noch ein wenig nervös, was?',
+  'Diesmal war es aber nicht dein Fehler. Der Flieger hatte einen Kurzschluss, deshalb war die Startsequenz anders als gewohnt.',
+  'Wir haben das wieder automatisch geregelt. Alles andere kennst du ja schon!',
+  'Der einzige Unterschied ist: Diesmal fliegst du zum Mond… und holst von dort einen Stein. Bis in einer Woche dann!',
 ];
 function mondLang(){
   return [
-    story.etappe >= 3 ? 'Hallo. Du warst wohl etwas nervös.'
-      : 'Hallo. Da hatte der Flieger wohl einen Kurzschluss, deshalb war die Startsequenz nicht wie gewohnt.',
-    'Aber keine Sorge, wir haben die Startsequenz und den Start automatisch durchgeführt.',
-    'Zur Erinnerung: Du hast dich freiwillig gemeldet, zum Mond zu fliegen und als Beweis einen Stein mitzubringen.',
-  ].concat(MARS_TEXT.slice(3, 9)).concat([MARS_TEXT[9]]);   // Flugerklaerung + Schluss wie beim Mars
+    // Etappe 3, zum ersten Mal im All: wie Etappe 2 Fall B, nur ohne Kurzschluss (den gibt es dort nicht)
+    story.etappe >= 3 ? 'Hallo Kenji! Du bist wohl etwas nervös gewesen…'
+      : 'Hallo Kenji! Da hatte der Flieger wohl einen Kurzschluss, deshalb war die Startsequenz anders als gewohnt.',
+    'Aber keine Sorge! Wir haben die Startsequenz und den Start automatisch durchgeführt.',
+    'Zur Erinnerung: Du hast dich freiwillig gemeldet, zum Mond zu fliegen… und als Beweis einen Stein mitzubringen!',
+  ].concat(MARS_TEXT.slice(3, 10).map(zumMond));             // Flugerklaerung + Schluss wie beim Mars, "Mars" -> "Mond"
 }
 // Etappe 3 (kein Kurzschluss) – vier Faelle, je nachdem, wo Kenji schon war:
 //   Mars und Mond  -> MOND_PROFI      Mond, nicht Mars -> MOND_ZWEITER (Konzept: "zweiter Mond-Trip")
@@ -1976,18 +2033,21 @@ const TRIP = {
   moon: { text: mondText, ziel: 'Mond', stein: 'Stein', farbe: 0xd8d8e6, glanz: 0x8888aa },
 };
 function tripOrt(){ return story.etappe >= 2 ? 'moon' : 'mars'; }
+// Text vom User ueberarbeitet (09.10.2026, SPRECHTEXTE.md). Index 3-9 nutzt auch der Mond-Trip (mondLang) – dort wird
+// "Mars" zu "Mond" (zumMond).
 const MARS_TEXT = [
-  'Hallo. Du bist wohl etwas nervös gewesen.',
-  'Aber keine Sorge, wir haben die Startsequenz und den Start automatisch durchgeführt.',
-  'Zur Erinnerung: Du hast dich freiwillig gemeldet, als erster Mensch zum Mars zu fliegen und als Beweis einen Stein mitzubringen.',
-  'Falls du vergessen hast, wie man fliegt, erklären wir es noch einmal kurz.',
-  'Mit dem linken Stick lenkst du und hebst oder senkst die Nase. Mit L T und R T rollst du.',
-  'Mit dem rechten Stick stellst du den Schub ein. Bei vollem Schub springt der Warp-Antrieb an, so kommst du schnell zum Mars.',
+  'Hallo Kenji! Du bist wohl etwas nervös gewesen…',
+  'Aber keine Sorge! Wir haben die Startsequenz und den Start einfach automatisch durchgeführt.',
+  'Zur Erinnerung: Du hast dich freiwillig gemeldet, als erster Mensch zum Mars zu fliegen… und als Beweis einen Stein mitzubringen!',
+  'Falls du vergessen hast, wie man fliegt, hier noch einmal die Steuerung:',
+  'Mit dem linken Stick lenkst du… und hebst oder senkst die Nase. Mit der linken und rechten Schultertaste rollst du das Schiff.',
+  'Mit dem rechten Stick stellst du den Schub ein. Bei vollem Schub springt der Warp-Antrieb an! So kommst du blitzschnell zum Mars.',
   'Der rote Punkt im Radar zeigt dir den Weg. Kurz vor dem Mars bremst der Antrieb von selbst ab.',
-  'Zum Landen gehst du auf zehn Prozent Schub, dann sinkt der X-Wing langsam und setzt senkrecht auf.',
-  'Mit Y steigst du aus und wieder ein. Zum Starten gibst du zwanzig Prozent Schub, dann steigst du senkrecht auf.',
-  'Du kommst schon klar. Wir sehen und hören uns dann in einer Woche wieder. Viel Spaß!',
+  'Zum Landen gehst du runter auf zehn Prozent Schub. Dann sinkt der X-Wing langsam… und setzt senkrecht auf.',
+  'Mit der Y-Taste steigst du aus… und später wieder ein. Zum Starten gibst du zwanzig Prozent Schub, dann steigst du senkrecht auf.',
+  'Du schaffst das schon! Wir hören uns in einer Woche wieder… Viel Spaß auf dem Mars!',
 ];
+const zumMond = (t) => t.replace(/zum Mars/g, 'zum Mond').replace(/dem Mars/g, 'dem Mond');
 const STEIN_R = 4;           // m: so nah muss Kenji fuer Y heran
 const mars = story.mars = { phase: null, stein: null, steinObj: null, steinSaeule: null, rede: null };
 
@@ -2079,7 +2139,7 @@ function marsSteinHolen(){
   mars.phase = 'zurueck';
   blitz();
   const st = TRIP[mars.ort || 'mars'].stein;
-  sprich(['Super, du hast den ' + st + '! Jetzt zurück zur Erde.']);
+  sprich(['Klasse! Du hast den Beweis! Und jetzt… schnell zurück zur Erde!']);
   hinweis('🪨 ' + st + ' an Bord – zurück zur Erde (blauer Punkt)');
   spaeter(9, () => { if(mars.phase === 'zurueck') hinweis(''); });
 }
@@ -2169,17 +2229,16 @@ function freiflugUpdate(){
 // ---- U-Boot-Weg ------------------------------------------------------------------------------
 // Stimme + Ziffernfeld (Code 14 02 – kommt in Etappe 6 wieder!), dann frei tauchen. Zwei
 // UNTERSCHIEDLICHE Wracks fotografieren (Controller Y / Tastatur F) -> 4 Tage. Scheitern kann man hier nicht.
-const UBOOT_TEXT = [   // den Code NICHT aussprechen – er steht gross genug im Ziffernfeld
-  'Hallo, danke für deine Hilfe.',
-  'Du siehst jung aus, und als würdest du zum ersten Mal ein U-Boot fahren. Wir helfen dir.',
-  'Wir haben den universellen Code für U-Boote für dich eingegeben.',
-  'Jetzt erklären wir dir kurz die Steuerung.',
-  'Mit dem rechten Stick oder W und S gibst du Fahrt. Ohne Fahrt kann das U-Boot nicht tauchen.',
-  'Linker Stick nach vorn oder Pfeil hoch taucht ab, nach hinten taucht wieder auf. Gelenkt wird nach links und rechts.',
-  'Mit B schickst du einen Sonar-Ping: Je näher ein Wrack ist, desto lauter kommt er zurück. Nach jedem Ping zeigt dir die Scheibe oben rechts kurz die Wracks als rote Punkte.',
-  'Wir möchten die Wracks nachbauen, um daraus künstliche Riffe zu erschaffen.',
-  'Wir wissen, dass es hier in der Nähe viele Wracks gibt.',
-  'Finde zwei unterschiedliche Schiffswracks und mache jeweils ein Foto davon, dann können wir der Umwelt helfen.',
+const UBOOT_TEXT = [
+  // Text vom User ueberarbeitet (09.10.2026): der Code wird jetzt gesprochen (vorher nur im Ziffernfeld)
+  'Hallo Kenji! Danke für deine Hilfe.',
+  'Du siehst noch recht jung aus… und als würdest du zum ersten Mal ein U-Boot steuern! Keine Sorge, wir helfen dir.',
+  'Den Universal-Code für U-Boote haben wir bereits für dich eingegeben: eins… vier… null… zwei!',
+  'Hier ist die kurze Erklärung für die Steuerung:',
+  'Gib zuerst Fahrt! Ohne Fahrt kann das U-Boot nämlich nicht tauchen.',
+  'Mit dem linken Stick tauchst du ab und hebst die Nase. Gelenkt wird nach links und rechts.',
+  'Mit der Taste B schickst du einen Sonar-Ping durch das Wasser. Je näher ein Wrack ist, desto lauter kommt das Signal zurück! Auf deiner Bildschirmanzeige siehst du die Wracks kurz als rote Punkte.',
+  'Wir wollen künstliche Riffe bauen, um der Umwelt zu helfen. Dafür brauchen wir Fotos von zwei unterschiedlichen Schiffswracks!',
 ];
 // Fototaste: Y am Controller, F auf der Tastatur – genannt wird, was gerade angeschlossen ist
 function fotoTaste(){ return gamepadIndex !== null ? 'Y' : 'F'; }
@@ -2208,7 +2267,7 @@ function ubootStart(){
   ub.aktiv = true; story.phase = 'uboot';
   hinweis('');
   ziffernfeld('14 02');
-  ub.rede = sprich(UBOOT_TEXT.concat(['Fotografiert wird mit ' + fotoTaste() + ', wenn du nah genug dran bist. Viel Spaß!']), () => {
+  ub.rede = sprich(UBOOT_TEXT.concat(['Wenn du nah genug an einem Wrack bist, machst du mit ' + fotoTaste() + ' ein Foto.', 'Viel Erfolg… und gute Fahrt!']), () => {
     if(ub.padEl) ub.padEl.style.display = 'none';        // Code-Anzeige nach der Ansage weg
     hinweis('Finde zwei unterschiedliche Wracks und fotografiere sie (' + fotoTaste() + ')');
     spaeter(9, () => { if(ub.aktiv) hinweis(''); });
@@ -2263,15 +2322,15 @@ function fotoMachen(){
   if(!w || !ub.aktiv) return;
   blitz();
   if(ub.fotos[w.key]){
-    sprich(['Diesen Schiffstyp haben wir schon. Such ein anderes Schiff!']);
+    sprich(['Diesen Schiffstyp haben wir schon! Such bitte ein anderes Wrack.']);
     return;
   }
   ub.fotos[w.key] = true;
   const n = Object.keys(ub.fotos).length;
   if(n < 2){
-    sprich(['Super, ein ' + NAME[w.key] + '! Jetzt fehlt noch ein anderes Schiff.']);
+    sprich(['Klasse, ein ' + NAME[w.key] + '! Jetzt fehlt nur noch ein zweites, anderes Schiff.']);
   } else {
-    sprich(['Toll gemacht! Mit beiden Fotos können wir die Riffe bauen. Danke!']);
+    sprich(['Toll gemacht! Mit deinen beiden Fotos können wir die Riffe bauen. Vielen Dank, Kenji!']);
     ub.aktiv = false; story.phase = 'uboot-fertig';
     ub.nah = null; fotoAnzeige();
     spaeter(3.5, () => {
@@ -2471,6 +2530,31 @@ function updateMarken(){
 // ---- Schubbalken und Y im Flug: kommen aus der Engine (Flugspiel) ----------------------------------------
 // Beides wurde hier gebaut und dann ins Flugspiel uebernommen (07.10.2026). Hier nur noch die Story-Sperren:
 // kein Balken im Kran, im Platzhalter und auf der Globusreise; kein Geraderichten waehrend Startsequenz/Autostart.
+// ---- Jet-Landung auf der Bahn mit 20-30 % (Live-Wunsch 09.10.2026, fuers Flugspiel vorgemerkt: FLUGSPIEL_UEBERNAHME #17) ---
+// Die Engine wertet jedes Aufsetzen ueber 55 m/s als Crash. Beim Alpha Jet (vMax 361) sind 20 % = 72 m/s, 30 % = 108 m/s –
+// die Anleitung ("30 % Schub, langsam runter") liess sich mit ihm also nie befolgen, nur mit ~10 %. Neu, nur fuer Jets
+// (aero, Flugzeug mit Rad, kein VTOL) auf einer Landebahn/einem Traegerdeck: Aufsetzen bis ~30 % Schub-Tempo ist ok, solange Sinkrate
+// und Lage stimmen (die Engine-Pruefung dafuer bleibt). Bremsen macht der Spieler selbst (Umkehrschub, Live-Wunsch).
+// Live-Wunsch: 'es reicht, wenn man auch mit maximal 30 % Schub noch landen kann' -> Grenze = 30 % vMax + 10 %
+const JET_LANDE_ANTEIL = 0.33;
+function jetLandung(){ const m = MODEL_NAMES[currentModel]; return m === 'AlphaJet' || m === 'Airbus'; }
+function hookJetLandung(){
+  const physOrig = stepPhysics;
+  stepPhysics = function(dt, inp){
+    const jet = locale === 'earth' && jetLandung() && !eva && !state.crashed;
+    let echt = 0;
+    if(jet && !state.onGround){
+      // kurz vor dem Aufsetzen auf der Bahn: die Fahrt fuer die Engine-Pruefung auf 54 m/s "maskieren" und danach zurueck
+      const gy = surfaceY(state.pos.x, state.pos.z), v = state.vel.length();
+      const bahn = isOnRunway(state.pos.x, state.pos.z) || isOnCarrier(state.pos.x, state.pos.z);
+      if(bahn && v > 54 && v <= spec.vMax * JET_LANDE_ANTEIL && state.pos.y + state.vel.y * dt <= gy + 0.05){ echt = v; state.vel.multiplyScalar(54 / v); }
+    }
+    const r = physOrig.apply(this, arguments);
+    if(echt && state.onGround && !state.crashed){ state.vel.multiplyScalar(echt / 54); state.vel.y = Math.max(0, state.vel.y); }
+    else if(echt && !state.onGround) state.vel.multiplyScalar(echt / 54);
+    return r;
+  };
+}
 function hookSchubGerade(){
   const schubOrig = schubBalken;
   schubBalken = function(){
@@ -2720,6 +2804,7 @@ window.STORY_HOOK = function(){
   hookKunstflugKamera();
   hookModellHalter();
   hookSchubGerade();
+  hookJetLandung();
   hookLoop();
 };
 window.STORY_START = function(){

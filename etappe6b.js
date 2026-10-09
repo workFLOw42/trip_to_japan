@@ -4,9 +4,9 @@
 //      "Wie bist du hier reingeraten? ... 3... 2... 1... LOS!" – ab dann selbst fliegen.
 //   2. Selbst fliegen (~15 s): eng und kurvig, Gyroskop ausgeblendet (man verliert das Gefuehl fuer oben – soll wie der
 //      Aufstieg im Schlot wirken). Jede Beruehrung beendet die Reise (Krankenhaus), unter 100 % Schub = zu langsam.
-//   3. Am Ende ein Ausgang mit Himmel. Durch -> Schwarzblende -> Zwischenszene (~3 s): der Jet rast senkrecht aus dem Krater,
-//      dicht gefolgt vom Ausbruch -> Schwarzblende -> normal fliegen (500 m, 50 % Schub), "Du bist der Wahnsinn ..." ->
-//      am Strand-Flughafen landen = geschafft (1 Tag).
+//   3. Am Ende ein Ausgang mit Himmel. Ins Licht -> weisser Blitz, sofort die Zwischenszene (~3 s): der Jet rast senkrecht
+//      aus dem Krater, dicht gefolgt vom Ausbruch -> Schwarzblende -> normal fliegen (500 m, 50 % Schub), "Du bist der
+//      Wahnsinn ..." -> auf dem Flugfeld hinter dem Strand landen (Festland, etappe6.js) = geschafft (1 Tag).
 // Der fruehere Senkrechtflug (Countdown, Dom, Lavaschacht) liegt mit Erklaerung in _intern/archiv/e6b_senkrechtschacht/.
 // Gescheitert (Fels, zu langsam, Absturz) -> 7 Tage.
 (function(){
@@ -44,8 +44,10 @@ const PYLON = 25, HOEHE = 2 * PYLON * 1.5, BREITE = 60;
 // Ende: Ausgang bei U_AUS (nach der letzten Kurve, Gerade zum Licht). Die Roehre weitet sich auf den letzten AUS_TRICHTER m
 // leicht auf, dahinter eine helle Flaeche in Himmelsfarbe (Licht am Ende des Tunnels).
 const U_AUS = 5200, AUS_TRICHTER = 260;
-const U_WAND = U_AUS + 400;               // hinter dem Ausgang frei: man fliegt noch ~0,5 s ins Licht (Live-Wunsch)
-const AUS_NACH = 0.5;                     // s Flug hinter dem Ausgang bis zur Blende
+const U_WAND = U_AUS + 400;               // Bau-Ende hinter dem Ausgang
+// Live-Feedback 09.10.2026: nach dem Ausgang flog man noch 0,5 s weiter und sah den eigenen Jet draussen (leere Welt) ->
+// die Szene kommt genau beim Flug ins Licht (helle Flaeche bei U_AUS + 30), mit weissem Blitz statt Schwarzblende.
+const U_LICHT = U_AUS + 15;
 function breite(u){
   if(u > U_AUS - AUS_TRICHTER){ const f = (u - (U_AUS - AUS_TRICHTER)) / AUS_TRICHTER; return BREITE * (1 + 0.6 * f * f); }
   return BREITE;
@@ -165,14 +167,22 @@ function abschnitteZeigen(){
   }
   for(const b of bau.lava) b.visible = nahAusgang;
 }
+// Live-Feedback: der zweite Flug ruckelte. Ursache: abschnitteZeigen laeuft nur in der Hoehle; nach einem Crash blieben die
+// zuletzt sichtbaren Abschnitte an (und wurden ausserhalb weiter gezeichnet), im 2. Flug kamen die neuen dazu -> 16 statt 6
+// Abschnitte, ~650.000 statt ~230.000 Dreiecke. Deshalb beim Verlassen und vor jedem Start alles aus.
+function hoehleAus(){ for(const A of bau.abschnitte) A.g.visible = false; for(const b of bau.lava) b.visible = false; }
+story.e6hoehleAus = hoehleAus;
 
 // ---- Ablauf -----------------------------------------------------------------------------------------------
 const ho = story.hoehle = { aktiv: false, auto: false, t: 0, phase: '', fertig: false, rede: null, hudEl: null, ausbruch: null };
 const AUTO_U = 0;                         // Autopilot fliegt hoechstens bis hier (Ende des Anlaufs), dann uebernimmt man
-const ANSAGE = ['Wie bist du hier reingeraten? Egal!', 'Du musst da schleunigst raus, der Vulkan bricht gleich aus.', 'Immer Vollgas durch die Höhle.', 'Drei', 'Zwei', 'Eins', 'LOS!'];
+const ANSAGE = ['Wie bist du denn hier reingeraten?! Egal!', 'Du musst da schleunigst raus, der Vulkan bricht gleich aus!', 'Immer Vollgas durch die Höhle!', 'Drei…', 'Zwei…', 'Eins…', 'LOS!'];
 function hoehleStart(){
+  // Hoehle haengt in Welt 6 – wurde die entsorgt (Etappe neu), neu bauen
+  if(bau.fertig && bau.abschnitte.length && !bau.abschnitte[0].g.parent){ bau.fertig = false; bau.abschnitte.length = 0; bau.lava.length = 0; }
   baueHoehle();
-  Object.assign(ho, { aktiv: true, auto: true, t: 0, phase: 'auto', fertig: false, steht: false, szene: null, raus: 0 });
+  hoehleAus();
+  Object.assign(ho, { aktiv: true, auto: true, t: 0, phase: 'auto', fertig: false, steht: false, gelandet: false, szene: null });
   gyroZeigen(false);                                                  // Live-Wunsch: in der Hoehle kein Gyroskop
   story.kunstflugAus = true;                                          // eigene ruhige Kamera (hookE6b)
   if(story.preflight && story.preflight.el) story.preflight.el.style.display = 'none';   // Startsequenz-HUD nicht in die Hoehle mitnehmen
@@ -219,12 +229,20 @@ function hoehleUpdate(dt){
   if(state.throttle < 0.995){ ende(false, 'zu langsam'); return; }
   // Live-Feedback: nach dem Krachen nicht noch aus der Hoehle fliegen -> sofort Schwarzblende, Flieger steht
   if(state.crashed || treffer()){ state.vel.set(0, 0, 0); state.throttle = 0; ho.steht = true; story.schwarz('', 1.5, () => {}); ende(false, 'Fels'); return; }
-  // Ausgang passiert -> Schwarzblende -> Zwischenszene
-  if(L.u > U_AUS && !ho.blende){
-    ho.raus = (ho.raus || 0) + dt;                                    // noch kurz ins Licht fliegen
-    if(ho.raus > AUS_NACH){ ho.blende = true; state.vel.set(0, 0, 0); story.schwarz('', 0.3, () => { ho.blende = false; szeneStart(); }); return; }
-  }
+  // Ins Licht geflogen -> weiss aufblitzen, im selben Bild die Zwischenszene (vor dem Zeichnen, man sieht nie nach draussen)
+  if(L.u > U_LICHT){ weissBlitz(); szeneStart(); return; }
   hud();
+}
+let blitzEl = null;
+function weissBlitz(){
+  if(!blitzEl){
+    blitzEl = document.createElement('div');
+    blitzEl.style.cssText = 'position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:24;';
+    document.body.appendChild(blitzEl);
+  }
+  blitzEl.style.transition = 'none'; blitzEl.style.opacity = '1';
+  void blitzEl.offsetWidth;                                           // voll weiss setzen, dann ausblenden
+  blitzEl.style.transition = 'opacity .8s ease-out'; blitzEl.style.opacity = '0';
 }
 // Gyro: die Engine (updateGyro) setzt es jedes Bild sichtbar -> dort einhaengen (hookE6b), hier nur der Merker
 let gyroAus = false;
@@ -232,8 +250,13 @@ function gyroZeigen(an){ gyroAus = !an; const g = document.getElementById('gyro'
 // ---- Zwischenszene "Jet rast aus dem Vulkan" (~3 s) -------------------------------------------------------------------
 // Feste Kamera von weitem: Krater in der Bildmitte, unteres Drittel; der Jet schiesst senkrecht heraus, nach ~0,4 s der
 // Ausbruch. Danach Schwarzblende und normaler Flug.
-const SZENE_T = 3.0;
-const SZENE_RICHT = new THREE.Vector3(1900, 0, 1800).normalize();   // von dort schaut die Kamera auf den Krater (waagerecht)
+const SZENE_T = 4.0;                      // Live-Wunsch: eine Sekunde laenger ("die ist wirklich schoen")
+// Live-Wunsch 09.10.: danach noch stehen lassen – der Jet bleibt in der Endposition, der Vulkan bricht weiter aus, die
+// Kamera zieht weiter auf und es blendet langsam ab (NACH_T s, davon die letzten ABBLENDE_T s ins Schwarze)
+const NACH_T = 4.5, ABBLENDE_T = 3.0;
+// Live-Wunsch: den Strand (Festland, -z) nicht im Bild -> Kamera oestlich vom Fuji (75 Grad, gerechnet in C:/tmp/sfg/e6/kamwahl.js),
+// Blick nach Westen: dahinter offenes Meer, Festland und Tokio liegen seitlich ausserhalb des Bildes
+const SZENE_RICHT = new THREE.Vector3(Math.sin(75 * Math.PI / 180), 0, Math.cos(75 * Math.PI / 180));
 function szeneKamera(z){
   // Live-Wunsch: Krater bleibt Mitte unteres Drittel, die Kamera zieht so auf, dass der Jet im oberen Drittel bleibt.
   // Bildhoehe in der Entfernung d: B = 2 d tan(fov/2). Krater bei 1/3 von unten, Jet bei 2/3 -> Jet - Krater = B/3.
@@ -243,39 +266,84 @@ function szeneKamera(z){
   const H = Math.max(0, state.pos.y - z.krater.y);
   const dMin = 1600, d = Math.max(dMin, 3 * H / t2), B = d * t2;   // ab ~1,7 s zieht die Kamera mit zurueck
   const mitte = z.krater.clone().add(new THREE.Vector3(0, B / 6, 0));   // Krater liegt so bei 1/3 von unten
-  z.cam.copy(mitte).addScaledVector(SZENE_RICHT, d);
+  z.cam.copy(mitte).addScaledVector(SZENE_RICHT, d * z.zoom);
   z.ziel.copy(mitte);
 }
+// Ton der Szene (Live-Wunsch): kein Flugzeug, nur ein Knall und tiefes Grollen. Der Motor-Gain der Engine wird waehrend der
+// Szene stumm gehalten (updateEngineSound setzt ihn jedes Bild, deshalb auch im Hook). Grollen: tiefpassgefiltertes Rauschen,
+// langsam an- und abschwellend, laeuft bis in die Abblende.
+let grollen = null;
+function szeneTon(an){
+  if(!an){ if(grollen){ const g = grollen; grollen = null; try { g.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.6); setTimeout(() => { try { g.src.stop(); } catch(e){} }, 3000); } catch(e){} } return; }
+  if(!soundOn || !audioCtx || grollen) return;
+  const sr = audioCtx.sampleRate, n = sr * 4, buf = audioCtx.createBuffer(1, n, sr), d = buf.getChannelData(0);
+  let b = 0; for(let i = 0; i < n; i++){ b = b * 0.985 + (Math.random() * 2 - 1) * 0.15; d[i] = b; }   // braunes Rauschen
+  const src = audioCtx.createBufferSource(); src.buffer = buf; src.loop = true;
+  const lp = audioCtx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 90;
+  const gain = audioCtx.createGain(); gain.gain.value = 0;
+  src.connect(lp).connect(gain).connect(audioCtx.destination); src.start();
+  gain.gain.setTargetAtTime(1.6, audioCtx.currentTime + 0.6, 0.5);
+  grollen = { src, gain };
+}
+// Live-Wunsch: in der Szene nur der Vulkan und das Meer bis zum Horizont (keine Stadt, kein Festland, keine Schiffe/Inseln).
+// Alles in Welt 6 ausser Fuji und Ausbruch wird versteckt (und danach wieder gezeigt), die Engine-Inseln und Schiffe auch.
+const szeneVersteckt = [];
+function szeneNurVulkan(an){
+  story.e6nurMeer = !!an;                             // etappe6.js: Meeresgitter ohne Land
+  if(typeof seabedAtX !== 'undefined'){ seabedAtX = null; seabedAtZ = null; }   // Meeresboden neu rechnen
+  if(an){
+    const w = story.welt(6), behalten = new Set([story.e6fujiMesh, ho.ausbruch && ho.ausbruch.g, ausbruchLicht].filter(Boolean));
+    for(const k of w.children) if(k.visible && !behalten.has(k)){ k.visible = false; szeneVersteckt.push(k); }
+    for(const [, isl] of islandCells) if(isl && isl.visible){ isl.visible = false; szeneVersteckt.push(isl); }
+    for(const sh of seaShips) if(sh.group && sh.group.visible){ sh.group.visible = false; szeneVersteckt.push(sh.group); }
+  } else { for(const k of szeneVersteckt) k.visible = true; szeneVersteckt.length = 0; }
+}
 function szeneStart(){
+  hoehleAus();
   ho.aktiv = false; ho.phase = 'szene'; story.phase = 'alpha';
   const F = E.FUJI, krater = new THREE.Vector3(F.x, F.h, F.z);
   // Kamera: 2,6 km seitlich, auf ~1,7 km Hoehe, Blick etwas UEBER den Krater -> Krater liegt im unteren Drittel
-  const cam = new THREE.Vector3(F.x + 1900, F.h - 300, F.z + 1800);
+  const cam = new THREE.Vector3(F.x, F.h - 300, F.z).addScaledVector(SZENE_RICHT, 2600);
   const ziel = krater.clone().add(new THREE.Vector3(0, 520, 0));
-  ho.szene = { t: 0, cam, ziel, krater, ausbruch: false, knall: false };
+  ho.szene = { t: 0, cam, ziel, krater, ausbruch: false, knall: false, zoom: 1 };
   state.pos.copy(krater).add(new THREE.Vector3(0, -40, 0));
   state.quat.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0, 'YXZ'));   // Nase senkrecht nach oben
   state.vel.set(0, spec.vMax, 0); state.throttle = 1; state.onGround = false; state.crashed = false;
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat); planeGroup.visible = true;
   planeGroup.scale.setScalar(4);                                      // aus 3,5 km sonst nur ein Punkt
   szeneKamera(ho.szene);
+  szeneNurVulkan(true);
   camera.position.copy(ho.szene.cam); camera.up.set(0, 1, 0); camera.lookAt(ho.szene.ziel);
 }
+story.e6szeneStart = () => { ho.fertig = false; ho.steht = false; ho.gelandet = false; ho.blende = false; szeneStart(); };   // Test "E6 Vulkan"
 function szeneUpdate(dt){
   const z = ho.szene; if(!z) return;
   z.t += dt;
-  // Jet: senkrecht hoch mit voller Fahrt (eigene Bewegung, keine Physik)
-  state.pos.y += spec.vMax * dt;                                      // volle Fahrt senkrecht (3 s ~ 1,1 km)
+  // Jet: senkrecht hoch mit voller Fahrt (eigene Bewegung, keine Physik); nach SZENE_T bleibt er stehen (Endposition)
+  if(z.t <= SZENE_T) state.pos.y += spec.vMax * dt;                   // volle Fahrt senkrecht (4 s ~ 1,4 km)
+  else z.zoom += dt * 0.12;                                           // Kamera zieht langsam weiter auf
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
   // Live-Wunsch: beim Verlassen des Kraters Ueberschallknall + Dampfkegel (Engine: triggerSonicBoom / updateSonic)
   if(!z.knall && state.pos.y > z.krater.y + 5){ z.knall = true; if(typeof triggerSonicBoom === 'function') triggerSonicBoom(); }
   if(typeof updateSonic === 'function'){ if(typeof wasSupersonic !== 'undefined') wasSupersonic = true; updateSonic(dt); }
   szeneKamera(z);
-  if(!z.ausbruch && z.t > 0.8){ z.ausbruch = true; ausbruch(); }   // erst den Jet herausschiessen sehen, dann der Ausbruch
-  if(z.t > SZENE_T && !ho.blende){ ho.blende = true; story.schwarz('', 0.4, () => { ho.blende = false; raus(); }); }
+  for(const [, isl] of islandCells) if(isl && isl.visible){ isl.visible = false; szeneVersteckt.push(isl); }
+  for(const sh of seaShips) if(sh.group && sh.group.visible){ sh.group.visible = false; szeneVersteckt.push(sh.group); }
+  if(!z.ausbruch && z.t > 0.8){ z.ausbruch = true; ausbruch(); if(typeof playSonicBoom === 'function') playSonicBoom(); szeneTon(true); rumble(900, 1.0, 1.0); }
+  if(z.t > SZENE_T + NACH_T - ABBLENDE_T && !ho.blende){ ho.blende = true; langsamSchwarz(ABBLENDE_T, () => { ho.blende = false; raus(); }); }
+}
+// Langsame Abblende (eigenes Element, die Engine-Blende ist auf 0,8 s fest): ueber s Sekunden ins Schwarze, dort fertig(),
+// danach in 1,2 s wieder auf
+let abEl = null;
+function langsamSchwarz(s, fertig){
+  if(!abEl){ abEl = document.createElement('div'); abEl.style.cssText = 'position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:25;'; document.body.appendChild(abEl); }
+  abEl.style.transition = 'opacity ' + s + 's ease-in'; void abEl.offsetWidth; abEl.style.opacity = '1';
+  setTimeout(() => { fertig(); setTimeout(() => { abEl.style.transition = 'opacity 1.2s'; abEl.style.opacity = '0'; }, 400); }, s * 1000 + 100);
 }
 // Danach: normal fliegen, waagerecht 500 m, 50 % Schub, Richtung Strand-Flughafen; Ansage, Radarpunkt = Bahnmitte
 function raus(){
+  szeneTon(false);
+  szeneNurVulkan(false);
   planeGroup.scale.setScalar(1);
   ho.aktiv = false; ho.szene = null; ho.phase = 'landen'; story.phase = 'alpha';
   story.kunstflugAus = false; gyroZeigen(true);
@@ -288,6 +356,7 @@ function raus(){
   state.quat.setFromEuler(new THREE.Euler(0, Math.atan2(-(zx - start.x), -(zz - start.z)), 0, 'YXZ'));
   state.throttle = 0.5;
   state.vel.copy(new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat).multiplyScalar(spec.vMax * 0.5));
+  ho.bremsFrei = true;                                                // Fahrt folgt dem Schub (landungPruefen)
   state.onGround = false; state.crashed = false;
   if(story.e6flug){ story.e6flug.laeuft = true; story.e6flug.hoehleFertig = true; }   // sonst haelt etappe6.js den Jet fest (Live-Test: stand)
   if(story.pfGasLos) story.pfGasLos();                                  // Gas-Sperre der Startsequenz loesen (sonst Schub 0)
@@ -298,23 +367,37 @@ function raus(){
   // im Schwarzen (Blende ~1,3 s), deshalb 2 s spaeter
   story.spaeter(2, () => {
     if(!ho.landen || ho.fertig) return;
-    story.sprich(['Du bist der Wahnsinn – ein wahres Fliegerass!', 'Jetzt noch landen, dann hast du es geschafft.'], null, 'pilot');
-    story.hinweis('Lande am Flughafen am Strand (roter Punkt im Radar)'); story.spaeter(8, () => story.hinweis(''));
+    story.sprich(['Du bist der absolute Wahnsinn! Ein wahres Fliegerass!', 'Jetzt nur noch landen… dann hast du es geschafft!'], null, 'pilot');
+    story.hinweis('Lande auf dem Flugfeld hinter dem Strand (roter Punkt im Radar)'); story.spaeter(8, () => story.hinweis(''));
   });
   ho.landen = true;
   hud();
 }
 function ende(ok, wie){
   if(ho.fertig) return;
-  ho.fertig = true; ho.aktiv = false; ho.landen = false; ho.szene = null; gyroZeigen(true); planeGroup.scale.setScalar(1);
+  ho.fertig = true; ho.aktiv = false; ho.landen = false; ho.szene = null; ho.bremsFrei = false;
+  hoehleAus(); szeneNurVulkan(false); gyroZeigen(true); planeGroup.scale.setScalar(1);
   story.kunstflugAus = false;
   story.ziel = null;
-  const txt = ok ? ['Sauber gelandet! Was für ein Flug!']
-    : wie === 'zu langsam' ? ['Zu langsam! Du musst immer Vollgas fliegen – der Vulkan war schneller.']
-    : wie === 'absturz' ? ['Oh nein, abgestürzt!', 'Kenji kommt ins Krankenhaus und muss eine Woche bleiben.']
-    : ['Krach – der Alpha ist am Fels zerschellt!', 'Kenji wird gerettet, muss aber eine Woche ins Krankenhaus.'];
-  if(!ok){ state.vel.set(0, 0, 0); state.throttle = 0; }
-  story.sprich(txt, () => story.spaeter(1.5, () => { hudAus(); story.e6flugEnde(ok, ok ? 'durch den Fuji' : (wie === 'zu langsam' ? 'zu langsam in der Höhle' : 'Absturz, Krankenhaus')); }), 'pilot');
+  const wieTxt = ok ? 'durch den Fuji' : (wie === 'zu langsam' ? 'zu langsam in der Höhle' : 'Absturz, Krankenhaus');
+  const weiter = () => { hudAus(); story.e6flugEnde(ok, wieTxt); };
+  // Live-Wunsch: nach dem Stillstand kein Gas mehr (steht fest) und gleich der Globus – die Ansage laeuft noch hinein
+  if(ok){ ho.steht = true; ho.gelandet = true; state.vel.set(0, 0, 0); state.throttle = 0;
+    story.sprich(['Sauber gelandet! Was für ein unglaublicher Flug!']); story.spaeter(1.2, weiter); return; }
+  // Live-Wunsch: bei Crash keine Ansage – die Blende danach nennt die 7 Tage und den Grund
+  state.vel.set(0, 0, 0); state.throttle = 0;
+  story.spaeter(wie === 'absturz' ? 2.5 : 1.5, weiter);
+}
+// Live-Feedback: "bei 20 % noch 700 km/h, wird viel zu langsam weniger". Die Engine baut Fahrt nur ab, solange der Jet
+// nicht sinkt (bFade) – im Landeanflug sinkt er aber immer. Hier: ist der Jet schneller als sein Schub, wird er waagerecht
+// mit 45 m/s^2 abgebremst (wie eine Luftbremse), unabhaengig vom Sinken. So geht es von 650 auf ~250 km/h in ~2,5 s.
+const LUFTBREMSE = 45;
+function luftbremse(dt){
+  if(!ho.bremsFrei || state.onGround) return;
+  const soll = spec.vMax * Math.max(0.12, state.throttle), hl = Math.hypot(state.vel.x, state.vel.z);
+  if(hl <= soll + 1) return;
+  const neu = Math.max(soll, hl - LUFTBREMSE * dt), f = neu / hl;
+  state.vel.x *= f; state.vel.z *= f;
 }
 // Landung am Strand-Flughafen
 function landungPruefen(){
@@ -326,36 +409,66 @@ function landungPruefen(){
 }
 
 // ---- Ausbruch: Rauchsaeule und Lavabrocken aus dem Krater ---------------------------------------------------
+// Live-Feedback 09.10.2026: Rauch hoeher (fast bis an den Jet, der in 4 s ~1,4 km steigt), gluehende Lava sichtbar ->
+// schnelle Rauchsaeule (380-530 m/s, stark gebremst -> ~0,9-1,2 km in 4 s), groessere Lavabrocken, Lavastroeme die
+// Flanken hinab (zur Kamera hin), heller Feuerschein.
+const LAVA_STROEME = 7, STROM_V = 260;    // m/s, wie schnell die Stroeme den Hang hinab laufen
+let ausbruchLicht = null;
+function ausbruchWeg(){ const a = ho.ausbruch; if(!a) return; story.entsorgen(a.g); ho.ausbruch = null; if(ausbruchLicht) ausbruchLicht.intensity = 0; }
+story.e6ausbruchWeg = ausbruchWeg;
 function ausbruch(){
   // Live-Test: blasse Wolke, kaum zu sehen -> dunkler, dichter Rauchpilz, viele gluehende Lavabrocken in hohen Boegen,
   // Feuerschein im Krater; kein Nebel (fog: false), damit man ihn auch aus Kilometern sieht.
   const w = story.welt(6), k = new THREE.Vector3(E.FUJI.x, E.FUJI.h - 10, E.FUJI.z);
   const rauchM = [0x2a2522, 0x3a3430, 0x4a423c].map(c => new THREE.MeshLambertMaterial({ color: c, transparent: true, opacity: 0.92, fog: false }));
   const lavaM = new THREE.MeshBasicMaterial({ color: 0xff4a10, fog: false }), glutM = new THREE.MeshBasicMaterial({ color: 0xffb030, fog: false });
+  // Speicher (Live-Feedback: nach dem zweiten Versuch ruckelte es): der alte Ausbruch wird freigegeben, das Punktlicht
+  // gibt es nur einmal (jedes weitere Licht zwingt alle Shader neu zu uebersetzen) und es bleibt bei 0, wenn kein Ausbruch laeuft
+  ausbruchWeg();
   const g = new THREE.Group(); w.add(g);
-  const schein = new THREE.Mesh(new THREE.SphereGeometry(110, 16, 10), new THREE.MeshBasicMaterial({ color: 0xff6a20, transparent: true, opacity: 0.55, fog: false }));
+  const schein = new THREE.Mesh(new THREE.SphereGeometry(150, 16, 10), new THREE.MeshBasicMaterial({ color: 0xff7a20, transparent: true, opacity: 0.7, fog: false }));
   schein.position.copy(k); g.add(schein);
-  const licht = new THREE.PointLight(0xff6a20, 3, 2500, 1.2); licht.position.copy(k).add(new THREE.Vector3(0, 80, 0)); g.add(licht);
+  if(!ausbruchLicht || !ausbruchLicht.parent){ ausbruchLicht = new THREE.PointLight(0xff6a20, 0, 2500, 1.2); w.add(ausbruchLicht); }
+  const licht = ausbruchLicht; licht.position.copy(k).add(new THREE.Vector3(0, 80, 0)); licht.intensity = 3;
   const teile = [];
-  for(let i = 0; i < 70; i++){
-    const rauch = i < 34;
-    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(rauch ? 90 + Math.random() * 90 : 10 + Math.random() * 14, 1), rauch ? rauchM[i % 3] : (i % 3 ? lavaM : glutM));
+  for(let i = 0; i < 100; i++){
+    const rauch = i < 40;
+    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(rauch ? 80 + Math.random() * 80 : 22 + Math.random() * 20, 1), rauch ? rauchM[i % 3] : (i % 3 ? lavaM : glutM));
     m.position.copy(k); g.add(m);
     const a = Math.random() * Math.PI * 2, r = Math.random();
-    const v = rauch ? new THREE.Vector3(Math.cos(a) * 25 * r, 70 + Math.random() * 60, Math.sin(a) * 25 * r)
-                    : new THREE.Vector3(Math.cos(a) * (60 + 140 * r), 140 + Math.random() * 160, Math.sin(a) * (60 + 140 * r));
-    teile.push({ m, v, rauch, t: -i * (rauch ? 0.12 : 0.05) });
+    const v = rauch ? new THREE.Vector3(Math.cos(a) * 30 * r, 380 + Math.random() * 150, Math.sin(a) * 30 * r)
+                    : new THREE.Vector3(Math.cos(a) * (60 + 160 * r), 160 + Math.random() * 200, Math.sin(a) * (60 + 160 * r));
+    teile.push({ m, v, rauch, t: -i * (rauch ? 0.07 : 0.03) });
   }
-  ho.ausbruch = { g, teile, t: 0, schein, licht };
+  // Lavastroeme: Roehren vom Kraterrand den Hang hinab (Hoehe aus story.e6fujiY), wachsen mit STROM_V (drawRange)
+  const F = E.FUJI, a0 = Math.atan2(SZENE_RICHT.x, SZENE_RICHT.z), stroeme = [], SEG = 48, RAD = 6;
+  for(let s = 0; s < LAVA_STROEME; s++){
+    const a = a0 + (s - (LAVA_STROEME - 1) / 2) * 0.32 + (Math.random() - 0.5) * 0.12, pts = [];
+    for(let i = 0; i <= 12; i++){
+      const d = 0.03 + 0.42 * i / 12, w = a + Math.sin(i * 0.9 + s) * 0.05;
+      const x = F.x + Math.sin(w) * d * F.r, z = F.z + Math.cos(w) * d * F.r;
+      pts.push(new THREE.Vector3(x, story.e6fujiY(x, z) + 14, z));
+    }
+    const kurve = new THREE.CatmullRomCurve3(pts), lang = kurve.getLength();
+    const geo = new THREE.TubeGeometry(kurve, SEG, 20 + Math.random() * 10, RAD, false);
+    geo.setDrawRange(0, 0);
+    const m = new THREE.Mesh(geo, s % 2 ? lavaM : glutM); m.frustumCulled = false; g.add(m);
+    stroeme.push({ geo, lang, proSeg: RAD * 6, verz: 0.2 + Math.random() * 0.5 });
+  }
+  ho.ausbruch = { g, teile, t: 0, schein, licht, stroeme, SEG };
 }
 function ausbruchUpdate(dt){
   const a = ho.ausbruch; if(!a) return;
   a.t += dt;
   a.schein.scale.setScalar(1 + 0.15 * Math.sin(a.t * 6)); a.licht.intensity = 2.5 + Math.sin(a.t * 9);
+  for(const s of a.stroeme){ const f = Math.max(0, Math.min(1, (a.t - s.verz) * STROM_V / s.lang)); s.geo.setDrawRange(0, Math.floor(f * a.SEG) * s.proSeg); }
   for(const p of a.teile){
     p.t += dt; if(p.t < 0) continue;
     p.m.position.addScaledVector(p.v, dt);
-    if(p.rauch){ p.v.y *= 1 - 0.05 * dt; p.m.scale.multiplyScalar(1 + 0.09 * dt); }
+    if(p.rauch){ p.v.y *= 1 - 0.3 * dt; p.m.scale.multiplyScalar(1 + 0.22 * dt);
+      // Live-Wunsch: der Vulkan bricht weiter aus -> aeltere Rauchballen kommen neu aus dem Krater (Saeule statt Kugel)
+      if(p.t > 2.8){ p.t = 0; p.m.position.set(E.FUJI.x, E.FUJI.h - 10, E.FUJI.z); p.m.scale.setScalar(1); const an = Math.random() * Math.PI * 2, rr = Math.random();
+        p.v.set(Math.cos(an) * 30 * rr, 380 + Math.random() * 150, Math.sin(an) * 30 * rr); } }
     else { p.v.y -= 9.81 * dt; if(p.m.position.y < 0){ // Lava faellt ins Meer/auf den Hang -> neu aus dem Krater
         p.m.position.set(E.FUJI.x, E.FUJI.h - 10, E.FUJI.z); const an = Math.random() * Math.PI * 2, r = Math.random();
         p.v.set(Math.cos(an) * (60 + 140 * r), 140 + Math.random() * 160, Math.sin(an) * (60 + 140 * r)); } }
@@ -389,7 +502,7 @@ function hookE6b(){
     if(hier() && ho.steht){ state.vel.set(0, 0, 0); state.throttle = 0; return; }   // gekracht: steht bis zum Etappenende
     const r = physOrig.apply(this, arguments);
     if(hier() && ho.aktiv) hoehleUpdate(dt);
-    if(hier() && ho.landen) landungPruefen();
+    if(hier() && ho.landen){ luftbremse(dt); landungPruefen(); }
     return r;
   };
   // In der Hoehle zaehlt nur die eigene Kollision (Fuji-Kegel ist dort hohl)
@@ -397,6 +510,9 @@ function hookE6b(){
   hitsBuilding = function(){ if(hier() && ho.aktiv) return false; return hitsOrig.apply(this, arguments); };
   const resetOrig = resetPlane;
   resetPlane = function(){ if(hier() && (ho.aktiv || ho.landen)) return; return resetOrig.apply(this, arguments); };
+  // Waehrend der Szene kein Flugzeugton (Live-Wunsch)
+  const tonOrig = updateEngineSound;
+  updateEngineSound = function(){ const r = tonOrig.apply(this, arguments); if(hier() && ho.szene && engineGain) engineGain.gain.value = 0; return r; };
   const gyroOrig = updateGyro;
   updateGyro = function(){ if(gyroAus && hier()){ const g = document.getElementById('gyro'); if(g) g.style.display = 'none'; return; } return gyroOrig.apply(this, arguments); };
   // Eigene Kamera (Live-Feedback: sprang hin und her, im Schacht verdreht). Blick = Fahrtrichtung, "oben" = Kabinendach des
@@ -405,7 +521,7 @@ function hookE6b(){
   const camOrig = updateCamera, _r = new THREE.Vector3(), _soll = new THREE.Vector3(), _up = new THREE.Vector3(), _dach = new THREE.Vector3(), _camUp = new THREE.Vector3(0, 1, 0);
   updateCamera = function(){
     if(hier() && ho.szene){ camera.position.copy(ho.szene.cam); camera.up.set(0, 1, 0); camera.lookAt(ho.szene.ziel); return; }   // Zwischenszene: feste Kamera
-    if(!(hier() && (ho.aktiv || ho.steht))) return camOrig.apply(this, arguments);
+    if(!(hier() && (ho.aktiv || (ho.steht && !ho.gelandet)))) return camOrig.apply(this, arguments);   // gelandet: normale Kamera
     _r.copy(state.vel); if(_r.lengthSq() < 1) _r.set(0, 0, -1).applyQuaternion(state.quat); _r.normalize();
     _dach.set(0, 1, 0).applyQuaternion(state.quat);                  // Kabinendach
     const waag = 1 - Math.min(1, Math.abs(_r.y) / 0.7);             // 1 waagerecht .. 0 ab ~45 Grad Steigen
@@ -425,7 +541,7 @@ story.aufgabeE6b = () => ho.aktiv || ho.landen ? ['Vulkan', [
   ['Schub', 'immer 100 % – sonst nicht geschafft'],
   ['Höhle', 'nichts berühren – eng und kurvig'],
   ['Ende', 'zum Licht – dem Ausgang am Ende der Höhle'],
-  ['Danach', 'am Flughafen am Strand landen'],
+  ['Danach', 'auf dem Flugfeld hinter dem Strand landen'],
 ]] : null;
 
 const hookOrig = window.STORY_HOOK;
