@@ -985,7 +985,7 @@ function schwimmUpdate(dt, inp){
   const nz = g.position.z - Math.cos(eva.yaw) * v * dt;
   tricks.ausschlag = Math.abs(inp.pitch || 0);
   // Ans Ufer: wieder zu Fuss
-  if(evaSolid(nx, nz) && !isOpenWater(nx, nz) || isOnBeach(nx, nz) || isOnLand(nx, nz)){
+  if(evaSolid(nx, nz) && !isOpenWater(nx, nz) || isOnBeach(nx, nz) || isOnLand(nx, nz) || (!story.watEigeneWelt() && story.watGrund(nx, nz) !== null)){
     sw.aktiv = false;
     g.position.set(nx, evaFootY(nx, nz), nz);
     eva.vy = 0; eva.onGround = true;
@@ -1003,9 +1003,35 @@ function schwimmUpdate(dt, inp){
   evaKmh = Math.abs(v) * 3.6;
 }
 
+// Waten (Live-Wunsch 09.10.2026, global): an Ufern mit Sandrand (Engine-Inseln, Festland mit isOnBeach) ist das Wasser auf
+// den ersten WAT_W m flach. Dort steht Kenji auf dem Grund; erst wo es tiefer als WAT_TIEF ist, schwimmt er (der Koerper
+// ist dann etwa zur Haelfte im Wasser, Kenji 1,55 m).
+const WAT_W = 14, WAT_TIEF = 0.8;
+// Abstand zur naechsten Sandkante, nur nahe am Ufer gesucht (0 = an der Kante, > WAT_W = tiefes Wasser)
+function watAbstand(x, z){
+  if(isOnLand(x, z) || isOnBeach(x, z)) return 0;
+  for(let r = 2; r <= WAT_W; r += 2){
+    for(let k = 0; k < 8; k++){ const a = k * Math.PI / 4; if(isOnBeach(x + Math.cos(a) * r, z + Math.sin(a) * r) || isOnLand(x + Math.cos(a) * r, z + Math.sin(a) * r)) return r; }
+  }
+  return Infinity;
+}
+// Grund in der Watzone: von der Wasserlinie (Sandkante) linear auf WAT_TIEF unter Wasser, danach der Engine-Grund
+function watGrund(x, z){ const d = watAbstand(x, z); if(d === 0 || d === Infinity) return null; return seaYAt(x, z) - WAT_TIEF * (d / WAT_W) * 0.98; }
+story.watGrund = watGrund;
 function hookSchwimmen(){
   evaEnterDinghy = function(x, z){ if(eva && !eva.boat && !sw.aktiv) schwimmStart(x, z); };
+  // Etappen mit eigener Wasserwelt (Fluss, Hafen, Wueste) haben eigene Regeln: dort nicht eingreifen
+  const eigeneWelt = () => story.etappe >= 2 && story.etappe <= 4;
+  const solidOrig = evaSolid, fussOrig = evaFootY, bedOrig = seabedY;
+  evaSolid = function(x, z){ if(solidOrig.apply(this, arguments)) return true; return locale === 'earth' && !eigeneWelt() && watGrund(x, z) !== null; };
+  evaFootY = function(x, z){ if(locale === 'earth' && !eigeneWelt()){ const g = watGrund(x, z); if(g !== null) return g; } return fussOrig.apply(this, arguments); };
+  // Meeresboden: in der Watzone flach (sonst haengt der Engine-Grund dort bei -1,2 m ueber dem Watgrund und Kenji
+  // sieht unter Wasser einen Sockel)
+  seabedY = function(x, z, islands){ const r = bedOrig.apply(this, arguments);
+    if(islands || locale !== 'earth' || eigeneWelt()) return r;      // Raster des Meeresbodens: unveraendert (Leistung)
+    const g = watGrund(x, z); return g !== null ? Math.min(r, g) : r; };
 }
+story.watEigeneWelt = () => story.etappe >= 2 && story.etappe <= 4;
 
 // ---- Warp: Bewegungsstreifen statt Ring ------------------------------------------------------
 // Ab Warp 1 rasen Lichtstreifen von vorn an der Kamera vorbei. Mit dem Warpfaktor (1 -> 10) wachsen
@@ -2497,6 +2523,7 @@ function stelleMarke(m, x, y, z, fzg){
   }
 }
 story.setzeMarke = function(m, x, y, z, fzg, zeigen){
+  if(eva && eva.group.position.y < (typeof seaYAt === 'function' ? seaYAt(eva.group.position.x, eva.group.position.z) : 0) - 0.4) zeigen = false;   // taucht: keine Pfeile/Schilder
   m.saeule.visible = m.pfeil.visible = zeigen;
   if(m.schild) m.schild.visible = zeigen;
   if(zeigen) stelleMarke(m, x, y, z, fzg);

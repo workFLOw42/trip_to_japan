@@ -223,7 +223,7 @@ function baueFuji(w){
 
 // ---- Festland: Strand, Wiese, Flugfeld, Bahnhof -------------------------------------------------------------
 const FEST_MX = FEST.x + FEST.R, FEST_MZ = FEST.z;      // Mitte des grossen Kreises (Land = innen)
-function festland(x, z){ return Math.hypot(x - FEST_MX, z - FEST_MZ) < FEST.R; }
+function festland(x, z){ return Math.hypot(x - FEST_MX, z - FEST_MZ) < FEST.R + 20; }   // bis zum Ende des Sands (Ring bis R + 20)
 function aufWiese(x, z){ return Math.hypot(x - FEST_MX, z - FEST_MZ) < FEST.R - FEST.strand; }
 function aufBahn(x, z){ return Math.abs(x - FLUGFELD.x) <= FLUGFELD.breite / 2 && Math.abs(z - FLUGFELD.z) <= FLUGFELD.laenge / 2; }
 const VORFELD = { x: FLUGFELD.x - 60, z: STRANDPLATZ.z - 20, b: 60, l: 80 };   // zwischen Strand und Bahn, auf Hoehe von Kenjis Platz
