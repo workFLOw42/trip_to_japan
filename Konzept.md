@@ -12,9 +12,8 @@ U-Boot-Schlucht) und in Etappe 6 der Alpha-Jet-Weg (Vulkanhöhle) · Startmenü 
 Tageszähler · Stimmen (Pilot männlich) · Offline-PWA · Highscores still gespeichert (noch ohne Anzeige).
 Details zum Gebauten in der [README](README.md); Stolperstellen der Engine in [ENGINE_RISIKEN.md](ENGINE_RISIKEN.md).
 
-**Als Nächstes:** **Etappe 1 umbauen** (Festland nach dem Vorbild Fukuoka-Beach: Strand, Nadelbäume, Schule „AEG“ als
-festes Gebäude, Stadt dahinter, Ariane schräg hinter der Schule, kleiner X-Wing-Parkplatz, U-Boot-Ring, Sonar mit Küste),
-danach Finale. Nach Etappe 6 geht es je nach verbrauchten Tagen weiter („es gibt noch mehr“).
+**Als Nächstes:** Etappe 1 live testen (neu als Festland: Strand, Nadelbäume, Schule „AEG“ als festes Gebäude, Stadt,
+Ariane, X-Wing-Parkplatz, U-Boot-Ring, Sonar mit Küste – gebaut 09.10.2026), danach Finale. Nach Etappe 6 geht es je nach verbrauchten Tagen weiter („es gibt noch mehr“).
 
 - **Etappe 6 fertig (09.10.2026):** spielt in **Tokio**, Ziel ist **Fukuoka** (Globus: Faden Tokio → Fukuoka, lila Punkt
   wird zur 🌊). **6c Shinkansen gebaut** (ersetzt den Stellwerk-Entwurf unten): Gleise wählen nach zwei Weichensymbolen je

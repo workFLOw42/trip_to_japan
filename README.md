@@ -21,6 +21,10 @@ vorerst ein Platzhalter.
 der Vulkanhöhle) (linker Stick / ← → wählen, A / Enter starten).
 
 ### Etappe 1 – Der Aufbruch am Strand
+Festland (`etappe1.js`, Vorbild Fukuoka-Beach): im Westen das offene Meer mit U-Boot, Wracks, Schiffen und Orcas, dann ein
+Strand und eine Wiese mit Nadelbäumen. Die Schule **AEG** ist ein festes Gebäude, dahinter eine Stadt und schräg dahinter
+die **Ariane** auf ihrer Rampe. Am Strand ein kleiner Parkplatz mit dem X-Wing, daneben der U-Boot-Ring. Im Sonar sieht man
+unten die Küste, oben das Meer mit den Wracks.
 - **Intro:** Kenji kommt aus der Schule, die Kamera fährt heran und schwenkt hinter ihn, die Erzählstimme
   erzählt die Geschichte. Schon nach dem Schwenk kann man laufen; einsteigen erst nach der Ansage.
 - **Zwei Wege**, markiert mit Lichtsäule und Schild: **X-Wing „1 Tag“** und **U-Boot „4 Tage“**.
@@ -146,6 +150,7 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `index.html` | wird von `tools/build_engine.ps1` erzeugt (HUD-Markup aus dem Flugspiel) |
 | `engine/` | Flugspiel-Engine + Modelle, **unverändert** kopiert von `tools/build_engine.ps1` |
 | `story.js` | Spiellogik und Etappe 1 – hängt sich per Wrapper in die Engine ein |
+| `etappe1.js` | Etappe 1 als Festland: Strand, Nadelbäume, Schule „AEG“ (fest), Stadt, Ariane, X-Wing-Parkplatz, U-Boot und Ring |
 | `etappe2.js` | Etappe 2 (Wüste, X-Wing-Falle, Transall-Flugschule) |
 | `etappe3.js` | Etappe 3 (Fluss, Feuerwehrboot, X-Wing ohne Kurzschluss) |
 | `etappe4.js` | Etappe 4: Hafen-Welt und Container-Kran |
@@ -178,7 +183,7 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `sw.js`, `manifest.json` | Offline-Cache und App-Installation (PWA) |
 | `ENGINE_RISIKEN.md` | bekannte Stolperstellen der Engine-Übernahme |
 
-Ladeordnung: `kenji_glb.js` → `story.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `schildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `surfboard_glb.js` → `campfire_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `etappe6c.js` → `engine/engine.js`. Die Engine ruft am Ende
+Ladeordnung: `kenji_glb.js` → `story.js` → `etappe1.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `schildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `surfboard_glb.js` → `campfire_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `etappe6c.js` → `engine/engine.js`. Die Engine ruft am Ende
 ihres Boot-Blocks `STORY_HOOK` (Wrapper setzen) und `STORY_START` (Startszene) auf – die zwei Zeilen fügt das Build-Skript ein.
 
 **Welten:** Jede Etappe baut ihre Kulisse in eine eigene Gruppe – `story.welt(n).add(obj)`, nie `scene.add(obj)`.

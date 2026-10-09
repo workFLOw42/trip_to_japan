@@ -179,14 +179,20 @@ function aufbau1(){
   const info = islandInfo(0, 0); if(!info) return false;
   const w = story.welt(1), i0 = story.intro && story.intro.start;
   const sx = i0 ? i0.x : info.wx, sz = i0 ? i0.z : info.wz;
-  story.moewenKreise(1, w, [
+  // Festland (etappe1.js): Moewen ueber Strand und Meer vor Kenji, Hunde auf der Wiese bei der Schule
+  const K = story.e1 && story.e1.FEST;
+  story.moewenKreise(1, w, K ? [
+    { x: K.x - 40, z: 0, r: 70, y: 24, n: 4 }, { x: sx, z: sz, r: 40, y: 18, n: 2 },
+    { x: K.x - 10, z: 130, r: 60, y: 14, n: 3 }, { x: K.x - 30, z: -140, r: 60, y: 20, n: 3 },
+  ] : [
     { x: info.wx, z: info.wz, r: info.radius * 0.9, y: 28, n: 3 }, { x: sx, z: sz, r: 40, y: 18, n: 2 },
     { x: info.wx + info.radius, z: info.wz, r: 60, y: 14, n: 3 }, { x: info.wx - info.radius * 0.7, z: info.wz - info.radius * 0.6, r: 50, y: 20, n: 2 },
   ]);
   if(window.HUND_GLB) story.bodenTiere(1, w, {
     name: 'hund', daten: window.HUND_GLB, mass: 1.1, achse: 'z', kopf: 'z',   // Labrador ~1,1 m lang, Kopf auf +Z (C:\tmp\sfg\labi\t3.png)
     tempo: 1.3,                                                               // eine Animation: beim Gehen schneller abgespielt
-    gruppen: [{ x: sx + 12, z: sz - 6, r: 6, n: 1 }, { x: sx - 10, z: sz - 14, r: 8, n: 2 }, { x: info.wx, z: info.wz, r: 60, n: 2 }],
+    gruppen: K ? [{ x: sx + 4, z: sz - 24, r: 6, n: 1 }, { x: sx + 10, z: sz + 26, r: 8, n: 2 }, { x: sx + 40, z: sz - 60, r: 15, n: 2 }]
+               : [{ x: sx + 12, z: sz - 6, r: 6, n: 1 }, { x: sx - 10, z: sz - 14, r: 8, n: 2 }, { x: info.wx, z: info.wz, r: 60, n: 2 }],
     y: ISLAND_Y, frei: inselFrei,
   });
   return true;

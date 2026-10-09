@@ -148,8 +148,11 @@ function hookWracks(){
     fertig = true;
     const info = info0(), bl = harborSubLocal(0, 0);
     const a0 = bl ? Math.atan2(bl.z, bl.x) : 0;
+    // Festland (etappe1.js): Kueste bei x = -60, Meer nur im Westen -> Wracks im Faecher um -x (Winkel -70..+70 Grad)
+    const fest = story.e1 && story.etappe === 1, FW = [-1.2, -0.6, 0, 0.6, 1.2];
     WRACKS.forEach((w, i) => {
-      const wx = info.wx + Math.cos(a0 + w.a) * w.r, wz = info.wz + Math.sin(a0 + w.a) * w.r;
+      const a = fest ? Math.PI + FW[i] : a0 + w.a;
+      const wx = info.wx + Math.cos(a) * w.r, wz = info.wz + Math.sin(a) * w.r;
       const y = seabedY(wx, wz);
       const rot = cellRnd(i, 7, 4) * Math.PI * 2;
       const def = SHIP_TYPES.find(d => d.key === w.key);
@@ -186,6 +189,7 @@ function hookFeuer(){
 // Sichtachse hintereinander (beide stehen am Ufer). Gesucht wird, bis kein Gebaeude im Weg steht.
 const XWING_NEBEN = 70;      // m
 function xwingStrandPlatz(){
+  if(story.e1xwingPlatz) return story.e1xwingPlatz();      // Festland (etappe1.js): fester Parkplatz am Strand
   const info = islandInfo(0, 0);
   const rg = ubootRingPlatz();
   const a0 = rg ? Math.atan2(rg.z - info.wz, rg.x - info.wx) : -Math.PI/2;
@@ -215,6 +219,7 @@ function ubootRingPlatz(){
   const r5 = story.ringPlatzE5 && story.ringPlatzE5();   // Etappe 5: Ring am lila Punkt (etappe5.js), nicht cachen
   if(r5) return { x: r5.x, z: r5.z, nx: 0, nz: 1 };
   if(story.ring) return story.ring;
+  if(story.e1ringPlatz && story.etappe === 1) return (story.ring = story.e1ringPlatz());   // Festland (etappe1.js)
   const info = islandInfo(0, 0), bl = harborSubLocal(0, 0);
   if(!info || !bl) return null;
   const sx = info.wx + bl.x, sz = info.wz + bl.z;
@@ -760,7 +765,7 @@ function baueSchule(x, z, yaw){
   const cx = cv.getContext('2d');
   cx.fillStyle = '#1d3b6a'; cx.fillRect(0, 0, 512, 128);
   cx.fillStyle = '#fff'; cx.font = 'bold 72px system-ui,sans-serif';
-  cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('SCHULE', 256, 66);
+  cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('AEG', 256, 66);   // Live-Wunsch 09.10.2026
   const schild = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5),
     new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) }));
   schild.position.set(0, 4.0, -T/2 - 0.04); schild.rotation.y = Math.PI; g.add(schild);
@@ -792,6 +797,7 @@ const INTRO_DREH  = 7;     // s: Kamera kreist 180° hinter ihn
 // 70 Grad liegen (Bildbreite ~87 Grad) und moeglichst gleich weit weg sind. Hinter Kenji muss Platz
 // fuer die Schule sein, und der Weg von der Tuer (INTRO_WEG) muss frei sein.
 function introPlatz(){
+  if(story.e1introPlatz) return story.e1introPlatz();      // Festland (etappe1.js): Kenji vor der Schultuer, Blick aufs Meer
   const info = islandInfo(0, 0);
   const bl = harborSubLocal(0, 0);
   const xp = story.xwingPlatz;
@@ -845,7 +851,8 @@ function introVorbereiten(){
   }
   hudSichtbar(false);
   const ip = introPlatz();
-  story.schule = baueSchule(ip.schuleX, ip.schuleZ, ip.yaw);
+  if(story.e1festlandBauen) story.e1festlandBauen();
+  story.schule = baueSchule(ip.schuleX, ip.schuleZ, ip.schuleYaw !== undefined ? ip.schuleYaw : ip.yaw);
   const g = eva.group;
   g.position.set(ip.x, evaFootY(ip.x, ip.z), ip.z);
   eva.yaw = ip.yaw; g.rotation.y = ip.yaw;
@@ -1612,6 +1619,7 @@ function hookLoop(){
     kenjiTasten();
     updateAufgabe();
     if(eva && story.phase === 'mars') marsUpdate(dt);
+    if(story.updateE1) story.updateE1(dt);
     if(story.updateE2) story.updateE2(dt);
     if(story.updateE3) story.updateE3(dt);
     if(story.updateE4) story.updateE4(dt);
