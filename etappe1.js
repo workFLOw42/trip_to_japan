@@ -131,6 +131,11 @@ function hookE1(){
   isOnLand  = function(x, z){ if(hier()) return festland(x, z); return onLandOrig.apply(this, arguments); };
   isOnBeach = function(x, z){ if(hier()) return false; return beachOrig.apply(this, arguments); };   // der Sand gehoert zum Festland
   isOnRunway = function(x, z){ if(hier()) return false; return runwayOrig.apply(this, arguments); };
+  // KI-Verkehr: keine Landeziele. Die einzige Insel ist die unsichtbare Startinsel, ihre Bahn laege quer ueber dem Strand
+  // vor der Schule (Live-Befund 13.10.2026). Airbus/Transall fliegen ohne Ziel Wegpunkte ab, wie die Canadairs.
+  for(const n of ['aiFindRunwayIsland', 'aiFindCargoTarget', 'aiFindDistantIsland']){
+    const orig = window[n]; window[n] = function(){ if(hier()) return null; return orig.apply(this, arguments); };
+  }
   collectSeaIslands = function(){ const r = seaIslOrig.apply(this, arguments);
     if(hier()){ _seaIslands.length = 0; const Rr = FEST.R, rs = Rr + 20, ra = rs + SHORE_FADE_W; _seaIslands.push(FEST_MX, FEST_MZ, rs, ra * ra, rs * rs); } return r; };
   const bedOrig = seabedY;

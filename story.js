@@ -2530,8 +2530,10 @@ function stelleMarke(m, x, y, z, fzg){
     m.schild.position.set(x, y + SCHILD_UNTEN + SCHILD_H / 2, z);   // Schild sitzt im Pfeilschaft, Unterkante fest ueber dem Boden
   }
 }
+// Kenji taucht: keine Pfeile/Schilder (sie haben depthTest aus und waeren durchs Wasser zu sehen)
+function taucht(){ return !!eva && eva.group.position.y < (typeof seaYAt === 'function' ? seaYAt(eva.group.position.x, eva.group.position.z) : 0) - 0.4; }
 story.setzeMarke = function(m, x, y, z, fzg, zeigen){
-  if(eva && eva.group.position.y < (typeof seaYAt === 'function' ? seaYAt(eva.group.position.x, eva.group.position.z) : 0) - 0.4) zeigen = false;   // taucht: keine Pfeile/Schilder
+  if(taucht()) zeigen = false;
   m.saeule.visible = m.pfeil.visible = zeigen;
   if(m.schild) m.schild.visible = zeigen;
   if(zeigen) stelleMarke(m, x, y, z, fzg);
@@ -2551,7 +2553,7 @@ function setzeMarken(){
 function updateMarken(){
   if(!marken.length) return;
   const zeigen = !!eva && story.etappe === 1 && locale === 'earth' && !story.phase
-    && steuerbar();
+    && steuerbar() && !taucht();
   updateRing(zeigen);
   const t = performance.now() / 1000;
   for(const m of marken){
