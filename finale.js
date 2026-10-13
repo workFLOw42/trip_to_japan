@@ -363,7 +363,12 @@ let knochen = null;
 function haltungKnochen(){
   const k = story.kenji; if(!k || !k.obj || !fin.k || !fin.k.g.userData.brett) return;
   if(!knochen){ knochen = []; k.obj.traverse(o => { if(BRETT_DREH[o.name] !== undefined) knochen.push([o, BRETT_DREH[o.name]]); }); }
-  for(const [o, w] of knochen){ _qk.setFromAxisAngle(_ya, w); o.quaternion.multiply(_qk); }
+  for(const [o, w] of knochen){
+    const u = o.userData;
+    if(!u.qSet || !o.quaternion.equals(u.qSet)) u.qBase = (u.qBase || new THREE.Quaternion()).copy(o.quaternion);   // Mixer hat neu geschrieben
+    o.quaternion.copy(u.qBase).multiply(_qk.setFromAxisAngle(_ya, w));
+    u.qSet = (u.qSet || new THREE.Quaternion()).copy(o.quaternion);
+  }
 }
 
 // ---- Nadelwald unterhalb der Baumgrenze (Live-Wunsch 13.10.2026: ab ~1500 m links und rechts der Piste) -----------------
