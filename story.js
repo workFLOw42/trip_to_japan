@@ -856,6 +856,7 @@ const intro = story.intro = { phase: 'aus', t: 0, rede: null, fertigRede: false 
 function hudSichtbar(an){
   document.body.classList.toggle('filmszene', !an);
 }
+story.hudSichtbar = hudSichtbar;      // finale.js: Snowboard/Surfen ohne HUD
 function introVorbereiten(){
   if(!document.getElementById('filmszene-css')){
     const st = document.createElement('style'); st.id = 'filmszene-css';

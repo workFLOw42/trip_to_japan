@@ -605,6 +605,33 @@ function hookE6(){
   // Schiffe nicht in den Fuji
   const shipWaterOrig = seaShipWaterFor;
   seaShipWaterFor = function(sh, x, z){ if(hier() && Math.hypot(x - FUJI.x, z - FUJI.z) < FUJI.r + 200) return false; return shipWaterOrig.apply(this, arguments); };
+  const placeOrig = placeSeaShip;
+  placeSeaShip = function(sh, fx, fz){
+    if(!hier()) return placeOrig.apply(this, arguments);
+    for(let i = 0; i < 6; i++){
+      if(!placeOrig.apply(this, arguments)) return false;
+      const vx = -Math.sin(sh.heading), vz = -Math.cos(sh.heading);
+      if([150, 300, 450].every(d => seaShipWaterFor(sh, sh.x + vx * d, sh.z + vz * d))) return true;   // Fahrweg frei
+      // sonst in die Richtung drehen, in der Wasser ist
+      for(let k = 1; k < 12; k++){ const h = sh.heading + k * Math.PI / 6, wx = -Math.sin(h), wz = -Math.cos(h);
+        if([150, 300, 450].every(d => seaShipWaterFor(sh, sh.x + wx * d, sh.z + wz * d))){ sh.heading = h; if(sh.group) sh.group.rotation.y = h; return true; } }
+    }
+    return true;
+  };
+  const shipsOrig = updateShipsSea;
+  updateShipsSea = function(dt){
+    if(!hier()) return shipsOrig.apply(this, arguments);
+    const vor = seaShips.map(sh => [sh.x, sh.z]);
+    const r = shipsOrig.apply(this, arguments);
+    const F = worldFocus();
+    seaShips.forEach((sh, i) => {
+      if(!sh.group || !vor[i]) return;
+      const fahrt = Math.hypot(sh.x - vor[i][0], sh.z - vor[i][1]);
+      sh.steht = fahrt < 0.001 ? (sh.steht || 0) + dt : 0;
+      if(sh.steht > 4){ sh.steht = 0; placeSeaShip(sh, F.x, F.z); }        // haengt fest -> woanders weiterfahren
+    });
+    return r;
+  };
   // Festland: fuer die Engine Land wie eine Insel (Boden, Landebahn); im Meeresgitter als riesige Insel eingetragen,
   // damit das Wasser darunter verschwindet und die Duenung am Strand auslaeuft (shoreFade), dazu der Meeresgrund
   const onLandOrig = isOnLand, runwayOrig = isOnRunway, seaIslOrig = collectSeaIslands, sbIslOrig = collectSeabedIslands;

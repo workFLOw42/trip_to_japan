@@ -514,8 +514,15 @@ function baueHindernisse(s0){
     ab.hinder.push(h);
   };
   // alle 75-130 m etwas: meist Felsen (einzeln oder zu zweit mit Luecke), jede vierte Stelle eine kleine Rampe, einmal die Rail
+  // Rail-Kombinationen (Live-Wunsch): Rail – 9 m Luecke – Rail (am Ende abspringen, auf der naechsten landen) und zwei
+  // Rails nebeneinander (seitlich hinueberspringen). Dort wird sonst nichts gebaut.
+  const kombi = [{ s: s0 + (SE - s0) * 0.3, L: 2 * RAIL_L + 9 }, { s: s0 + (SE - s0) * 0.62, L: RAIL_L + 6 }];
+  neu('rail', kombi[0].s, -4); neu('rail', kombi[0].s + RAIL_L + 9, -4);
+  neu('rail', kombi[1].s, -2.5); neu('rail', kombi[1].s + 6, 2.5);
+  const frei = s => kombi.every(k => s < k.s - 45 || s > k.s + k.L + 30);
   let nr = 0, letzteRail = -1e9, nachRail = false;
   for(let s = s0 + 70; s < SE - 140; s += 55 + rnd() * 35){
+    if(!frei(s)) continue;
     nr++; const w = rnd();
     if(w < 0.15 && s - letzteRail > 250){ neu('rail', s, (rnd() - 0.5) * 16); letzteRail = s; s += RAIL_L; nachRail = true; continue; }
     if(w < 0.55 || nachRail){
@@ -547,6 +554,7 @@ function abfahrtStart(k){
   const o = ort(ab.s, ab.q); ab.y = grundAb(o.x, o.z);
   figurZurueck(); fin.kal = false; ab.kalT = 0; fin.camY = undefined;
   fin.schritt = 'abfahrt';
+  if(story.hudSichtbar) story.hudSichtbar(false);        // Live-Wunsch: auf dem Brett kein HUD
   haltung();
   zeige('🏂 Los geht’s! L-Stick: links/rechts · B: springen · R-Stick: Tricks', 6);
 }
@@ -578,9 +586,15 @@ function landen(){
   if(name){ ab.tricks.push(name); zeige('✨ ' + name + '!', 2); }
   return true;
 }
+// Grind beendet: einmal pro Rail zaehlen (ab 3 m Grind), auch wenn man auf derselben Rail wieder landet
+function grindEnde(){
+  const r = ab.grind; ab.grind = null; if(!r) return;
+  const weg = ab.s - (ab.grindS0 === undefined ? ab.s : ab.grindS0);
+  if(weg >= 3 && !r.gezaehlt){ r.gezaehlt = true; ab.tricks.push('Rail-Grind'); zeige('✨ Rail-Grind!', 2); }
+}
 function springen(){
   if(fin.schritt !== 'abfahrt') return;
-  if(ab.grind){ ab.grind = null; ab.luft = true; ab.vy = 3.5; ab.hh = RAIL_H; ab.luftT = 0; ab.spin0 = ab.spin; ab.tricks.push('Rail-Grind'); zeige('✨ Rail-Grind!', 2); return; }
+  if(ab.grind){ grindEnde(); ab.luft = true; ab.vy = 5.5 + ab.v * 0.12; ab.hh = RAIL_H; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0; return; }   // von der Rail: genauso hoch wie am Boden, ab Railhoehe
   if(ab.luft || ab.stolper > 0) return;
   if(ab.rampe){ if(!ab.extra){ ab.extra = true; zeige('💥 Extra-Schwung!', 1.2); } return; }   // auf dem Kicker: an der Kante extra hoch und weit
   ab.luft = true; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0; ab.hh = 0; ab.vy = 5.5 + ab.v * 0.12;   // bei 50 km/h ~1,9 m hoch, ~1 s
@@ -627,7 +641,7 @@ function abfahrtSchritt(dt){
   }
   if(ab.stolper > 0) ab.stolper -= dt;
   if(!ab.grind){
-    ab.qv += ((ab.stolper > 0 ? 0 : st.x * 9) - ab.qv) * Math.min(1, dt * (ab.luft ? 1.5 : 5));
+    ab.qv += ((ab.stolper > 0 ? 0 : st.x * 9) - ab.qv) * Math.min(1, dt * (ab.luft ? 2.5 : 5));
     ab.q += ab.qv * dt;
     if(Math.abs(ab.q) > AB_RAND){ ab.q = Math.sign(ab.q) * AB_RAND; ab.qv = 0; if(!ab.luft) ab.v = Math.max(1.5, ab.v - 6 * dt); }
   }
@@ -641,14 +655,14 @@ function abfahrtSchritt(dt){
   }
   if(ab.grind){
     const r = ab.grind; ab.y = grund + RAIL_H; ab.q += (r.q - ab.q) * Math.min(1, dt * 10);
-    if(ab.s > r.s + RAIL_L){ ab.grind = null; ab.luft = true; ab.vy = 2.5; ab.hh = RAIL_H; ab.luftT = 0; ab.spin0 = ab.spin; ab.tricks.push('Rail-Grind'); zeige('✨ Rail-Grind!', 2); }
+    if(ab.s > r.s + RAIL_L){ grindEnde(); ab.luft = true; ab.vy = 3.5; ab.hh = RAIL_H; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0; }   // am Ende: kleiner Hopser
   } else if(ab.luft){
     // ballistisch ueber dem Hang: Hoehe ab.hh (Schwerkraft etwas kraeftiger, damit es knackig wirkt), Boden folgt darunter mit
     ab.luftT += dt; ab.vy -= 14 * dt; ab.hh += ab.vy * dt; ab.y = grund + ab.hh;
     ab.spin -= rs.x * 8 * dt; ab.flip += rs.y * 7.5 * dt;      // R-Stick: rechts = rechtsherum drehen, vor = Frontflip (Nase runter)
-    for(const h of ab.hinder) if(h.typ === 'rail' && ab.vy < 0 && ab.s > h.s && ab.s < h.s + RAIL_L - 2 && Math.abs(ab.q - h.q) < 1.3
-      && ab.hh <= RAIL_H + 0.3 && ab.hh >= RAIL_H - 0.7){
-      if(landen()){ ab.grind = h; ab.y = grund + RAIL_H; zeige('Grind!', 1.5); }
+    for(const h of ab.hinder) if(h.typ === 'rail' && ab.vy < 0 && ab.s > h.s + 0.5 && ab.s < h.s + RAIL_L - 1 && Math.abs(ab.q - h.q) < 1.4
+      && ab.hh <= RAIL_H + 0.4 && ab.hh >= RAIL_H - 0.8){
+      if(landen()){ ab.grind = h; if(ab.grindS0 === undefined || h !== ab.letzteRail) ab.grindS0 = ab.s; ab.letzteRail = h; ab.y = grund + RAIL_H; ab.qv = 0; zeige('Grind!', 1.2); }
       break;
     }
     // auf einem Kicker gelandet (selten): dort aufsetzen, nicht hindurchfallen
@@ -660,6 +674,7 @@ function abfahrtSchritt(dt){
     else ab.y = grund;
     if(!ab.luft) ab.rampe = auf;
     if(!auf && !ab.luft) ab.extra = false;
+    if(!ab.luft){ ab.grindS0 = undefined; ab.letzteRail = null; }
     { const z = Math.round(ab.spin / (2 * Math.PI)) * 2 * Math.PI; ab.spin += (z - ab.spin) * Math.min(1, dt * 3); }   // zurueck nach vorn
     for(const h of ab.hinder) if(h.typ === 'rail' && !h.weg && ab.s > h.s - 0.5 && ab.s < h.s + 1.5 && Math.abs(ab.q - h.q) < 0.8){ h.weg = true; anstossen('Autsch – die Rail! Mit B draufspringen.'); }
   }
@@ -677,7 +692,7 @@ function abfahrtSchritt(dt){
 function megaStart(){
   const o = ort(ab.s, ab.q);
   ab.mega = { x: o.x, z: o.z, tx: o.tx, tz: o.tz, vh: 30 + ab.v, y: ab.y, y0: ab.y, ueberMeer: false };
-  ab.vy = 16 + ab.v * 0.5; fin.schritt = 'mega';
+  ab.vy = 16 + ab.v * 0.5; fin.schritt = 'mega'; ab.spin0 = ab.spin; ab.flip = 0;
   zeige('🚀 MEGA-SPRUNG!', 2.5);
   if(typeof rumble === 'function') rumble(400, 0.8, 0.8);
 }
@@ -691,8 +706,9 @@ function megaSchritt(dt){
   const meer = typeof seaYAt === 'function' ? seaYAt(m.x, m.z) : 0, berg = m.ueberMeer ? -Infinity : fujiMeshY(m.x, m.z) + 2.5;
   if(m.y <= Math.max(meer, berg)){
     m.y = Math.max(meer, berg);
-    const sauber = landen();                                    // im Meer gibt es kein Bremsen-Problem: es geht so oder so weiter
-    if(!sauber){ ab.stolper = 0; zeige('Platsch! 🌊', 2.5); }
+    // im Meer zaehlt jeder volle Trick, auch schraeg gelandet (Wasser verzeiht); danach geht es so oder so weiter
+    const name = trickName(); if(name){ ab.tricks.push('Mega ' + name); zeige('✨ Mega ' + name + '!', 2.5); } else zeige('Platsch! 🌊', 2.5);
+    ab.luft = false; ab.vy = 0; ab.stolper = 0; ab.spin = Math.round(ab.spin / (2 * Math.PI)) * 2 * Math.PI; ab.flip = 0;
     fin.schritt = 'surf'; ab.surfT = 0; ab.v = m.vh * 0.45;
     const g = fin.k.g, alt = g.userData.brett; if(alt) g.remove(alt);       // Snowboard -> Surfbrett
     if(surfVorlage){ const b = surfVorlage.clone(true); b.position.y = 0.02; g.add(b); g.userData.brett = b; }
@@ -751,7 +767,7 @@ function aufraeumen(){
   if(fin.k){ scene.remove(fin.k.g); fin.k = null; }
   if(fin.flieger){ scene.remove(fin.flieger.g); fin.flieger = null; }
   for(const r of fin.ringe) r.mesh.visible = false;
-  vulkanAus(); abWeg(); figurZurueck(); if(camera.fov !== 60){ camera.fov = 60; camera.updateProjectionMatrix(); }
+  vulkanAus(); abWeg(); figurZurueck(); if(story.hudSichtbar) story.hudSichtbar(true); if(camera.fov !== 60){ camera.fov = 60; camera.updateProjectionMatrix(); }
   if(fin.hudEl) fin.hudEl.style.display = 'none';
   state.crashed = false; state.crashTimer = 0; state.falling = false; state.ejected = false; state.stalling = false;
   if(typeof clearRescue === 'function') clearRescue();
@@ -856,6 +872,9 @@ function hookFinale(){
   // Aufgabe im Finale (vor allen Etappen-Texten; sonst fiel sie auf Etappe 1 zurueck)
   const aufgabeE6Orig = story.aufgabeE6;
   story.aufgabeE6 = function(){ if(fin.aktiv && hier()) return aufgabe(); return aufgabeE6Orig ? aufgabeE6Orig.apply(this, arguments) : null; };
+  const brettZeit = () => fin.aktiv && hier() && (fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf');
+  const schubOrig = schubBalken;
+  schubBalken = function(){ if(brettZeit()){ if(schubEl && schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; } return; } return schubOrig.apply(this, arguments); };
   const tonOrig = updateEngineSound;
   updateEngineSound = function(){ const r = tonOrig.apply(this, arguments); if(fin.aktiv && hier() && fin.k && typeof engineGain !== 'undefined' && engineGain) engineGain.gain.value = 0; return r; };
   const cratesOrig = updateCrates, scoopOrig = updateScoopHint;
