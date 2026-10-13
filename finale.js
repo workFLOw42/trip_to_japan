@@ -284,7 +284,8 @@ function stick(){
   return { x, y };
 }
 function aktionB(){
-  if(fin.schritt === 'abfahrt') springen();
+  if(fin.schritt === 'welle') welleSpringen();
+  else if(fin.schritt === 'abfahrt') springen();
   else if(fin.schritt === 'pilot') abspringen();
   else if(fin.schritt === 'flug' && fin.art === 'sprung'){
     story.hinweis('Erst zum roten Punkt über der Piste – mindestens ' + SPRUNG_MIN + ' m hoch!'); story.spaeter(4, () => story.hinweis(''));
@@ -704,7 +705,10 @@ function abfahrtStart(k){
   story.hinweis('');
 }
 story.finaleAbfahrt = abfahrtStart;
-function zeige(t, sek){ const id = ++ab.hid; story.hinweis(t); story.spaeter(sek || 2, () => { if(ab.hid === id) story.hinweis(''); }); }
+let zeigeErlaubt = false;
+const hinweisOrig = story.hinweis;
+story.hinweis = function(text){ if(text && fin.aktiv && fin.k && !zeigeErlaubt) return; return hinweisOrig.apply(this, arguments); };
+function zeige(t, sek){ const id = ++ab.hid; zeigeErlaubt = true; story.hinweis(t); zeigeErlaubt = false; story.spaeter(sek || 2, () => { if(ab.hid === id) story.hinweis(''); }); }
 // Trick-Eingaben (Live-Wunsch): x = Drehung/Rolle aus LT/RT (RT rechtsherum, Tastatur Q/E), y = Flip/Abtauchen vom rechten Stick
 // (vor = Kopf runter, Tastatur I/K)
 function rStick(){
@@ -922,6 +926,7 @@ function insWasser(m, meer){
   if(surfVorlage){ const b = surfVorlage.clone(true); g.add(b); g.userData.brett = b; if(g.children[0] !== b) g.children[0].position.y = 0.045; }
   fin.kal = false; ab.kalT = 0; knochen = null; haltung();
   if(typeof rumble === 'function') rumble(400, 0.8, 0.6);
+  surfenStart(true);                                      // Live-Wunsch: nach dem Mega-Sprung gleich auf die Brandungswellen
 }
 function surfSchritt(dt){
   const m = ab.mega;
@@ -968,13 +973,204 @@ function figurZurueck(){
   const k = story.kenji; if(k && k.acts.idle) k.acts.idle.paused = false;
 }
 
+// ==== Surfen auf Brandungswellen (Live-Wunsch 13.10.2026) ==============================================================
+// Eigenes, feines Wellenfeld (die Engine-Duenung ist mit 62,5 m Stuetzabstand und +-1,6 m zu grob): Wellenreihen laufen von der
+// See (-x) auf den Fukuoka-Beach zu (+x), Kaemme laengs z. Profil: steile Front, flacher Ruecken, Schaum am Kamm. Hoehe nach
+// Stufe (1: 5 m, 2: 3,5 m, 3: 2 m, 4: 1 m; 5: kein Surfen). Kenji steht automatisch auf der Welle; die Welle schiebt ihn
+// (Tempo aus dem Gefaelle), L-Stick lenkt quer an der Welle entlang und hoch/runter, B springt an der Lippe, LT/RT drehen,
+// R-Stick Flips. Wipeout = Waschgang (kurz unter, auf dem Brett wieder auf, naechste Welle). Y = aussteigen -> Ring am Strand.
+const WEL = { L: 46, V: 9.5, X0: -140, X1: 18 };          // Wellenlaenge (m), Laufgeschwindigkeit (m/s), Feld von/bis Kueste (relativ)
+function wellenHoehe(){ return ({ 1: 5, 2: 3.5, 3: 2, 4: 1 })[stufe()] || 0; }
+const welle = { aktiv: false, t: 0, mesh: null, cx: 0, cz: 0, H: 2, wasch: 0, ersteMal: true, abspann: false };
+story.finaleWelle = welle;
+// Brandungsprofil einer Reihe: u = Phase in [0, 1) (0 = Kamm/Lippe, Front davor bei u ~0,9..1, Ruecken danach)
+function wellenProfil(u){
+  // Front steil (letzte 18 % der Wellenlaenge), Ruecken flach (Rest), Kamm bei u = 0/1
+  if(u > 0.82){ const f = (u - 0.82) / 0.18; return Math.pow(f, 1.6); }        // Front: von Tal (0) steil hoch zum Kamm (1)
+  const r = u / 0.82; return Math.pow(1 - r, 2.2);                                // Ruecken: vom Kamm flach ab ins Tal
+}
+// Wellenhoehe an (x, z) in Weltkoordinaten. Kuestenabstand d = x - KX (KX = Wasserlinie): weit draussen klein, an der
+// Brandungszone voll, kurz vor dem Strand bricht sie und laeuft aus.
+function wellenY(x, z){
+  const K = L().FEST.x, d = x - K;                                               // < 0 = auf See
+  if(d > 6) return -0.3;
+  const zone = Math.max(0, Math.min(1, (d + 150) / 70)) * Math.max(0, Math.min(1, (6 - d) / 30));
+  const u = (((x - welle.t * WEL.V) / WEL.L) % 1 + 1) % 1;
+  const wackel = 1 + 0.08 * Math.sin(z * 0.045 + welle.t * 0.7);                 // Kamm nicht schnurgerade
+  return welle.H * zone * wackel * wellenProfil(u) - 0.3 + Math.sin(z * 0.11 + welle.t * 1.6) * 0.06;
+}
+story.finaleWellenY = wellenY;
+// Steigung der Welle in Laufrichtung (+x), fuer Tempo und Neigung
+function wellenGef(x, z){ return (wellenY(x + 0.6, z) - wellenY(x - 0.6, z)) / 1.2; }
+// Feines Mesh, das mit Kenji mitwandert (rastet auf 1,5 m ein)
+function wellenBauen(){
+  if(welle.mesh) return;
+  const NX = 140, NZ = 110, S = 1.5, geo = new THREE.PlaneGeometry(NX * S, NZ * S, NX, NZ); geo.rotateX(-Math.PI / 2);
+  const col = new Float32Array(geo.attributes.position.count * 3); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.96, fog: false }));
+  m.frustumCulled = false; m.renderOrder = 1; scene.add(m);
+  welle.mesh = m; welle.S = S; welle.base = Float32Array.from(geo.attributes.position.array);
+}
+function wellenWeg(){ if(!welle.mesh) return; scene.remove(welle.mesh); welle.mesh.geometry.dispose(); welle.mesh.material.dispose(); welle.mesh = null; }
+const _wt = new THREE.Color(0x0e5d86), _wm = new THREE.Color(0x2fa6cf), _ws = new THREE.Color(0xffffff), _ww = new THREE.Color(0x0b4f74), _wc = new THREE.Color();
+function wellenMesh(){
+  const m = welle.mesh; if(!m) return;
+  const S = welle.S, cx = Math.round(state.pos.x / S) * S, cz = Math.round(state.pos.z / S) * S;
+  m.position.set(cx, 0, cz);
+  const P = m.geometry.attributes.position, C = m.geometry.attributes.color, B = welle.base;
+  for(let i = 0; i < P.count; i++){
+    const x = B[i * 3] + cx, z = B[i * 3 + 2] + cz, y = wellenY(x, z);
+    P.setY(i, y);
+    // Farbe: Tal tuerkis-dunkel, oben hell, an der steilen Front kurz vor dem Kamm Schaum
+    const h = welle.H > 0 ? Math.max(0, Math.min(1, (y + 0.3) / welle.H)) : 0, g = wellenGef(x, z);
+    // steile Wand (Front) dunkler, Ruecken heller; oben an der Front Schaumkrone
+    const wand = Math.max(0, Math.min(1, g * 1.6));
+    _wc.copy(_wt).lerp(_wm, h).lerp(_ww, wand * (1 - h) * 0.8);
+    if(h > 0.72 && g > 0.15) _wc.lerp(_ws, Math.min(1, (h - 0.72) / 0.18));
+    C.setXYZ(i, _wc.r, _wc.g, _wc.b);
+  }
+  P.needsUpdate = true; C.needsUpdate = true; m.geometry.computeVertexNormals();
+}
+// ---- Surfen starten / Schritt / Waschgang / aussteigen ----------------------------------------------------------------
+function surfenStart(vonMega){
+  if(fx){ fx.schatten.visible = false; fx.spur.visible = false; }
+  welle.aktiv = true; welle.H = wellenHoehe(); welle.wasch = 0;
+  wellenBauen();
+  fin.aktiv = true; fin.art = 'surfen'; fin.schritt = 'welle'; story.phase = 'finale';
+  if(story.hudSichtbar) story.hudSichtbar(false);
+  ladeSurf();
+  if(!vonMega){
+    clearEva();
+    const g = makeAstronaut(); scene.add(g);
+    fin.k = { g, v: new THREE.Vector3(), yaw: -Math.PI / 2, t: 0 };
+    ab.tricks = ab.tricks || [];
+  }
+  const g = fin.k.g;
+  if(!g.userData.brett && surfVorlage){ const b = surfVorlage.clone(true); g.add(b); g.userData.brett = b; if(g.children[0] !== b) g.children[0].position.y = 0.045; }
+  // Startpunkt: draussen auf der Front der naechsten Welle, Blick zum Strand (+x)
+  const K = L().FEST.x, z0 = vonMega && ab.mega ? ab.mega.z : L().STRANDPLATZ.z;
+  ab.x = K - 70; ab.z = z0; ab.vx = WEL.V; ab.vz = 0; ab.v = WEL.V; ab.luft = false; ab.vy = 0; ab.hh = 0;
+  ab.spin = 0; ab.spin0 = 0; ab.flip = 0; ab.stolper = 0; ab.kurs = 1.05; ab.kalT = 0; fin.kal = false; knochen = null;   // ~60° quer zur Welle
+  welleFangen();
+  figurZurueck(); haltung();
+  story.hinweis(''); welle.hinweisSperre = true;
+}
+story.finaleSurfen = surfenStart;
+// Kenji auf die naechste Front setzen (automatisch auf der Welle)
+function welleFangen(){
+  // auf die Front einer Welle (Phase u = 0,9), und zwar die erste, die mindestens 55 m vor dem Strand laeuft
+  const K = L().FEST.x, phase = x => (((x - welle.t * WEL.V) / WEL.L) % 1 + 1) % 1;
+  let x = K - 55; x += (0.9 - phase(x)) * WEL.L; while(x > K - 55) x -= WEL.L;
+  ab.x = x; ab.v = WEL.V; ab.y = wellenY(ab.x, ab.z);
+}
+function welleSchritt(dt){
+  const k = fin.k; if(!k) return;
+  k.t += dt; ab.kalT = (ab.kalT || 0) + dt; welle.t += dt;
+  const st = stick(), rs = rStick(), K = L().FEST.x;
+  if(welle.wasch > 0){ waschgang(dt); return; }
+  // Steuerung: L-Stick links/rechts = Kurs (Winkel zur Wellenrichtung), vor/zurueck = an der Welle hoch / runter
+  // Kurs: links/rechts wechselt die Fahrtrichtung an der Wand (+-60°), losgelassen haelt er die Seite
+  if(!ab.luft && Math.abs(st.x) > 0.3) ab.kursSoll = Math.sign(st.x) * 1.05;
+  if(ab.kursSoll === undefined) ab.kursSoll = 1.05;
+  ab.kurs += (ab.kursSoll - ab.kurs) * Math.min(1, dt * 2.2);
+  const gef = wellenGef(ab.x, ab.z);
+  if(!ab.luft){
+    // Die Welle schiebt (Front = positive Steigung in Laufrichtung): je steiler, desto schneller, max ~45 km/h
+    const schub = Math.max(0, gef) * 9.81 * 0.9, bremse = 0.6 + Math.max(0, -gef) * 6;
+    ab.v = Math.max(WEL.V * 0.4, Math.min(12.5, ab.v + (schub - bremse) * dt));
+  }
+  // Richtung: Grundlauf mit der Welle (+x), Kurs dreht quer (z), L-Stick vor = die Welle hinunter (schneller, mehr +x)
+  const quer = Math.sin(ab.kurs), laeng = Math.cos(ab.kurs);
+  const vx = WEL.V + (ab.v - WEL.V) * laeng - st.y * 2.2, vz = ab.v * quer;   // Grundlauf = Welle; Gefaelle und Stick dazu
+  ab.x += vx * dt; ab.z += vz * dt;
+  const tx = vx / (Math.hypot(vx, vz) || 1), tz = vz / (Math.hypot(vx, vz) || 1);
+  // Welle verloren (hinter ihr zurueckgefallen) oder am Strand -> neue Welle
+  const u = (((ab.x - welle.t * WEL.V) / WEL.L) % 1 + 1) % 1;
+  if(!ab.luft && (u < 0.55 || ab.x - K > -4)) welleFangen();
+  const wy = wellenY(ab.x, ab.z);
+  if(ab.luft){
+    ab.luftT += dt; ab.vy -= 14 * dt; ab.hh += ab.vy * dt; ab.y = wy + ab.hh;
+    ab.spin -= rs.x * 8 * dt; ab.flip += rs.y * 7.5 * dt;
+    if(ab.hh <= 0){ ab.hh = 0; ab.y = wy;
+      const sr = ab.spin - Math.round(ab.spin / Math.PI) * Math.PI, fr = ab.flip - Math.round(ab.flip / (2 * Math.PI)) * 2 * Math.PI;
+      if(Math.abs(sr) > 0.87 || Math.abs(fr) > 1.05){ waschgangStart(); return; }   // unsauber = Waschgang
+      landen(); if(fx) fx.puff(state.pos, 1);
+    }
+  } else {
+    ab.y = wy;
+    // Lippe: an der Kante (Kamm) mit B oder automatisch bei hoher Fahrt nach oben (st.y < 0 = hoch) abheben
+    const lippe = u > 0.97 || u < 0.02;
+    if(lippe && ab.springWunsch){ ab.springWunsch = false; ab.luft = true; ab.luftT = 0; ab.hh = 0; ab.spin0 = ab.spin; ab.flip = 0; ab.vy = 4 + welle.H * 1.2 + ab.v * 0.2; ab.kante = false; }
+    { const z = Math.round(ab.spin / (2 * Math.PI)) * 2 * Math.PI; ab.spin += (z - ab.spin) * Math.min(1, dt * 3); }
+  }
+  // Pose: Neigung aus der Welle unter dem Brett (vor/hinter), Gruppe zeigt in Fahrtrichtung
+  const neig = Math.atan2(wellenY(ab.x - tx * 0.7, ab.z - tz * 0.7) - wellenY(ab.x + tx * 0.7, ab.z + tz * 0.7), 1.4);
+  pose(ab.x, ab.y + 0.02, ab.z, tx, tz, 0, ab.luft ? 0 : neig, false);
+  state.vel.set(vx, ab.luft ? ab.vy : 0, vz);
+  fahrtwind(dt);
+  gischt(dt, tx, tz);
+}
+// B auf der Welle: Sprungwunsch fuer die naechste Lippe (oder sofort, wenn man an ihr ist)
+function welleSpringen(){ if(welle.wasch > 0 || ab.luft) return; ab.springWunsch = true; story.spaeter(0.6, () => { ab.springWunsch = false; }); }
+// Gischt: weisse Spritzer hinter dem Brett, in der Kurve mehr (Snowboard-Spray-Baustein mit anderer Farbe)
+const gisch = { teile: [], mat: null, t: 0 };
+function gischt(dt, tx, tz){
+  if(!gisch.mat) gisch.mat = new THREE.MeshBasicMaterial({ color: 0xeafaff, transparent: true, opacity: 0.85, fog: false });
+  if(!gisch.g){ gisch.g = new THREE.Group(); scene.add(gisch.g); }
+  gisch.t -= dt;
+  const kurve = Math.abs(ab.kurs);
+  if(!ab.luft && gisch.t <= 0){
+    gisch.t = 0.025 / (1 + kurve * 2);
+    let s = gisch.teile.find(p => !p.m.visible);
+    if(!s && gisch.teile.length < 80){ s = { m: new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 0), gisch.mat), v: new THREE.Vector3() }; gisch.g.add(s.m); gisch.teile.push(s); }
+    if(s){ const seite = Math.sign(ab.kurs || 1) * -1; s.m.visible = true; s.t = 0; s.m.position.set(ab.x - tx * 0.8, ab.y + 0.1, ab.z - tz * 0.8);
+      s.v.set(-tx * 3 + -tz * seite * (2 + kurve * 5), 2 + Math.random() * 2 + kurve * 2, -tz * 3 + tx * seite * (2 + kurve * 5)); }
+  }
+  for(const p of gisch.teile) if(p.m.visible){ p.t += dt; p.v.y -= 9.81 * dt; p.m.position.addScaledVector(p.v, dt); p.m.scale.setScalar(Math.max(0.1, 1 - p.t * 1.4)); if(p.t > 0.7) p.m.visible = false; }
+}
+function gischtWeg(){ if(gisch.g){ scene.remove(gisch.g); gisch.g.traverse(o => { if(o.geometry) o.geometry.dispose(); }); gisch.g = null; } gisch.teile.length = 0; }
+// Waschgang: Kenji faellt ins Wasser, kurz unter (gedreht), taucht auf dem Brett auf, naechste Welle
+function waschgangStart(){
+  welle.wasch = 1.8; ab.luft = false; ab.spin = 0; ab.flip = 0; ab.hh = 0;
+  zeige('🌊 Waschgang!', 1.5); if(typeof rumble === 'function') rumble(500, 0.9, 0.7);
+  if(fx) fx.puff(state.pos, 2);
+  kAnim('swim');
+}
+function waschgang(dt){
+  welle.wasch -= dt;
+  const k = fin.k, wy = wellenY(ab.x, ab.z), tief = Math.sin(Math.min(1, (1.8 - welle.wasch) / 1.2) * Math.PI) * 1.6;
+  ab.x += WEL.V * 0.5 * dt;
+  k.g.position.set(ab.x, wy - tief, ab.z); k.g.rotation.set(Math.sin(k.t * 7) * 0.8, k.yaw + k.t * 2, Math.cos(k.t * 5) * 0.6, 'YXZ');
+  state.pos.set(ab.x, wy, ab.z); state.vel.set(WEL.V * 0.5, 0, 0);
+  if(welle.wasch <= 0){ welle.wasch = 0; welleFangen(); figurZurueck();
+    const K = story.kenji; if(K && K.acts.swim){ K.acts.swim.stop(); K.cur = null; }   // hart zurueck auf die Stehhaltung
+    haltung(); fin.kal = false; ab.kalT = 0; }
+}
+// Y: aussteigen -> im Ring am Strand; beim ersten Mal laeuft der Abspann
+function surfenAussteigen(){
+  if(!welle.aktiv) return;
+  welle.aktiv = false;
+  story.schwarz('', 1.2, () => {
+    wellenWeg(); gischtWeg();
+    aufraeumen();
+    bahnStart(); planeGroup.visible = false;
+    const c = story.e6c400 && story.e6c400(); if(c) c.visible = true;
+    evaExit();
+    const S = L().SURF || L().STRANDPLATZ;
+    if(eva){ eva.group.position.set(S.x + 2, ISLAND_Y, S.z); eva.yaw = -Math.PI / 2; eva.group.rotation.y = eva.yaw; evaOrbit = 0; evaPitch = 0; }
+    snapCamera(); story.phase = 'ankunft';
+    if(!welle.abspann){ welle.abspann = true; if(story.abspann) story.abspann(); }
+  });
+}
+story.finaleSurfenAus = surfenAussteigen;
+
 // ---- Zurueck an die C-400 (geschafft oder noch einmal) -------------------------------------------------------------
 function aufraeumen(){
   fin.aktiv = false; fin.schritt = null; story.ziel = null;
   if(fin.k){ scene.remove(fin.k.g); fin.k = null; }
   if(fin.flieger){ scene.remove(fin.flieger.g); fin.flieger = null; }
   for(const r of fin.ringe) r.mesh.visible = false;
-  vulkanAus(); abWeg(); fxWeg(); figurZurueck(); if(ab.mega && ab.mega.brett){ scene.remove(ab.mega.brett.b); ab.mega.brett = null; } if(story.hudSichtbar) story.hudSichtbar(true); if(camera.fov !== 60){ camera.fov = 60; camera.updateProjectionMatrix(); }
+  vulkanAus(); abWeg(); fxWeg(); wellenWeg(); gischtWeg(); welle.aktiv = false; figurZurueck(); if(ab.mega && ab.mega.brett){ scene.remove(ab.mega.brett.b); ab.mega.brett = null; } if(story.hudSichtbar) story.hudSichtbar(true); if(camera.fov !== 60){ camera.fov = 60; camera.updateProjectionMatrix(); }
   if(fin.hudEl) fin.hudEl.style.display = 'none';
   state.crashed = false; state.crashTimer = 0; state.falling = false; state.ejected = false; state.stalling = false;
   if(typeof clearRescue === 'function') clearRescue();
@@ -1000,18 +1196,19 @@ function zurueck(text, danach){
 // ---- Aufgabe (D-Pad links / T) und Status-Symbol ----------------------------------------------------------------
 function aufgabe(){
   const p = state.pos, agl = Math.max(0, Math.round(p.y - ISLAND_Y)), z = story.ziel, d = z ? Math.round(Math.hypot(z.x - p.x, z.z - p.z)) : 0;
-  const titel = fin.art === 'sprung' ? '🪂 Abenteuer: Fuji-Sprung' : '✈️ Rundflug um den Fuji', zeilen = [];
+  const titel = fin.schritt === 'welle' ? '🏄 Surfen' : (fin.art === 'sprung' ? '🪂 Abenteuer: Fuji-Sprung' : '✈️ Rundflug um den Fuji'), zeilen = [];
   if(fin.schritt === 'ansage' || fin.schritt === 'sequenz') zeilen.push(['Start', 'Startsequenz, dann Vollgas und abheben']);
-  else if(['fall', 'schirm', 'gelandet', 'abfahrt', 'mega', 'surf'].includes(fin.schritt)){
+  else if(['fall', 'schirm', 'gelandet', 'abfahrt', 'mega', 'surf', 'welle'].includes(fin.schritt)){
     // Live-Wunsch: nur Tempo, Tricks je Trick, Rest der Piste
-    const kmh = Math.round((fin.schritt === 'abfahrt' || fin.schritt === 'surf' ? ab.v : state.vel.length()) * 3.6);
+    const kmh = Math.round((fin.schritt === 'abfahrt' || fin.schritt === 'surf' || fin.schritt === 'welle' ? ab.v : state.vel.length()) * 3.6);
     zeilen.push(['Tempo', kmh + ' km/h']);
     const n = {}; for(const x of ab.tricks || []) n[x] = (n[x] || 0) + 1;
     const liste = Object.keys(n);
     if(!liste.length) zeilen.push(['Tricks', 'noch keine']);
     for(const x of liste) zeilen.push([x, n[x] + '×']);
     const rest = fin.piste && fin.piste.S !== undefined && fin.schritt === 'abfahrt' ? Math.max(0, Math.round(fin.piste.S - ab.s)) : null;
-    zeilen.push(['Piste übrig', rest === null ? (fin.schritt === 'mega' || fin.schritt === 'surf' ? 'geschafft' : '–') : rest + ' m']);
+    if(fin.schritt === 'welle') zeilen.push(['Welle', welle.H.toFixed(1).replace('.', ',') + ' m · Y: aussteigen']);
+    else zeilen.push(['Piste übrig', rest === null ? (fin.schritt === 'mega' || fin.schritt === 'surf' ? 'geschafft' : '–') : rest + ' m']);
   } else if(fin.art === 'rundflug'){
     zeilen.push(['Höhe', agl + ' m (Gipfel 2000, max ' + MAX_ALT + ')']);
     if(fin.ringNr < fin.ringe.length){ zeilen.push(['Ring', (fin.ringNr + 1) + ' / ' + fin.ringe.length + ' · ' + d + ' m']); zeilen.push(['Ringhöhe', Math.round(fin.ringe[fin.ringNr].y) + ' m']); }
@@ -1026,7 +1223,7 @@ function aufgabe(){
 }
 function hud(){
   if(fin.hudEl) fin.hudEl.style.display = 'none';
-  const st = document.getElementById('status'), sym = fin.schritt === 'fall' || fin.schritt === 'schirm' ? '🪂' : (fin.schritt === 'surf' ? '🏄' : (fin.schritt === 'gelandet' || fin.schritt === 'abfahrt' || fin.schritt === 'mega' ? '🏂' : '✈️'));
+  const st = document.getElementById('status'), sym = fin.schritt === 'fall' || fin.schritt === 'schirm' ? '🪂' : (fin.schritt === 'surf' || fin.schritt === 'welle' ? '🏄' : (fin.schritt === 'gelandet' || fin.schritt === 'abfahrt' || fin.schritt === 'mega' ? '🏂' : '✈️'));
   if(st && st.textContent !== sym) st.textContent = sym;
 }
 
@@ -1062,6 +1259,8 @@ function hookFinale(){
     if(n === 1) fin.testPilot = true;                     // nach dem Globus (der leert alle Timer), siehe updateHUD
     return r;
   };
+  const yOrig = buttonY;
+  buttonY = function(){ if(fin.aktiv && hier() && fin.schritt === 'welle'){ surfenAussteigen(); return; } return yOrig.apply(this, arguments); };
   // Y an der C-400 (am Strand, nach Etappe 6)
   const boardYOrig = evaBoardY;
   evaBoardY = function(){ if(c400Nah()){ einsteigen(); return; } return boardYOrig.apply(this, arguments); };
@@ -1078,11 +1277,13 @@ function hookFinale(){
   // Aufgabe im Finale (vor allen Etappen-Texten; sonst fiel sie auf Etappe 1 zurueck)
   const aufgabeE6Orig = story.aufgabeE6;
   story.aufgabeE6 = function(){ if(fin.aktiv && hier()) return aufgabe(); return aufgabeE6Orig ? aufgabeE6Orig.apply(this, arguments) : null; };
-  const brettZeit = () => fin.aktiv && hier() && (fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf');
+  const brettZeit = () => fin.aktiv && hier() && (fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf' || fin.schritt === 'welle');
   const schubOrig = schubBalken;
   schubBalken = function(){ if(brettZeit()){ if(schubEl && schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; } return; } return schubOrig.apply(this, arguments); };
   const bodenOrig = seaFloorNeeded;
   seaFloorNeeded = function(){ if(fin.aktiv && hier() && fin.k) return false; return bodenOrig.apply(this, arguments); };
+  const schattenOrig = updateShadow;
+  updateShadow = function(){ const r = schattenOrig.apply(this, arguments); if(fin.aktiv && hier() && fin.k){ if(planeShadow) planeShadow.visible = false; if(typeof ovalShadow !== 'undefined' && ovalShadow) ovalShadow.visible = false; } return r; };
   const tonOrig = updateEngineSound;
   updateEngineSound = function(){ const r = tonOrig.apply(this, arguments); if(fin.aktiv && hier() && fin.k && typeof engineGain !== 'undefined' && engineGain) engineGain.gain.value = 0; return r; };
   const cratesOrig = updateCrates, scoopOrig = updateScoopHint;
@@ -1094,6 +1295,7 @@ function hookFinale(){
     if(fin.schritt === 'ansage'){ state.vel.set(0, 0, 0); state.throttle = 0; return; }
     if(fin.schritt === 'pilot'){ pilotSchritt(dt); hud(); return; }
     if(fin.schritt === 'fall' || fin.schritt === 'schirm' || fin.schritt === 'gelandet'){ sprungSchritt(dt); hud(); return; }
+    if(fin.schritt === 'welle'){ welleSchritt(dt); hud(); return; }
     if(fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf'){ abfahrtSchritt(dt); hud(); return; }
     const r = physOrig.apply(this, arguments);
     if(fin.schritt === 'flug'){ flugUpdate(); hud(); }
@@ -1112,6 +1314,7 @@ function hookFinale(){
   updateCamera = function(){
     if(!(fin.aktiv && hier() && fin.k)) return camOrig.apply(this, arguments);
     haltungKnochen(); fuesseAusrichten();
+    if(welle.aktiv) wellenMesh();
     if(sideView !== 0) seitS = sideView;
     seitK = sideView !== 0 ? Math.min(1, seitK + 0.12) : 0;
     if(seitK > 0.02 && fin.k){
@@ -1127,7 +1330,7 @@ function hookFinale(){
       camera.lookAt(p.x + fx * 2, p.y + hy + 0.6, p.z + fz * 2);
       if(sideView !== 0){ fin.camY = camera.position.y; return; }   // beim Loslassen gleitet die normale Kamera zurueck
     }
-    const fahrt = fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf';
+    const fahrt = fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf' || fin.schritt === 'welle';
     const k = fin.k, p = fahrt ? state.pos : k.g.position, fx = -Math.sin(k.yaw), fz = -Math.cos(k.yaw);
     const fall = fin.schritt === 'fall', hinten = fahrt ? 6.5 : (fall ? 10 : (fin.schritt === 'gelandet' ? 8 : 16)), hoch = fahrt ? 2.4 : (fall ? 7 : 4);
     const fov = fahrt ? 60 + Math.min(1, ab.v / AB_VMAX) * 22 : 60;                       // Tempo: Sichtfeld weiter (60 -> 82°)
@@ -1136,6 +1339,14 @@ function hookFinale(){
     const hoch2 = fahrt && fin.schritt === 'abfahrt' && ab.luft ? ab.hh : 0;
     fin.sprungK = (fin.sprungK || 0) + (Math.min(1, hoch2 / 8) - (fin.sprungK || 0)) * (hoch2 > 0 ? 0.12 : 0.08);   // 0..1 weich
     const zurueck = fin.sprungK * 6;                                                      // Zoom: weiter weg
+    if(fin.schritt === 'welle' && sideView === 0){
+      // hinter Kenji, aber zur See hin versetzt (-x), damit die anrollende Wand seitlich im Bild steht
+      const hi = 7.5, ho = 3 + welle.H * 0.5;
+      _cp.set(p.x - fx * hi - 4, p.y + ho, p.z - fz * hi); fin.camY = undefined;
+      camera.position.lerp(_cp, 0.12); camera.up.set(0, 1, 0);
+      camera.lookAt(p.x + fx * 8 + 2, p.y + welle.H * 0.3, p.z + fz * 8);
+      return;
+    }
     if(fin.schritt === 'mega'){
       const ph = ab.mega && ab.mega.phase, nah = ph === 'frei' || ph === 'schirm';
       const hi = ph === 'schirm' ? 12 : (nah ? 6 : 6.5), ho = ph === 'schirm' ? 2 : (nah ? 2.5 : 4);

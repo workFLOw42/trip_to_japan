@@ -49,7 +49,7 @@ const SURF = { x: FEST.x + 6, z: STRANDPLATZ.z - 11 };         // Surfbrett rech
 const MEOTO = { x: FEST.x - 230, z: STRANDPLATZ.z - 120 };    // rechts dahinter (Blick -x: rechts = -z)
 const FEUER = { x: FEST.x + 30, z: STRANDPLATZ.z + 90 };       // Lagerfeuer auf einem freien Strandabschnitt links von Kenji
 const SAMURAI_GRUPPE = { x: FEST.x + 28, z: STRANDPLATZ.z - 92 };   // stehende Samurai, freie Flaeche rechts von Kenji
-story.e6 = { get VORFELD(){ return VORFELD; }, ALPHA, BAHNHOF, RING6, START6, FUJI, ZIEL6, FEST, FLUGFELD, BAHNHOF2, STRANDPLATZ, FEUER, SAMURAI_GRUPPE, get STADT(){ return STADT; } };
+story.e6 = { get VORFELD(){ return VORFELD; }, SURF, ALPHA, BAHNHOF, RING6, START6, FUJI, ZIEL6, FEST, FLUGFELD, BAHNHOF2, STRANDPLATZ, FEUER, SAMURAI_GRUPPE, get STADT(){ return STADT; } };
 
 // Fuji-Hoehe an (x, z): Kegel nach dem vereinfachten Modell (fuji_glb.js, Hoehe 1 bei Radius 0, 0 bei Radius 1). Fuer
 // Kollision (Berg rammen) und damit die Hoehle (etappe6b.js) weiss, wo der Fels ist.
@@ -649,7 +649,7 @@ function hookE6(){
   const boardYOrig = evaBoardY;
   evaBoardY = function(){
     if(hier() && story.phase === 'ankunft'){                            // am Strand: der Alpha bleibt stehen
-      if(surfNah()){ story.hinweis('Surfen kommt bald – die Reise geht weiter!'); story.spaeter(5, () => story.hinweis('')); }
+      if(surfNah() && story.finaleSurfen && story.finaleStufe && story.finaleStufe() <= 4){ story.finaleSurfen(false); return; }   // Stufe 5: Aussser Betrieb
       return;
     }
     if(hier() && alphaNah()){ alphaEinsteigen(); return; }
@@ -693,7 +693,7 @@ function updateE6(dt){
   // Surfbrett am Fukuoka-Beach: Ring + gelber Pfeil "Surfen", nur zu Fuss und nach der Ankunft
   if(story.phase === 'ankunft' && eva){
     if(!surf.ring) surf.ring = story.einstiegsRing(SURF.x, ISLAND_Y, SURF.z);
-    if(!surf.marke && story.baueMarke) surf.marke = story.baueMarke(0xffd23f, 'Surfen');
+    if(!surf.marke && story.baueMarke) surf.marke = story.baueMarke(0xffd23f, story.finaleStufe && story.finaleStufe() >= 5 ? 'Außer Betrieb' : 'Surfen');   // Live-Wunsch: Stufe 5 wie die C-400
   }
   const surfZeigen = story.phase === 'ankunft' && !!eva && locale === 'earth';
   if(surf.ring) surf.ring.zeigen(surfZeigen);
