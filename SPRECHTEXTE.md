@@ -381,7 +381,7 @@ Hinweise (nur Text): *Freier Fall! Der Schirm geht von allein auf – mit dem li
 
 | Situation | Text |
 |---|---|
-| Start (nach der Landung auf der Piste) | 🏂 Los geht’s! L-Stick: links/rechts · B: springen · R-Stick: Tricks |
+| Start (nach der Landung auf der Piste) | *kein Hinweis* – frei erkunden (L-Stick fahren, B springen, LT/RT drehen, R-Stick Flips) |
 | Trick gestanden | ✨ {360 / 720 / Frontflip / Backflip / Doppel-…}! |
 | Rail | Grind! · danach ✨ Rail-Grind! |
 | Gegen einen Felsen | Autsch – ein Felsen! |

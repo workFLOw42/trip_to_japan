@@ -263,6 +263,31 @@ function aktionB(){
     story.hinweis('Erst zum roten Punkt über der Piste – mindestens ' + SPRUNG_MIN + ' m hoch!'); story.spaeter(4, () => story.hinweis(''));
   }
 }
+const frei = { rolle: 0, salto: 0, r0: 0, s0: 0 };
+function freiflugStart(){ frei.rolle = 0; frei.salto = 0; frei.r0 = 0; frei.s0 = 0; }
+function freiflugSchritt(dt){
+  const rs = rStick();
+  frei.rolle -= rs.x * 4.5 * dt;                            // ~1,4 s je Rolle
+  frei.salto += rs.y * 3.5 * dt;                            // R-Stick vor (negativ) = Kopf runter / abtauchen
+  const ganz = (w, w0) => Math.trunc((w - w0) / (2 * Math.PI));
+  const nr = ganz(frei.rolle, frei.r0), ns = ganz(frei.salto, frei.s0);
+  if(nr){ frei.r0 += nr * 2 * Math.PI; trick('Rolle'); }
+  if(ns){ frei.s0 += ns * 2 * Math.PI; trick(ns < 0 ? 'Salto vorwärts' : 'Salto rückwärts'); }
+}
+function freiflugAufrichten(dt){
+  const z = w => Math.round(w / (2 * Math.PI)) * 2 * Math.PI, f = Math.min(1, dt * 2.5);
+  frei.rolle += (z(frei.rolle) - frei.rolle) * f; frei.salto += (z(frei.salto) - frei.salto) * f;
+}
+// Figur g mit der Koerpermitte auf m setzen: Blickrichtung yaw, Salto um die Querachse, Rolle um die Laengsachse
+// ('fly' liegt flach, Kopf voraus: die Laengsachse ist die Blickrichtung)
+const _fq = new THREE.Quaternion(), _fq2 = new THREE.Quaternion(), _fm = new THREE.Vector3();
+function freiflugPose(g, m, yaw){
+  g.quaternion.setFromAxisAngle(_Y, yaw).multiply(_fq.setFromAxisAngle(_X, frei.salto)).multiply(_fq2.setFromAxisAngle(_Z, frei.rolle));
+  _fm.set(0, 0.8, 0).applyQuaternion(g.quaternion);
+  g.position.set(m.x - _fm.x, m.y - _fm.y, m.z - _fm.z);
+}
+// Trick zaehlen (Freiflug, Snowboard, Rail, Mega)
+function trick(name){ ab.tricks.push(name); zeige('✨ ' + name + '!', 1.8); }
 function abspringen(){
   fin.schritt = 'fall';
   // Der Flieger fliegt als Kopie geradeaus weiter; state.pos folgt ab jetzt Kenji (Radar, Hoehe im HUD)
@@ -271,28 +296,30 @@ function abspringen(){
   const g = makeAstronaut(), back = new THREE.Vector3(0, 0, 1).applyQuaternion(state.quat);
   g.position.set(state.pos.x + back.x * 8, state.pos.y - 3, state.pos.z + back.z * 8);
   scene.add(g);
-  fin.k = { g, v: state.vel.clone().multiplyScalar(0.6), yaw: fin.yaw, t: 0 }; fin.k.v.y = 0;
+  fin.k = { g, v: state.vel.clone().multiplyScalar(0.6), yaw: fin.yaw, t: 0, m: g.position.clone().add(new THREE.Vector3(0, 0.8, 0)) }; fin.k.v.y = 0;
   let best = null, bd = 1e9; fin.piste.pts.forEach((q, i) => { if(i < 8) return; const dd = Math.hypot(q.x - g.position.x, q.z - g.position.z); if(dd < bd){ bd = dd; best = q; } });
   fin.k.lande = { x: best.x, z: best.z, sx: 0, sz: 0 };   // sx/sz: Versatz durch den Stick (bleibt auf der Pistenbreite)
-  kAnim('fly'); state.throttle = 0;
+  kAnim('fly'); state.throttle = 0; freiflugStart(); ab.tricks = []; ab.v = 0;
+  if(story.hudSichtbar) story.hudSichtbar(false);          // Live-Wunsch: ab dem Fallschirmsprung kein HUD
   story.sprich(['Viel Spaß!'], null, 'pilot');
-  story.hinweis('Freier Fall! Der Schirm geht von allein auf – mit dem linken Stick lenkst du auf der Piste nach links und rechts');
+  story.hinweis('');
 }
 function schirmAuf(){
   const k = fin.k; if(!k || fin.schritt !== 'fall') return;
   fin.schritt = 'schirm';
-  const g = makeParachute(); g.position.copy(k.g.position);
-  scene.remove(k.g); scene.add(g); k.g = g;
+  const g = makeParachute(); g.position.copy(k.m ? k.m : k.g.position); if(k.m) g.position.y -= 0.8;
+  scene.remove(k.g); scene.add(g); k.g = g; k.m = null;
+  frei.rolle = 0; frei.salto = 0;
   kAnim('hang');
   k.v.y = Math.max(k.v.y, -20);
-  story.hinweis('🪂 Schirm offen – du schwebst zur weißen Piste');
+  story.hinweis('');
 }
 function sprungSchritt(dt){
   const f = fin.flieger;
   if(f){ f.t += dt; f.g.position.addScaledVector(f.v, dt); if(f.t > 14){ scene.remove(f.g); fin.flieger = null; } }
   const k = fin.k; if(!k) return;
   k.t += dt;
-  const st = stick(), p = k.g.position;
+  const st = stick(), p = fin.schritt === 'fall' && k.m ? k.m : k.g.position;
   // Gleitpfad: waagerecht genau so schnell zum Landepunkt, dass er bei der Landung erreicht ist (Restzeit aus der Hoehe)
   const L0 = k.lande, lx = L0.x + L0.sx, lz = L0.z + L0.sz;
   L0.sx += st.x * 6 * dt * Math.cos(k.yaw); L0.sz -= st.x * 6 * dt * Math.sin(k.yaw);
@@ -308,8 +335,8 @@ function sprungSchritt(dt){
     const a = Math.min(1, dt * 0.8);
     k.v.x += (zx - k.v.x) * a; k.v.z += (zz - k.v.z) * a;
     k.v.y = Math.max(-55, k.v.y - 9.81 * dt);
-    k.g.rotation.set(0, k.yaw, 0, 'YXZ');                // 'fly' liegt schon flach (Bauch nach unten, Kopf voraus)
-    if(p.y - bodenY(p.x, p.z) < SCHIRM_AUF) schirmAuf();
+    freiflugSchritt(dt);
+    if(p.y - 0.8 - bodenY(p.x, p.z) < SCHIRM_AUF) schirmAuf();
   } else if(fin.schritt === 'schirm'){
     // Blick in Flugrichtung (zum Landepunkt), der Stick dreht etwas mit
     if(ed > 2){ let dy = Math.atan2(-ex, -ez) - k.yaw; while(dy > Math.PI) dy -= 2 * Math.PI; while(dy < -Math.PI) dy += 2 * Math.PI; k.yaw += dy * Math.min(1, dt * 1.2); }
@@ -324,6 +351,7 @@ function sprungSchritt(dt){
     const gy = bodenY(p.x, p.z);
     if(p.y <= gy){ p.y = gy; gelandet(p); }
   }
+  if(fin.schritt === 'fall') freiflugPose(k.g, k.m, k.yaw);
   state.pos.copy(p); state.vel.copy(k.v); state.onGround = false; state.throttle = 0;
 }
 function gelandet(p){
@@ -406,7 +434,7 @@ function baueWald(){
 
 // ---- Snowboard-Abfahrt (Live-Wunsch 13.10.2026) -------------------------------------------------------------------------
 // Kein Gas: der Hang beschleunigt bis 50 km/h. L-Stick = links/rechts auf der Piste, B = springen (Hoehe/Weite nach Tempo),
-// R-Stick in der Luft = Tricks (links/rechts = Drehung 180, 360 …, vor/zurueck = Front-/Backflip). Felsen und Rail-Anfang:
+// LT/RT in der Luft = Drehung 180, 360 …, R-Stick vor/zurueck = Front-/Backflip (Live-Wunsch 13.10.2026). Felsen und Rail-Anfang:
 // anstossen = abbremsen, weiterfahren. Unsauber gelandet = abbremsen. Kleine Rampen springen weit, eine Rail zum Grinden
 // (von oben draufspringen), am Ende die Mega-Rampe weit aufs Meer – beim Aufkommen wird das Snowboard zum Surfbrett.
 // Gefahren wird in Pisten-Koordinaten: s = Strecke entlang der Mittellinie, q = quer dazu (rechts positiv).
@@ -549,21 +577,27 @@ function abfahrtStart(k){
   bi = Math.min(bi, P.length - 2);
   const a = P[bi], dx = p.x - a.x, dz = p.z - a.z;
   Object.assign(ab, { s: a.S + dx * a.tx + dz * a.tz, q: Math.max(-AB_RAND, Math.min(AB_RAND, -dx * a.tz + dz * a.tx)), qv: 0, v: 2, vy: 0,
-    luft: false, spin: 0, spin0: 0, flip: 0, luftT: 0, extra: false, weit: 1, grind: null, rampe: null, i: bi, stolper: 0, tricks: [], mega: null, surfT: 0, ende: false });
+    luft: false, spin: 0, spin0: 0, flip: 0, luftT: 0, extra: false, weit: 1, grind: null, rampe: null, i: bi, stolper: 0, tricks: ab.tricks || [], mega: null, surfT: 0, ende: false });
   baueHindernisse(ab.s);
   const o = ort(ab.s, ab.q); ab.y = grundAb(o.x, o.z);
   figurZurueck(); fin.kal = false; ab.kalT = 0; fin.camY = undefined;
   fin.schritt = 'abfahrt';
   if(story.hudSichtbar) story.hudSichtbar(false);        // Live-Wunsch: auf dem Brett kein HUD
   haltung();
-  zeige('🏂 Los geht’s! L-Stick: links/rechts · B: springen · R-Stick: Tricks', 6);
+  story.hinweis('');
 }
 story.finaleAbfahrt = abfahrtStart;
 function zeige(t, sek){ const id = ++ab.hid; story.hinweis(t); story.spaeter(sek || 2, () => { if(ab.hid === id) story.hinweis(''); }); }
+// Trick-Eingaben (Live-Wunsch): x = Drehung/Rolle aus LT/RT (RT rechtsherum, Tastatur Q/E), y = Flip/Abtauchen vom rechten Stick
+// (vor = Kopf runter, Tastatur I/K)
 function rStick(){
-  let x = (keys['KeyL'] ? 1 : 0) - (keys['KeyJ'] ? 1 : 0), y = (keys['KeyK'] ? 1 : 0) - (keys['KeyI'] ? 1 : 0);
+  let x = (keys['KeyE'] ? 1 : 0) - (keys['KeyQ'] ? 1 : 0), y = (keys['KeyK'] ? 1 : 0) - (keys['KeyI'] ? 1 : 0);
   const gp = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
-  if(gp){ const ax = gp.axes[2] || 0, ay = gp.axes[3] || 0; if(Math.abs(ax) > 0.25) x = ax; if(Math.abs(ay) > 0.25) y = ay; }
+  if(gp){
+    const rt = gp.buttons[7] ? gp.buttons[7].value : 0, lt = gp.buttons[6] ? gp.buttons[6].value : 0;
+    if(Math.abs(rt - lt) > 0.1) x = rt - lt;
+    const ay = gp.axes[3] || 0; if(Math.abs(ay) > 0.25) y = ay;
+  }
   return { x, y };
 }
 function trickName(){
@@ -583,20 +617,20 @@ function landen(){
   ab.luft = false; ab.vy = 0;
   if(Math.abs(sr) > 0.87 || Math.abs(fr) > 1.05){ anstossen('Uff – unsauber gelandet!'); return false; }   // Toleranz +-50° / +-60°
   const name = trickName(); ab.spin = Math.round(ab.spin / Math.PI) * Math.PI; ab.flip = 0;
-  if(name){ ab.tricks.push(name); zeige('✨ ' + name + '!', 2); }
+  if(name) trick(name);
   return true;
 }
 // Grind beendet: einmal pro Rail zaehlen (ab 3 m Grind), auch wenn man auf derselben Rail wieder landet
 function grindEnde(){
   const r = ab.grind; ab.grind = null; if(!r) return;
   const weg = ab.s - (ab.grindS0 === undefined ? ab.s : ab.grindS0);
-  if(weg >= 3 && !r.gezaehlt){ r.gezaehlt = true; ab.tricks.push('Rail-Grind'); zeige('✨ Rail-Grind!', 2); }
+  if(weg >= 3 && !r.gezaehlt){ r.gezaehlt = true; trick('Rail-Grind'); }
 }
 function springen(){
   if(fin.schritt !== 'abfahrt') return;
   if(ab.grind){ grindEnde(); ab.luft = true; ab.vy = 5.5 + ab.v * 0.12; ab.hh = RAIL_H; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0; return; }   // von der Rail: genauso hoch wie am Boden, ab Railhoehe
   if(ab.luft || ab.stolper > 0) return;
-  if(ab.rampe){ if(!ab.extra){ ab.extra = true; zeige('💥 Extra-Schwung!', 1.2); } return; }   // auf dem Kicker: an der Kante extra hoch und weit
+  if(ab.rampe){ ab.extra = true; return; }   // auf dem Kicker: an der Kante extra hoch und weit
   ab.luft = true; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0; ab.hh = 0; ab.vy = 5.5 + ab.v * 0.12;   // bei 50 km/h ~1,9 m hoch, ~1 s
 }
 function abheben(h){
@@ -606,7 +640,7 @@ function abheben(h){
   ab.hh = ab.y - grundAb(o.x, o.z);                                                    // Hoehe ueber der Piste (Kante = Kickerhoehe)
   ab.vy = extra ? 12 + ab.v * 0.45 : 8 + ab.v * 0.35;                                // ohne B ~8 m, mit B ~13 m ueber dem Hang
   ab.weit = extra ? 1.35 : 1.15;                                                       // in der Luft schneller voraus (weiter)
-  if(extra) zeige('🚀 Mega-Kick!', 1.5);
+
 }
 const BRETT_HALB = 0.72;                                  // halbe Brettlaenge (Snowboard 1,45 m)
 function pose(x, y, z, tx, tz, extraYaw, neig, amBoden){
@@ -632,6 +666,8 @@ function pose(x, y, z, tx, tz, extraYaw, neig, amBoden){
 function abfahrtSchritt(dt){
   const k = fin.k; if(!k) return;
   k.t += dt; ab.kalT = (ab.kalT || 0) + dt;
+  if(ab.mega && ab.mega.brett){ const B = ab.mega.brett; B.v.y -= 9.81 * dt; B.b.position.addScaledVector(B.v, dt); B.b.rotation.x += B.w.x * dt; B.b.rotation.y += B.w.y * dt; B.b.rotation.z += B.w.z * dt;
+    if(B.b.position.y < -5){ scene.remove(B.b); ab.mega.brett = null; } }
   if(fin.schritt === 'mega'){ megaSchritt(dt); return; }
   if(fin.schritt === 'surf'){ surfSchritt(dt); return; }
   const st = stick(), rs = rStick(), P = fin.piste.pts;
@@ -662,7 +698,7 @@ function abfahrtSchritt(dt){
     ab.spin -= rs.x * 8 * dt; ab.flip += rs.y * 7.5 * dt;      // R-Stick: rechts = rechtsherum drehen, vor = Frontflip (Nase runter)
     for(const h of ab.hinder) if(h.typ === 'rail' && ab.vy < 0 && ab.s > h.s + 0.5 && ab.s < h.s + RAIL_L - 1 && Math.abs(ab.q - h.q) < 1.4
       && ab.hh <= RAIL_H + 0.4 && ab.hh >= RAIL_H - 0.8){
-      if(landen()){ ab.grind = h; if(ab.grindS0 === undefined || h !== ab.letzteRail) ab.grindS0 = ab.s; ab.letzteRail = h; ab.y = grund + RAIL_H; ab.qv = 0; zeige('Grind!', 1.2); }
+      if(landen()){ ab.grind = h; if(ab.grindS0 === undefined || h !== ab.letzteRail) ab.grindS0 = ab.s; ab.letzteRail = h; ab.y = grund + RAIL_H; ab.qv = 0; }
       break;
     }
     // auf einem Kicker gelandet (selten): dort aufsetzen, nicht hindurchfallen
@@ -691,17 +727,31 @@ function abfahrtSchritt(dt){
 // Mega-Rampe: weit hinaus aufs Meer (bei 50 km/h ~34 m/s weg und 18 m/s hoch), Tricks gehen weiter
 function megaStart(){
   const o = ort(ab.s, ab.q);
-  ab.mega = { x: o.x, z: o.z, tx: o.tx, tz: o.tz, vh: 30 + ab.v, y: ab.y, y0: ab.y, ueberMeer: false };
-  ab.vy = 16 + ab.v * 0.5; fin.schritt = 'mega'; ab.spin0 = ab.spin; ab.flip = 0;
-  zeige('🚀 MEGA-SPRUNG!', 2.5);
+  const m = ab.mega = { x: o.x, z: o.z, tx: o.tx, tz: o.tz, vh: 30 + ab.v, y: ab.y, y0: ab.y, ueberMeer: false };
+  ab.vy = 16 + ab.v * 0.5; fin.schritt = 'mega'; ab.spin0 = ab.spin; ab.flip = 0; m.phase = 'brett'; m.t = 0;
   if(typeof rumble === 'function') rumble(400, 0.8, 0.8);
 }
+const MEGA_SCHIRM = 45;                                   // m ueber dem Meer: Schirm geht auf (~5 s bis aufs Wasser)
 function megaSchritt(dt){
   const m = ab.mega, rs = rStick();
-  // Klippensprung: Bogen hinaus, dann faellt er (hoechstens 75 m/s) – ~9 s und ~350 m bis aufs Meer
-  ab.luftT += dt; ab.vy = Math.max(-75, ab.vy - 9.81 * dt); m.y += ab.vy * dt;
-  m.vh = Math.max(25, m.vh - 1.5 * dt); m.x += m.tx * m.vh * dt; m.z += m.tz * m.vh * dt;
-  ab.spin -= rs.x * 8 * dt; ab.flip += rs.y * 7.5 * dt;
+  m.t += dt; ab.luftT += dt;
+  if(m.phase === 'schirm'){ megaSchirm(dt); return; }
+  // Klippensprung: Bogen hinaus, dann faellt er (hoechstens 55 m/s im Freiflug)
+  ab.vy = Math.max(m.phase === 'frei' ? -55 : -75, ab.vy - 9.81 * dt); m.y += ab.vy * dt;
+  m.vh = Math.max(18, m.vh - 3 * dt); m.x += m.tx * m.vh * dt; m.z += m.tz * m.vh * dt;
+  if(m.phase === 'brett'){
+    ab.spin -= rs.x * 8 * dt; ab.flip += rs.y * 7.5 * dt;
+    if(m.t > 1.5) brettWeg(m);                             // nach kurzer Zeit verliert er das Snowboard
+  } else {
+    freiflugSchritt(dt);
+    const k = fin.k; k.yaw = Math.atan2(-m.tx, -m.tz);
+    if(!m.mitte) m.mitte = new THREE.Vector3();
+    m.mitte.set(m.x, m.y + 0.8, m.z); freiflugPose(k.g, m.mitte, k.yaw);
+    state.pos.set(m.x, m.y, m.z); state.vel.set(m.tx * m.vh, ab.vy, m.tz * m.vh); state.onGround = false;
+    if(m.ueberMeer && m.y - (typeof seaYAt === 'function' ? seaYAt(m.x, m.z) : 0) < MEGA_SCHIRM) megaSchirmAuf(m);
+    if(!m.ueberMeer && fujiMeshY(m.x, m.z) === -Infinity) m.ueberMeer = true;
+    return;
+  }
   if(!m.ueberMeer && fujiMeshY(m.x, m.z) === -Infinity) m.ueberMeer = true;      // vom Berg weg: keine Abfrage mehr (Ruckeln)
   const meer = typeof seaYAt === 'function' ? seaYAt(m.x, m.z) : 0, berg = m.ueberMeer ? -Infinity : fujiMeshY(m.x, m.z) + 2.5;
   if(m.y <= Math.max(meer, berg)){
@@ -717,9 +767,44 @@ function megaSchritt(dt){
   pose(m.x, m.y, m.z, m.tx, m.tz);
   state.vel.set(m.tx * m.vh, ab.vy, m.tz * m.vh);
 }
+// Snowboard fliegt davon (eigene Bahn, dreht sich), Kenji geht in den Freiflug
+function brettWeg(m){
+  const name = trickName(); if(name) trick('Mega ' + name);
+  ab.spin = 0; ab.flip = 0; m.phase = 'frei'; freiflugStart();
+  const g = fin.k.g, b = g.userData.brett; g.userData.brett = null;
+  if(b){ g.updateMatrixWorld(true); const w = new THREE.Vector3(); b.getWorldPosition(w); g.remove(b); b.position.copy(w); scene.add(b);
+    m.brett = { b, v: new THREE.Vector3(m.tx * m.vh * 0.6 - m.tz * 4, ab.vy + 3, m.tz * m.vh * 0.6 + m.tx * 4), w: new THREE.Vector3(3, 1.2, 2) }; }
+  figurZurueck(); kAnim('fly');
+
+}
+function megaSchirmAuf(m){
+  m.phase = 'schirm';
+  const k = fin.k, g = makeParachute(); g.position.set(m.x, m.y, m.z);
+  scene.remove(k.g); scene.add(g); k.g = g; frei.rolle = 0; frei.salto = 0;
+  kAnim('hang'); ab.vy = Math.max(ab.vy, -12);
+}
+function megaSchirm(dt){
+  const m = ab.mega, k = fin.k, a = Math.min(1, dt * 1.6);
+  ab.vy += (-9 - ab.vy) * a; m.vh += (8 - m.vh) * a;
+  m.y += ab.vy * dt; m.x += m.tx * m.vh * dt; m.z += m.tz * m.vh * dt;
+  k.yaw = Math.atan2(-m.tx, -m.tz); k.g.position.set(m.x, m.y, m.z); k.g.rotation.set(0, k.yaw, Math.sin(k.t * 1.3) * 0.06, 'YXZ');
+  state.pos.set(m.x, m.y, m.z); state.vel.set(m.tx * m.vh, ab.vy, m.tz * m.vh);
+  const meer = typeof seaYAt === 'function' ? seaYAt(m.x, m.z) : 0;
+  if(m.y <= meer) insWasser(m, meer);
+}
+// Aufs Wasser: Schirm weg, Kenji steht auf dem Surfbrett (wie auf dem Snowboard)
+function insWasser(m, meer){
+  m.y = meer; ab.luft = false; ab.vy = 0; ab.stolper = 0; ab.spin = 0; ab.flip = 0;
+  fin.schritt = 'surf'; ab.surfT = 0; ab.v = Math.max(6, m.vh);
+  const alt = fin.k.g; scene.remove(alt);
+  const g = makeAstronaut(); scene.add(g); fin.k.g = g;
+  if(surfVorlage){ const b = surfVorlage.clone(true); g.add(b); g.userData.brett = b; if(g.children[0] !== b) g.children[0].position.y = 0.045; }
+  fin.kal = false; ab.kalT = 0; knochen = null; haltung();
+  if(typeof rumble === 'function') rumble(400, 0.8, 0.6);
+}
 function surfSchritt(dt){
   const m = ab.mega;
-  ab.surfT += dt; ab.v *= 1 - Math.min(1, dt * 0.35);
+  ab.surfT += dt; ab.v *= 1 - Math.min(1, dt * 0.25);
   m.x += m.tx * ab.v * dt; m.z += m.tz * ab.v * dt;
   m.y = typeof seaYAt === 'function' ? seaYAt(m.x, m.z) : 0;
   pose(m.x, m.y - 0.05, m.z, m.tx, m.tz);
@@ -767,7 +852,7 @@ function aufraeumen(){
   if(fin.k){ scene.remove(fin.k.g); fin.k = null; }
   if(fin.flieger){ scene.remove(fin.flieger.g); fin.flieger = null; }
   for(const r of fin.ringe) r.mesh.visible = false;
-  vulkanAus(); abWeg(); figurZurueck(); if(story.hudSichtbar) story.hudSichtbar(true); if(camera.fov !== 60){ camera.fov = 60; camera.updateProjectionMatrix(); }
+  vulkanAus(); abWeg(); figurZurueck(); if(ab.mega && ab.mega.brett){ scene.remove(ab.mega.brett.b); ab.mega.brett = null; } if(story.hudSichtbar) story.hudSichtbar(true); if(camera.fov !== 60){ camera.fov = 60; camera.updateProjectionMatrix(); }
   if(fin.hudEl) fin.hudEl.style.display = 'none';
   state.crashed = false; state.crashTimer = 0; state.falling = false; state.ejected = false; state.stalling = false;
   if(typeof clearRescue === 'function') clearRescue();
@@ -795,21 +880,20 @@ function aufgabe(){
   const p = state.pos, agl = Math.max(0, Math.round(p.y - ISLAND_Y)), z = story.ziel, d = z ? Math.round(Math.hypot(z.x - p.x, z.z - p.z)) : 0;
   const titel = fin.art === 'sprung' ? '🪂 Abenteuer: Fuji-Sprung' : '✈️ Rundflug um den Fuji', zeilen = [];
   if(fin.schritt === 'ansage' || fin.schritt === 'sequenz') zeilen.push(['Start', 'Startsequenz, dann Vollgas und abheben']);
-  else if(fin.schritt === 'fall' || fin.schritt === 'schirm'){
-    zeilen.push(['Über Grund', Math.max(0, Math.round(p.y - bodenY(p.x, p.z))) + ' m']);
-    zeilen.push(['Piste', Math.round(Math.max(0, pisteAbstand(p.x, p.z) - PISTE_B / 2)) + ' m']);
-    zeilen.push(['Lenken', fin.schritt === 'fall' ? 'linker Stick – Schirm geht bei ' + SCHIRM_AUF + ' m von allein auf' : 'linker Stick nach links und rechts']);
+  else if(['fall', 'schirm', 'gelandet', 'abfahrt', 'mega', 'surf'].includes(fin.schritt)){
+    // Live-Wunsch: nur Tempo, Tricks je Trick, Rest der Piste
+    const kmh = Math.round((fin.schritt === 'abfahrt' || fin.schritt === 'surf' ? ab.v : state.vel.length()) * 3.6);
+    zeilen.push(['Tempo', kmh + ' km/h']);
+    const n = {}; for(const x of ab.tricks || []) n[x] = (n[x] || 0) + 1;
+    const liste = Object.keys(n);
+    if(!liste.length) zeilen.push(['Tricks', 'noch keine']);
+    for(const x of liste) zeilen.push([x, n[x] + '×']);
+    const rest = fin.piste && fin.piste.S !== undefined && fin.schritt === 'abfahrt' ? Math.max(0, Math.round(fin.piste.S - ab.s)) : null;
+    zeilen.push(['Piste übrig', rest === null ? (fin.schritt === 'mega' || fin.schritt === 'surf' ? 'geschafft' : '–') : rest + ' m']);
   } else if(fin.art === 'rundflug'){
     zeilen.push(['Höhe', agl + ' m (Gipfel 2000, max ' + MAX_ALT + ')']);
     if(fin.ringNr < fin.ringe.length){ zeilen.push(['Ring', (fin.ringNr + 1) + ' / ' + fin.ringe.length + ' · ' + d + ' m']); zeilen.push(['Ringhöhe', Math.round(fin.ringe[fin.ringNr].y) + ' m']); }
     else { zeilen.push(['Ziel', 'zurück zur Bahn · ' + d + ' m']); zeilen.push(['Landen', 'Gas auf 20–30 %, langsam sinken']); }
-  } else if(fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf'){
-    zeilen.push(['Tempo', Math.round(ab.v * 3.6) + ' km/h (max 50, nur durch den Hang)']);
-    zeilen.push(['Tricks', ab.tricks.length ? ab.tricks.length + ' – zuletzt ' + ab.tricks[ab.tricks.length - 1] : 'noch keine']);
-    zeilen.push(['L-Stick', 'links / rechts fahren']);
-    zeilen.push(['B', 'springen (Felsen, auf die Rail)']);
-    zeilen.push(['R-Stick in der Luft', '← → drehen (180, 360 …) · ↑ ↓ Front-/Backflip']);
-    zeilen.push(['Unten', 'Mega-Rampe hinaus aufs Meer']);
   } else if(fin.schritt === 'pilot') zeilen.push(['Der Pilot fliegt', 'B: abspringen!']);
   else if(fin.schritt === 'flug'){
     zeilen.push(['Höhe', agl + ' m (mindestens ' + SPRUNG_MIN + ')']);
@@ -926,7 +1010,16 @@ function hookFinale(){
     if(Math.abs(camera.fov - fov) > 0.1){ camera.fov += (fov - camera.fov) * 0.08; camera.updateProjectionMatrix(); }
     _cp.set(p.x - fx * hinten, p.y + hoch, p.z - fz * hinten);
     const hoch2 = fahrt && fin.schritt === 'abfahrt' && ab.luft ? ab.hh : 0;          // im Sprung: Kamera bleibt am Hang
-    if(fin.schritt === 'mega'){ _cp.y = p.y + 4; fin.camY = undefined; camera.position.lerp(_cp, 0.08); camera.up.set(0, 1, 0); camera.lookAt(p.x + fx * 25, p.y - 6, p.z + fz * 25); return; }
+    if(fin.schritt === 'mega'){
+      const ph = ab.mega && ab.mega.phase, nah = ph === 'frei' || ph === 'schirm';
+      const hi = ph === 'schirm' ? 12 : (nah ? 6 : 6.5), ho = ph === 'schirm' ? 2 : (nah ? 2.5 : 4);
+      if(nah && Math.abs(camera.fov - 65) > 0.1){ camera.fov += (65 - camera.fov) * 0.15; camera.updateProjectionMatrix(); }
+      _cp.set(p.x - fx * hi, p.y + ho, p.z - fz * hi); fin.camY = undefined;
+      if(nah && fin.camPh !== ph){ camera.position.copy(_cp); fin.camPh = ph; } else if(!nah) fin.camPh = ph;
+      camera.position.lerp(_cp, nah ? 0.35 : 0.08); camera.up.set(0, 1, 0);
+      camera.lookAt(p.x + fx * (nah ? 4 : 25), p.y + (ph === 'schirm' ? 1.5 : (nah ? -1.5 : -6)), p.z + fz * (nah ? 4 : 25));
+      return;
+    }
     if(fahrt){ const ziel = p.y - hoch2 * 0.8 + hoch; fin.camY = fin.camY === undefined || Math.abs(ziel - fin.camY) > 6 ? ziel : fin.camY + (ziel - fin.camY) * (fin.schritt === 'abfahrt' ? 0.15 : 0.06); _cp.y = fin.camY; }
     camera.up.set(0, 1, 0);
     camera.position.x += (_cp.x - camera.position.x) * 0.12; camera.position.z += (_cp.z - camera.position.z) * 0.12;
