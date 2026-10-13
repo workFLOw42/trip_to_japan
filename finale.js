@@ -37,8 +37,31 @@ function fujiMeshY(x, z){
   return h.length ? h[0].point.y : -Infinity;
 }
 story.finaleFujiY = fujiMeshY;
+let pyI = 0;                                              // zuletzt gefundener Abschnitt (Suche lokal von dort)
+function pisteYschnell(x, z){
+  const P = fin.piste && fin.piste.pts; if(!P || !P[0].hq) return null;
+  const n = P.length - 1, d2 = i => { const p = P[i]; return (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z); };
+  const start = fin.schritt === 'abfahrt' && ab.i !== undefined ? ab.i : pyI;
+  let i = Math.max(0, Math.min(n - 1, start)), best = d2(i);
+  for(let k = Math.max(0, i - 12), e = Math.min(n, i + 12); k <= e; k++){ const d = d2(k); if(d < best){ best = d; i = k; } }
+  if(best > 30 * 30){ for(let k = 0; k <= n; k += 4){ const d = d2(k); if(d < best){ best = d; i = k; } } }   // weit weg: grob alles
+  if(best > 60 * 60) return null;                         // weit weg von der Piste
+  pyI = i;
+  // Abschnitt [i0, i0+1] mit dem Lot von (x, z) dazwischen
+  let i0 = i; const pi = P[i]; if(i > 0){ const q = P[i - 1], vx = pi.x - q.x, vz = pi.z - q.z; if((x - pi.x) * vx + (z - pi.z) * vz < 0) i0 = i - 1; }
+  if(i0 >= n) i0 = n - 1;
+  const a = P[i0], b = P[i0 + 1], lx = b.x - a.x, lz = b.z - a.z, ll = lx * lx + lz * lz || 1;
+  const f = Math.max(0, Math.min(1, ((x - a.x) * lx + (z - a.z) * lz) / ll));
+  const mx = a.x + lx * f, mz = a.z + lz * f, nx = a.nx + (b.nx - a.nx) * f, nz = a.nz + (b.nz - a.nz) * f;
+  const s = ((x - mx) * nx + (z - mz) * nz) / (PISTE_B / 2);  // quer: -1 .. 1
+  if(Math.abs(s) > 1.4) return null;                      // weiter draussen (Boeschung) -> Raycast
+  const u = (Math.max(-1, Math.min(1, s)) + 1) * 3, j = Math.min(5, Math.floor(u)), w = u - j;
+  const ha = a.hq[j] + (a.hq[j + 1] - a.hq[j]) * w, hb = b.hq[j] + (b.hq[j + 1] - b.hq[j]) * w;
+  return ha + (hb - ha) * f;
+}
 function pisteY(x, z){
   if(!fin.piste) return -Infinity;
+  const sy = pisteYschnell(x, z); if(sy !== null) return sy;
   _o.set(x, 5000, z); _ray.set(_o, _d);
   const h = _ray.intersectObject(fin.piste.mesh, false);
   return h.length ? h[0].point.y : -Infinity;
@@ -66,7 +89,8 @@ function bauePiste(){
     const B = PISTE_B / 2, QN = 9;
     const xl = p.x - nx * (B + 8), zl = p.z - nz * (B + 8), xr = p.x + nx * (B + 8), zr = p.z + nz * (B + 8);
     pos.push(xl, Math.max(fujiMeshY(xl, zl), 0.5) - 3, zl);
-    for(let j = 0; j < 7; j++){ const s = -1 + j / 3, x = p.x + nx * s * B, z = p.z + nz * s * B; pos.push(x, Math.max(fujiMeshY(x, z), p.y - 6, 0.5) + 2.5, z); }
+    p.hq = []; p.nx = nx; p.nz = nz;
+    for(let j = 0; j < 7; j++){ const s = -1 + j / 3, x = p.x + nx * s * B, z = p.z + nz * s * B, y = Math.max(fujiMeshY(x, z), p.y - 6, 0.5) + 2.5; pos.push(x, y, z); p.hq.push(y); }
     pos.push(xr, Math.max(fujiMeshY(xr, zr), 0.5) - 3, zr);
     if(i < N){ const k = i * QN; for(let j = 0; j < QN - 1; j++) idx.push(k + j, k + j + 1, k + j + QN, k + j + 1, k + j + QN + 1, k + j + QN); }
   }
@@ -310,7 +334,7 @@ function schirmAuf(){
   fin.schritt = 'schirm';
   const g = makeParachute(); g.position.copy(k.m ? k.m : k.g.position); if(k.m) g.position.y -= 0.8;
   scene.remove(k.g); scene.add(g); k.g = g; k.m = null;
-  frei.rolle = 0; frei.salto = 0;
+  frei.rolle = 0; frei.salto = 0; if(fx) fx.wind.material.opacity = 0;
   kAnim('hang');
   k.v.y = Math.max(k.v.y, -20);
   story.hinweis('');
@@ -338,6 +362,7 @@ function sprungSchritt(dt){
     k.v.y = Math.max(-55, k.v.y - 9.81 * dt);
     freiflugSchritt(dt);
     if(p.y - 0.8 - bodenY(p.x, p.z) < SCHIRM_AUF) schirmAuf();
+    state.vel.copy(k.v); fahrtwind(dt);
   } else if(fin.schritt === 'schirm'){
     // Blick in Flugrichtung (zum Landepunkt), der Stick dreht etwas mit
     if(ed > 2){ let dy = Math.atan2(-ex, -ez) - k.yaw; while(dy > Math.PI) dy -= 2 * Math.PI; while(dy < -Math.PI) dy += 2 * Math.PI; k.yaw += dy * Math.min(1, dt * 1.2); }
@@ -460,7 +485,7 @@ function ort(s, q){
   _ort.x = a.x + (b.x - a.x) * f - _ort.tz * q; _ort.z = a.z + (b.z - a.z) * f + _ort.tx * q;   // quer = (-tz, tx) = rechts
   return _ort;
 }
-function grundAb(x, z){ const y = pisteY(x, z), b = fujiMeshY(x, z) + 2.5; return y > -1e8 ? Math.max(y, b) : Math.max(b, 0); }   // nie unter dem Berg
+function grundAb(x, z){ const s = pisteYschnell(x, z); if(s !== null) return s; const y = pisteY(x, z), b = fujiMeshY(x, z) + 2.5; return y > -1e8 ? Math.max(y, b) : Math.max(b, 0); }   // nie unter dem Berg
 const _Y = new THREE.Vector3(0, 1, 0), _Z = new THREE.Vector3(0, 0, 1), _X = new THREE.Vector3(1, 0, 0);
 const _qb = new THREE.Quaternion(), _qc = new THREE.Quaternion(), _pv = new THREE.Vector3();
 // Keil (Rampe): Laenge entlang +X (Fahrtrichtung), hinten H hoch, W breit
@@ -500,7 +525,7 @@ function fxBauen(){
   const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d');
   const gr = c.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(0, 0, 64, 64);
   const schatten = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, fog: false }));
-  schatten.rotation.x = -Math.PI / 2; schatten.renderOrder = 2; g.add(schatten);
+  schatten.renderOrder = 2; g.add(schatten);
   // Spuren: Ringpuffer aus Strichen (je Kante einer pro 0,6 m), verblassen ueber 6 s
   const SP = 220, spurPos = new Float32Array(SP * 2 * 2 * 3), spurGeo = new THREE.BufferGeometry();
   spurGeo.setAttribute('position', new THREE.BufferAttribute(spurPos, 3));
@@ -521,36 +546,57 @@ function fxBauen(){
 }
 function fxWeg(){ if(!fx) return; scene.remove(fx.g); fx.g.traverse(o => { if(o.geometry) o.geometry.dispose(); }); fx = null; }
 function fxSchritt(dt, o, amBoden){
-  const f = fxBauen(), p = state.pos;
+  const f = fxBauen(), p = state.pos; f.schatten.visible = true; f.spur.visible = true;
   // Schatten: auf dem Schnee unter Kenji, im Sprung kleiner und heller
   const boden = grundAb(p.x, p.z), hoehe = Math.max(0, p.y - boden), k = 1 / (1 + hoehe * 0.15);
-  f.schatten.position.set(p.x, boden + 0.04, p.z); f.schatten.scale.set(1.9 * k + 0.3, 0.9 * k + 0.2, 1);
-  f.schatten.rotation.z = -Math.atan2(-o.tx, -o.tz); f.schatten.material.opacity = Math.max(0.15, k);
+  // Hangebene aus vier Punkten um Kenji (1 m vor/hinter, links/rechts) -> Normale; Schatten liegt darin, 8 cm ueber dem Schnee
+  const rx = -o.tz, rz = o.tx;
+  const yv = grundAb(p.x + o.tx, p.z + o.tz), yh = grundAb(p.x - o.tx, p.z - o.tz), yr = grundAb(p.x + rx, p.z + rz), yl = grundAb(p.x - rx, p.z - rz);
+  const ax = new THREE.Vector3(2 * o.tx, yv - yh, 2 * o.tz), az = new THREE.Vector3(2 * rx, yr - yl, 2 * rz), nrm = new THREE.Vector3().crossVectors(az, ax).normalize();
+  if(nrm.y < 0) nrm.negate();
+  f.schatten.position.set(p.x, boden + 0.08, p.z);
+  // Ebene: lokale Z-Achse des Schattens = Normale, lokale Y-Achse (lange Seite) = Fahrtrichtung in der Ebene
+  const lang = ax.clone().normalize(), quer = new THREE.Vector3().crossVectors(lang, nrm).normalize();
+  f.schatten.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(quer, lang, nrm));
+  f.schatten.scale.set(0.9 * k + 0.25, 1.9 * k + 0.35, 1); f.schatten.material.opacity = Math.max(0.15, k);
   // Spuren: am Boden alle 0,6 m ein Strich je Kante
   if(amBoden){
-    const qx = -o.tz * 0.13, qz = o.tx * 0.13;
-    const jetzt = [p.x - qx, p.z - qz, p.x + qx, p.z + qz];
+    const qx = -o.tz * 0.13, qz = o.tx * 0.13, kurve = ab.qv;     // > 0 = nach rechts gelenkt
+    const L = [p.x - qx, p.z - qz], R = [p.x + qx, p.z + qz];
+    const jetzt = [L[0], L[1], R[0], R[1]];
     const l = f.spurLetzt;
     if(!l || Math.hypot(p.x - l[4], p.z - l[5]) > 0.6){
-      if(l){ const P = f.spurPos, i = (f.spurN % 220) * 12, y = boden + 0.03;
-        P.set([l[0], l[6], l[1], jetzt[0], y, jetzt[1], l[2], l[6], l[3], jetzt[2], y, jetzt[3]], i);
+      if(l){ const P = f.spurPos, i = (f.spurN % 220) * 12, yl = grundAb(L[0], L[1]) + 0.05, yr = grundAb(R[0], R[1]) + 0.05;
+        // in der Kurve zeichnet nur die Innenkante (die greift), geradeaus beide; die andere wird unsichtbar (Laenge 0)
+        const links = kurve < 2, rechts = kurve > -2;
+        P.set(links ? [l[0], l[6], l[1], jetzt[0], yl, jetzt[1]] : [l[0], -1e4, l[1], l[0], -1e4, l[1]], i);
+        P.set(rechts ? [l[2], l[7], l[3], jetzt[2], yr, jetzt[3]] : [l[2], -1e4, l[3], l[2], -1e4, l[3]], i + 6);
         f.spurN++; f.spur.geometry.attributes.position.needsUpdate = true; f.spur.geometry.setDrawRange(0, Math.min(f.spurN, 220) * 4); }
-      f.spurLetzt = [...jetzt, p.x, p.z, boden + 0.03];
+      f.spurLetzt = [...jetzt, p.x, p.z, grundAb(L[0], L[1]) + 0.05, grundAb(R[0], R[1]) + 0.05];
     }
   } else f.spurLetzt = null;
   // Staub
   for(const s of f.staub) if(s.m.visible){ s.t += dt; s.v.y -= 6 * dt; s.m.position.addScaledVector(s.v, dt); s.m.scale.setScalar(Math.max(0.05, 1 - s.t * 1.6)); if(s.t > 0.6) s.m.visible = false; }
-  // Wind: ab ~20 km/h, mit dem Tempo dichter und deutlicher; Striche ziehen an der Kamera vorbei nach hinten
-  const v = Math.hypot(state.vel.x, state.vel.z) + Math.abs(state.vel.y) * 0.5, st = Math.max(0, Math.min(1, (v - 5) / 15));
+  fahrtwind(dt);
+}
+const _wd = new THREE.Vector3(), _wa = new THREE.Vector3(), _wb = new THREE.Vector3(), _wu = new THREE.Vector3(0, 1, 0);
+function fahrtwind(dt){
+  const f = fxBauen(), v = state.vel.length(), st = Math.max(0, Math.min(1, (v - 5) / 15));
   f.wind.material.opacity = 0.55 * st;
-  const fwx = -Math.sin(fin.k.yaw), fwz = -Math.cos(fin.k.yaw), c = camera.position;
+  if(v < 0.5) return;
+  _wd.copy(state.vel).multiplyScalar(1 / v);                                     // Bewegungsrichtung
+  _wa.crossVectors(_wd, Math.abs(_wd.y) > 0.9 ? _X : _wu).normalize(); _wb.crossVectors(_wd, _wa).normalize();   // quer dazu
+  const c = camera.position;
   f.windT.forEach((w, i) => {
     w.life -= dt;
-    if(w.life <= 0){ w.life = 0.25 + Math.random() * 0.3; const vor = 8 + Math.random() * 14, seite = (Math.random() < 0.5 ? -1 : 1) * (3 + Math.random() * 4), sy = (Math.random() - 0.5) * 4;
-      w.x = c.x + fwx * vor - fwz * seite; w.y = c.y + sy; w.z = c.z + fwz * vor + fwx * seite; }
-    w.x -= fwx * v * 2.2 * dt; w.z -= fwz * v * 2.2 * dt;                          // auf die Kamera zu
+    if(w.life <= 0){ w.life = 0.25 + Math.random() * 0.3;
+      const vor = 8 + Math.random() * 14, a = Math.random() * 6.28, r = 3 + Math.random() * 4;   // Ring um die Achse (Mitte frei)
+      const qa = Math.cos(a) * r, qb = Math.sin(a) * r * 0.7;
+      w.x = c.x + _wd.x * vor + _wa.x * qa + _wb.x * qb; w.y = c.y + _wd.y * vor + _wa.y * qa + _wb.y * qb; w.z = c.z + _wd.z * vor + _wa.z * qa + _wb.z * qb; }
+    const k = v * 1.2 * dt; w.x -= _wd.x * k; w.y -= _wd.y * k; w.z -= _wd.z * k;    // relativ zur Kamera: auf sie zu
+    w.x += state.vel.x * dt; w.y += state.vel.y * dt; w.z += state.vel.z * dt;     // die Kamera faehrt mit
     const len = 0.8 + v * 0.06;
-    f.windPos.set([w.x, w.y, w.z, w.x + fwx * len, w.y, w.z + fwz * len], i * 6);
+    f.windPos.set([w.x, w.y, w.z, w.x + _wd.x * len, w.y + _wd.y * len, w.z + _wd.z * len], i * 6);
   });
   f.wind.geometry.attributes.position.needsUpdate = true;
 }
@@ -795,7 +841,7 @@ function abfahrtSchritt(dt){
 }
 // Mega-Rampe: weit hinaus aufs Meer (bei 50 km/h ~34 m/s weg und 18 m/s hoch), Tricks gehen weiter
 function megaStart(){
-  if(fx){ fx.schatten.visible = false; fx.spur.visible = false; fx.wind.material.opacity = 0; }
+  if(fx){ fx.schatten.visible = false; fx.spur.visible = false; }
   const o = ort(ab.s, ab.q);
   const m = ab.mega = { x: o.x, z: o.z, tx: o.tx, tz: o.tz, vh: 30 + ab.v, y: ab.y, y0: ab.y, ueberMeer: false };
   ab.vy = 16 + ab.v * 0.5; fin.schritt = 'mega'; ab.spin0 = ab.spin; ab.flip = 0; m.phase = 'brett'; m.t = 0;
@@ -817,7 +863,7 @@ function megaSchritt(dt){
     const k = fin.k; k.yaw = Math.atan2(-m.tx, -m.tz);
     if(!m.mitte) m.mitte = new THREE.Vector3();
     m.mitte.set(m.x, m.y + 0.8, m.z); freiflugPose(k.g, m.mitte, k.yaw);
-    state.pos.set(m.x, m.y, m.z); state.vel.set(m.tx * m.vh, ab.vy, m.tz * m.vh); state.onGround = false;
+    state.pos.set(m.x, m.y, m.z); state.vel.set(m.tx * m.vh, ab.vy, m.tz * m.vh); state.onGround = false; fahrtwind(dt);
     if(m.ueberMeer && m.y - (typeof seaYAt === 'function' ? seaYAt(m.x, m.z) : 0) < MEGA_SCHIRM) megaSchirmAuf(m);
     if(!m.ueberMeer && fujiMeshY(m.x, m.z) === -Infinity) m.ueberMeer = true;
     return;
@@ -850,7 +896,7 @@ function brettWeg(m){
 function megaSchirmAuf(m){
   m.phase = 'schirm';
   const k = fin.k, g = makeParachute(); g.position.set(m.x, m.y, m.z);
-  scene.remove(k.g); scene.add(g); k.g = g; frei.rolle = 0; frei.salto = 0;
+  scene.remove(k.g); scene.add(g); k.g = g; frei.rolle = 0; frei.salto = 0; if(fx) fx.wind.material.opacity = 0;
   kAnim('hang'); ab.vy = Math.max(ab.vy, -12);
 }
 function megaSchirm(dt){
@@ -1030,6 +1076,8 @@ function hookFinale(){
   const brettZeit = () => fin.aktiv && hier() && (fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf');
   const schubOrig = schubBalken;
   schubBalken = function(){ if(brettZeit()){ if(schubEl && schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; } return; } return schubOrig.apply(this, arguments); };
+  const bodenOrig = seaFloorNeeded;
+  seaFloorNeeded = function(){ if(fin.aktiv && hier() && fin.k) return false; return bodenOrig.apply(this, arguments); };
   const tonOrig = updateEngineSound;
   updateEngineSound = function(){ const r = tonOrig.apply(this, arguments); if(fin.aktiv && hier() && fin.k && typeof engineGain !== 'undefined' && engineGain) engineGain.gain.value = 0; return r; };
   const cratesOrig = updateCrates, scoopOrig = updateScoopHint;
