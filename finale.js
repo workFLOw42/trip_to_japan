@@ -13,7 +13,7 @@ function hier(){ return e6() && locale === 'earth'; }
 
 function stufe(){ const t = story.tage; return t <= 6 ? 1 : t <= 12 ? 2 : t <= 21 ? 3 : t <= 39 ? 4 : 5; }
 story.finaleStufe = stufe;
-story.finaleSchild = () => ({ 1: 'Abenteuer', 2: 'Rundflug' })[stufe()] || 'Außer Betrieb';   // Schild ueber der C-400 (Live-Wunsch)
+story.finaleSchild = () => story.freiesSpiel ? 'Abenteuer · B: Rundflug' : (({ 1: 'Abenteuer', 2: 'Rundflug' })[stufe()] || 'Außer Betrieb');   // Schild ueber der C-400 (Live-Wunsch)
 
 const MAX_ALT = 2500;            // Gipfel 2000 m + 500 m (Live-Wunsch)
 const SPRUNG_MIN = 2300;         // ab dieser Hoehe uebernimmt der Pilot ueber der Piste
@@ -157,8 +157,8 @@ function bahnStart(){
   state.falling = false; state.ejected = false; state.stalling = false;
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat); planeGroup.scale.setScalar(1);
 }
-function einsteigen(){
-  fin.aktiv = true; fin.art = stufe() === 1 ? 'sprung' : 'rundflug'; fin.schritt = 'ansage';
+function einsteigen(art){
+  fin.aktiv = true; fin.art = art || (stufe() === 1 ? 'sprung' : 'rundflug'); fin.schritt = 'ansage';
   fin.abgehoben = false; fin.crash = false; fin.ringNr = 0;
   story.phase = 'finale'; story.hinweis('');
   story.schwarz('', 0.6, () => {                       // von der C-400 auf dem Vorfeld an den Anfang der Bahn
@@ -1262,11 +1262,13 @@ function hookFinale(){
     story.finaleDirekt = 0;
     // sofort (noch im Schwarzen): Globus Tokio -> Fukuoka, danach der Strand; Finale 1 dann gleich ueber die Piste
     story.e6ankunft(1, 'Test-Sprung Finale ' + n, true);
-    if(n === 1) fin.testPilot = true;                     // nach dem Globus (der leert alle Timer), siehe updateHUD
+    if(n === 1 && !story.freiesSpiel) fin.testPilot = true;   // nach dem Globus (der leert alle Timer), siehe updateHUD
     return r;
   };
   const yOrig = buttonY;
   buttonY = function(){ if(fin.aktiv && hier() && fin.schritt === 'welle'){ surfenAussteigen(); return; } return yOrig.apply(this, arguments); };
+  const bOrig = buttonB;
+  buttonB = function(){ if(story.freiesSpiel && c400Nah() && !fin.aktiv){ einsteigen('rundflug'); return; } return bOrig.apply(this, arguments); };
   // Y an der C-400 (am Strand, nach Etappe 6)
   const boardYOrig = evaBoardY;
   evaBoardY = function(){ if(c400Nah()){ einsteigen(); return; } return boardYOrig.apply(this, arguments); };
