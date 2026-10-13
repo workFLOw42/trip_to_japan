@@ -636,14 +636,14 @@ function startbildschirm(weiter){
   el.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;'
     + 'justify-content:center;background:rgba(0,0,0,.55);color:#fff;font-family:system-ui,sans-serif;'
     + 'z-index:30;text-align:center;user-select:none;';
-  const OPT = [{ n: 1, t: 'Neues Spiel' }, { n: 2, t: 'E2' }, { n: 3, t: 'E3' }, { n: 4, t: 'E4' }, { n: 5, t: 'E5' }, { n: 6, t: 'E6' }, { n: 6, t: 'E6 Höhle', hoehle: true }, { n: 6, t: 'E6 Zug', zug: true }, { n: 6, t: 'E6 Vulkan', vulkan: true }];
+  const OPT = [{ n: 1, t: 'Neues Spiel' }, { n: 2, t: 'E2' }, { n: 3, t: 'E3' }, { n: 4, t: 'E4' }, { n: 5, t: 'E5' }, { n: 6, t: 'E6' }, { n: 6, t: 'E6 Höhle', hoehle: true }, { n: 6, t: 'E6 Zug', zug: true }, { n: 6, t: 'E6 Vulkan', vulkan: true }, { n: 6, t: 'Finale 1', finale: 1 }, { n: 6, t: 'Finale 2', finale: 2 }];
   el.innerHTML = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>'
     + '<div style="display:flex;gap:10px;justify-content:center;margin-top:34px">'
     + OPT.map((o, i) => '<button data-i="' + i + '" style="min-width:' + (i ? 54 : 170) + 'px;height:44px;border-radius:10px;'
       + 'border:2px solid rgba(255,255,255,.45);background:rgba(255,255,255,.1);color:#fff;font:600 18px system-ui;'
       + 'cursor:pointer;transition:all .12s">' + o.t + '</button>').join('') + '</div>'
     + '<div style="font-size:14px;margin-top:16px;opacity:.7">Linker Stick / ← → wählen · A / Enter starten'
-    + '<br><span style="font-size:12px;opacity:.8">E2–E6: Test – direkt zur Etappe · E6 Höhle: direkt in den Autopiloten · E6 Zug: direkt in den Shinkansen · E6 Vulkan: Szene am Höhlenausgang, dann landen</span></div>';
+    + '<br><span style="font-size:12px;opacity:.8">E2–E6: Test – direkt zur Etappe · E6 Höhle: direkt in den Autopiloten · E6 Zug: direkt in den Shinkansen · E6 Vulkan: Szene am Höhlenausgang, dann landen · Finale 1/2: am Strand an der C-400 (Fuji-Sprung / Rundflug)</span></div>';
   document.body.appendChild(el);
   const knoepfe = [...el.querySelectorAll('button')];
   let wahl = 0;
@@ -667,6 +667,7 @@ function startbildschirm(weiter){
     if(!soundOn) toggleSound();      // die Geste erlaubt jetzt Audio: Ton an (D-Pad runter / N schaltet um)
     const n = OPT[wahl].n;
     if(OPT[wahl].hoehle){ story.hoehleDirekt = true; springeZu(n); return; }
+    if(OPT[wahl].finale){ story.finaleDirekt = OPT[wahl].finale; springeZu(n); return; }   // Test: Finale am Strand (finale.js)
     if(OPT[wahl].zug){ story.zugDirekt = true; springeZu(n); return; }         // Test: direkt in den Shinkansen (etappe6c.js)
     if(OPT[wahl].vulkan){ story.vulkanDirekt = true; springeZu(n, 5); return; } // Test: Szene am Hoehlenausgang, bisher 5 Tage   // Test: direkt in die Hoehle (etappe6.js)
     if(n > 1){ springeZu(n); return; }
@@ -2631,7 +2632,7 @@ function hookHud(){
       }
       if(statEl){
         const ein = evaCanBoard() || harborSubNear() || (story.transallNah && story.transallNah()) || (story.bootNah && story.bootNah()) || (story.kranNah && story.kranNah()) || (story.bootNah4 && story.bootNah4())
-          || (story.ringNah6 && story.ringNah6());
+          || (story.ringNah6 && story.ringNah6()) || (story.c400Nah && story.c400Nah());
         const s = marsSteinNah() ? 'Y: ' + TRIP[mars.ort || 'mars'].stein + ' aufheben' : (ein ? 'Y: einsteigen' : '');
         if(statEl.textContent !== s) statEl.textContent = s;
       }

@@ -49,7 +49,7 @@ const SURF = { x: FEST.x + 6, z: STRANDPLATZ.z - 11 };         // Surfbrett rech
 const MEOTO = { x: FEST.x - 230, z: STRANDPLATZ.z - 120 };    // rechts dahinter (Blick -x: rechts = -z)
 const FEUER = { x: FEST.x + 30, z: STRANDPLATZ.z + 90 };       // Lagerfeuer auf einem freien Strandabschnitt links von Kenji
 const SAMURAI_GRUPPE = { x: FEST.x + 28, z: STRANDPLATZ.z - 92 };   // stehende Samurai, freie Flaeche rechts von Kenji
-story.e6 = { ALPHA, BAHNHOF, RING6, START6, FUJI, ZIEL6, FEST, FLUGFELD, BAHNHOF2, STRANDPLATZ, FEUER, SAMURAI_GRUPPE, get STADT(){ return STADT; } };
+story.e6 = { get VORFELD(){ return VORFELD; }, ALPHA, BAHNHOF, RING6, START6, FUJI, ZIEL6, FEST, FLUGFELD, BAHNHOF2, STRANDPLATZ, FEUER, SAMURAI_GRUPPE, get STADT(){ return STADT; } };
 
 // Fuji-Hoehe an (x, z): Kegel nach dem vereinfachten Modell (fuji_glb.js, Hoehe 1 bei Radius 0, 0 bei Radius 1). Fuer
 // Kollision (Berg rammen) und damit die Hoehle (etappe6b.js) weiss, wo der Fels ist.
@@ -404,7 +404,7 @@ function updateFeuer(dt){
   feuer.t += dt; feuer.mixer.update(dt);
   if(feuer.licht) feuer.licht.intensity = 2 + Math.sin(feuer.t * 13) * 0.35 + Math.sin(feuer.t * 7.3) * 0.25;
 }
-// Gelber Pfeil ueber der C-400 mit (noch) leerem Schild (Live-Wunsch: das Fahrzeug kommt spaeter dran)
+// Gelber Pfeil ueber der C-400. Schild je nach Finale-Stufe (finale.js): 'Abenteuer' / 'Rundflug' / 'Außer Betrieb'
 let c400Marke = null;
 function stelleC400(){
   if(welt.c400 || !glbTemplates.Transall) return;
@@ -412,6 +412,7 @@ function stelleC400(){
   g.position.set(VORFELD.x, ISLAND_Y, VORFELD.z); g.rotation.y = Math.PI / 2;    // auf dem Vorfeld, Nase zur Bahn (+x)
   g.userData.fremd = true; story.welt(6).add(g); welt.c400 = g;
 }
+story.e6c400 = () => welt.c400;
 story.e6strand = () => ({ wx: FLUGFELD.x, wz: FLUGFELD.z, radius: FLUGFELD.laenge / 2 + 50 });   // 6b: Ziel der Landung
 
 // ---- Marken und Ring -----------------------------------------------------------------------------------
@@ -670,12 +671,13 @@ function updateE6(dt){
   const surfZeigen = story.phase === 'ankunft' && !!eva && locale === 'earth';
   if(surf.ring) surf.ring.zeigen(surfZeigen);
   if(surf.marke) story.setzeMarke(surf.marke, SURF.x, ISLAND_Y, SURF.z, 1.9, surfZeigen);
-  if(surfZeigen && !c400Marke && story.baueMarke) c400Marke = story.baueMarke(0xffd23f, '');
+  if(surfZeigen && !c400Marke && story.baueMarke) c400Marke = story.baueMarke(0xffd23f, story.finaleSchild ? story.finaleSchild() : '');
   if(c400Marke) story.setzeMarke(c400Marke, VORFELD.x, ISLAND_Y, VORFELD.z, 9, surfZeigen && !!welt.c400);
 }
 story.updateE6 = updateE6;
 story.aufgabeE6 = () => (story.aufgabeE6c && story.aufgabeE6c()) || (e6() && story.phase === 'ankunft' ? ['Etappe 6: am Strand neben dem Fuji', [
   ['Geschafft', 'die Reise geht bald weiter'],
+  ...(story.finaleStufe && story.finaleStufe() <= 2 ? [['C-400 (gelb)', story.finaleSchild() + ' – hinlaufen, Y']] : []),
   ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],
 ]] : null) || (story.aufgabeE6b && story.aufgabeE6b()) || (flug.aktiv ? ['Alpha Jet zum Fuji', [
   ['Start', 'Startsequenz, dann Vollgas und abheben'],

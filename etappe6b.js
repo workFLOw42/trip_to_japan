@@ -416,6 +416,10 @@ const LAVA_STROEME = 7, STROM_V = 260;    // m/s, wie schnell die Stroeme den Ha
 let ausbruchLicht = null;
 function ausbruchWeg(){ const a = ho.ausbruch; if(!a) return; story.entsorgen(a.g); ho.ausbruch = null; if(ausbruchLicht) ausbruchLicht.intensity = 0; }
 story.e6ausbruchWeg = ausbruchWeg;
+// Finale-Rundflug (finale.js): Ausbruch starten, mit Grollen; aus = nichts kommt mehr nach, die Teile verfliegen, dann weg
+story.e6ausbruch = function(){ ausbruch(); szeneTon(true); };
+story.e6ausbruchStopp = function(){ const a = ho.ausbruch; if(a && !a.aus){ a.aus = a.t; } szeneTon(false); };
+story.e6ausbruchLaeuft = () => !!(ho.ausbruch && !ho.ausbruch.aus);
 function ausbruch(){
   // Live-Test: blasse Wolke, kaum zu sehen -> dunkler, dichter Rauchpilz, viele gluehende Lavabrocken in hohen Boegen,
   // Feuerschein im Krater; kein Nebel (fog: false), damit man ihn auch aus Kilometern sieht.
@@ -460,16 +464,19 @@ function ausbruch(){
 function ausbruchUpdate(dt){
   const a = ho.ausbruch; if(!a) return;
   a.t += dt;
-  a.schein.scale.setScalar(1 + 0.15 * Math.sin(a.t * 6)); a.licht.intensity = 2.5 + Math.sin(a.t * 9);
+  const ab = a.aus ? Math.max(0, 1 - (a.t - a.aus) / 6) : 1;            // Auslaufen: Schein und Licht verloeschen in 6 s
+  if(a.aus && ab <= 0){ ausbruchWeg(); return; }
+  a.schein.scale.setScalar((1 + 0.15 * Math.sin(a.t * 6)) * Math.max(0.05, ab)); a.licht.intensity = (2.5 + Math.sin(a.t * 9)) * ab;
   for(const s of a.stroeme){ const f = Math.max(0, Math.min(1, (a.t - s.verz) * STROM_V / s.lang)); s.geo.setDrawRange(0, Math.floor(f * a.SEG) * s.proSeg); }
   for(const p of a.teile){
     p.t += dt; if(p.t < 0) continue;
     p.m.position.addScaledVector(p.v, dt);
     if(p.rauch){ p.v.y *= 1 - 0.3 * dt; p.m.scale.multiplyScalar(1 + 0.22 * dt);
       // Live-Wunsch: der Vulkan bricht weiter aus -> aeltere Rauchballen kommen neu aus dem Krater (Saeule statt Kugel)
-      if(p.t > 2.8){ p.t = 0; p.m.position.set(E.FUJI.x, E.FUJI.h - 10, E.FUJI.z); p.m.scale.setScalar(1); const an = Math.random() * Math.PI * 2, rr = Math.random();
+      if(p.t > 2.8 && !a.aus){ p.t = 0; p.m.position.set(E.FUJI.x, E.FUJI.h - 10, E.FUJI.z); p.m.scale.setScalar(1); const an = Math.random() * Math.PI * 2, rr = Math.random();
         p.v.set(Math.cos(an) * 30 * rr, 380 + Math.random() * 150, Math.sin(an) * 30 * rr); } }
-    else { p.v.y -= 9.81 * dt; if(p.m.position.y < 0){ // Lava faellt ins Meer/auf den Hang -> neu aus dem Krater
+    else { p.v.y -= 9.81 * dt; if(p.m.position.y < 0 && a.aus){ p.m.visible = false; p.v.set(0, 0, 0); continue; }
+      if(p.m.position.y < 0){ // Lava faellt ins Meer/auf den Hang -> neu aus dem Krater
         p.m.position.set(E.FUJI.x, E.FUJI.h - 10, E.FUJI.z); const an = Math.random() * Math.PI * 2, r = Math.random();
         p.v.set(Math.cos(an) * (60 + 140 * r), 140 + Math.random() * 160, Math.sin(an) * (60 + 140 * r)); } }
   }

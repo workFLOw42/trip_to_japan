@@ -349,3 +349,46 @@ Wie Etappe 2 Fall B, nur Satz 1 ohne Kurzschluss (den gibt es in Etappe 3 nicht)
 ### Ende von Etappe 6 (beide Wege)
 
 Globus (still): der Faden wächst von Tokio nach Fukuoka, der lila Punkt wird zur 🌊. Text: **Ziel: Fukuoka** · {Ein Tag / n Tage} vergangen ({Grund}) · noch {Tage} von 42 Tagen. Danach steht Kenji am Strand, Hinweis (Text): *Angekommen am Strand neben dem Fuji – die Reise geht bald weiter …*
+
+---
+
+## Finale – Fukuoka-Beach (C-400 auf dem Vorfeld)
+
+> Entwurf 13.10.2026 (zum Korrigieren). Welche Stufe es gibt, hängt an den verbrauchten Tagen (Konzept.md, 5-Stufen-Finale).
+> Am Pfeil über der C-400 steht je nach Stufe **„Abenteuer“** (Stufe 1) oder **„Rundflug“** (Stufe 2), sonst **„Außer Betrieb“** (kein Einsteigen).
+
+### Stufe 1 (6 Tage): Abenteuer – Fuji-Sprung → Fallschirm → Piste
+
+**Am Boden (Pilot):**
+
+1. Willkommen an Bord! Heute wird es wild: Du fliegst uns hoch über den Fuji.
+2. Erst die Startsequenz, dann steig auf mindestens zweitausenddreihundert Meter und flieg zum roten Punkt über der weißen Piste.
+3. Dort übernehme ich das Steuer, und du springst mit B ab. Im freien Fall lenkst du mit dem linken Stick, der Schirm geht von allein auf. Lande auf der Piste!
+
+| Situation | Rolle | Text |
+|---|---|---|
+| Startsequenz geschafft | männlich | Sehr gut! Vollgas und ab in die Luft. |
+| Über der Piste, hoch genug | männlich | Ich übernehme! Wir kreisen über der Piste. Spring mit B, wenn du bereit bist! |
+| Absprung (B) | männlich | Viel Spaß! |
+| Auf der Piste gelandet | – | *keine Ansage* – Kenji steht gleich auf dem Snowboard, die Abfahrt beginnt |
+| Daneben (Hang) → noch einmal | männlich | Knapp daneben – das war nicht die Piste. Noch einmal! |
+| Daneben (Meer) → noch einmal | männlich | Platsch! Das war das Meer, nicht die Piste. Noch einmal! |
+| Absturz → noch einmal | männlich | Oh nein! Das ging schief. Keine Sorge – wir versuchen es gleich noch einmal. |
+
+Hinweise (nur Text): *Freier Fall! Der Schirm geht von allein auf – mit dem linken Stick lenkst du auf der Piste nach links und rechts* (Schirm bei 120 m über Grund; jeder Sprung während des Autopiloten landet auf der Piste) · *🪂 Schirm offen – du schwebst zur weißen Piste* · *Erst zum roten Punkt über der Piste – mindestens 2300 m hoch!* · Blende: *Noch ein Versuch!*
+
+### Stufe 2 (9–12 Tage): Rundflug um den Fuji
+
+**Am Boden (Pilot):**
+
+1. Willkommen an Bord der C-400! Heute fliegst du selbst – einmal rund um den Fuji.
+2. Erst die Startsequenz, dann Vollgas und abheben. Flieg durch die gelben Ringe, der rote Punkt im Radar zeigt dir den nächsten.
+3. Zum Schluss geht es über den Gipfel. Danach bringst du uns zurück und landest hier auf der Bahn.
+
+| Situation | Rolle | Text |
+|---|---|---|
+| Startsequenz geschafft | männlich | Sehr gut! Vollgas und ab in die Luft. |
+| Gelandet | männlich | Und jetzt ab an den Strand: Die Wellen sind heute richtig hoch! |
+| Absturz → noch einmal | männlich | Oh nein! Das ging schief. Keine Sorge – wir versuchen es gleich noch einmal. |
+
+Hinweis nach der Landung (Text): *Surfen auf hohen Wellen kommt bald!*
