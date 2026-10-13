@@ -1063,8 +1063,14 @@ function welleFangen(){
   let x = K - 55; x += (0.9 - phase(x)) * WEL.L; while(x > K - 55) x -= WEL.L;
   ab.x = x; ab.v = WEL.V; ab.y = wellenY(ab.x, ab.z);
 }
+function brettNachreichen(){
+  const g = fin.k && fin.k.g; if(!g || g.userData.brett || !surfVorlage) return;
+  const b = surfVorlage.clone(true); g.add(b); g.userData.brett = b; if(g.children[0] !== b) g.children[0].position.y = 0.045;
+  fin.kal = false; ab.kalT = 0; knochen = null;
+}
 function welleSchritt(dt){
   const k = fin.k; if(!k) return;
+  brettNachreichen();
   k.t += dt; ab.kalT = (ab.kalT || 0) + dt; welle.t += dt;
   const st = stick(), rs = rStick(), K = L().FEST.x;
   if(welle.wasch > 0){ waschgang(dt); return; }
@@ -1271,6 +1277,7 @@ function hookFinale(){
   updateHUD = function(){
     const r = hudOrig.apply(this, arguments);
     if(fin.testPilot && hier() && story.phase === 'ankunft' && eva && story.e6fujiMesh){ fin.testPilot = false; testPilot(); }
+    if(hier() && story.phase === 'ankunft' && surfVorlage === null) ladeSurf();          // Surfbrett vorab laden
     if(fin.aktiv && hier()) hud();
     return r;
   };
