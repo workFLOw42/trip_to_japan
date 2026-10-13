@@ -667,7 +667,7 @@ function startbildschirm(weiter){
     if(!soundOn) toggleSound();      // die Geste erlaubt jetzt Audio: Ton an (D-Pad runter / N schaltet um)
     const n = OPT[wahl].n;
     if(OPT[wahl].hoehle){ story.hoehleDirekt = true; springeZu(n); return; }
-    if(OPT[wahl].finale){ story.finaleDirekt = OPT[wahl].finale; springeZu(n); return; }   // Test: Finale am Strand (finale.js)
+    if(OPT[wahl].finale){ finaleDirekt(OPT[wahl].finale); return; }   // Test: Finale (finale.js) – nur Globus Tokio -> Fukuoka
     if(OPT[wahl].zug){ story.zugDirekt = true; springeZu(n); return; }         // Test: direkt in den Shinkansen (etappe6c.js)
     if(OPT[wahl].vulkan){ story.vulkanDirekt = true; springeZu(n, 5); return; } // Test: Szene am Hoehlenausgang, bisher 5 Tage   // Test: direkt in die Hoehle (etappe6.js)
     if(n > 1){ springeZu(n); return; }
@@ -734,6 +734,19 @@ function springeZu(n, tageBisher){
   });
 }
 story.springeZu = springeZu;
+// Test "Finale 1/2": wie springeZu(6), aber ohne Globus nach Japan und ohne Tokio-Szene – im Schwarzen Etappe 6 aufbauen,
+// dann gleich die Ankunft (Globus Tokio -> Fukuoka, danach der Strand mit der C-400)
+function finaleDirekt(nr){
+  intro.phase = 'aus'; hudSichtbar(true);
+  if(intro.rede) intro.rede.abbrechen();
+  story.e1aufraeumen && story.e1aufraeumen();
+  story.reise = [0, 1, 2, 3, 4, 5];
+  story.e1weg = story.e1weg || 'uboot'; story.e2weg = story.e2weg || 'transall';
+  story.tage = nr === 1 ? 5 : 11;                       // + 1 Tag Ankunft = 6 bzw. 12
+  story.etappe = 6; story.finaleDirekt = nr;
+  schwarz('', 0.1, () => { if(story.etappe6Start) story.etappe6Start(); });
+}
+story.finaleDirektStart = finaleDirekt;
 story.sprich = sprich;
 story.hinweis = hinweis;
 story.etappeEnde = (t, w) => etappeEnde(t, w);

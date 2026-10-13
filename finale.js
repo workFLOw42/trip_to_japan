@@ -71,8 +71,7 @@ function bauePiste(){
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
-  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0xf4f8ff, side: THREE.DoubleSide, fog: false,
-    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0xf4f8ff, side: THREE.DoubleSide, fog: false }));
   mesh.frustumCulled = false; story.welt(6).add(mesh);
   fin.piste = { mesh, pts, ziel: pts[Math.round(N * 0.08)] };
   story.finalePiste = fin.piste;                       // fuer die Snowboard-Abfahrt
@@ -353,7 +352,7 @@ story.finaleBrett = () => brettVorlage || null;
 // Kenji auf dem Brett (Live-Befund 13.10.2026): in 'idle' steht der linke Fuss vor dem rechten. Die Figur bleibt deshalb in
 // Fahrtrichtung (linker Fuss vorne auf dem Brett), nur Becken und Oberkoerper drehen 90° nach rechts zur Seite, der Kopf
 // schaut zurueck in Fahrtrichtung – die typische Snowboard-Haltung. Die Drehung kommt nach dem Mixer auf die Knochen (haltungKnochen).
-const BRETT_DREH = { 'mixamorig:Hips': -0.5, 'mixamorig:Spine': -0.35, 'mixamorig:Spine1': -0.3, 'mixamorig:Spine2': -0.25, 'mixamorig:Neck': 0.55, 'mixamorig:Head': 0.5 };
+const BRETT_DREH = { mixamorigSpine: 0.35, mixamorigSpine1: 0.3, mixamorigSpine2: 0.25, mixamorigNeck: 0.25, mixamorigHead: 0.25 };   // Three.js nimmt den ':' aus den Namen
 function brettUnter(g){
   if(!brettVorlage) return;
   const b = brettVorlage.clone(true); b.position.y = 0.02;
@@ -435,6 +434,19 @@ function keil(L, H, W){
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(tri.flat(), 3)); g.computeVertexNormals();
   return g;
 }
+// Kicker als Flaeche ueber der Piste: Raster entlang (s, q), jeder Punkt = Schnee + Hoehe (0 vorne -> H an der Kante). Dazu die
+// senkrechte Kante hinten und die Seitenwangen. Die Fahrhoehe auf dem Kicker (abfahrtSchritt) rechnet mit derselben Formel.
+function kickerGeo(s0, q, L, H, W){
+  const NL = 8, NW = 2, pos = [], idx = [], P = (u, w, y) => { const o = ort(s0 + u, q + w); pos.push(o.x, grundAb(o.x, o.z) + y, o.z); return pos.length / 3 - 1; };
+  const top = [];
+  for(let i = 0; i <= NL; i++){ top.push([]); for(let j = 0; j <= NW; j++){ const u = L * i / NL, w = -W / 2 + W * j / NW; top[i].push(P(u, w, H * i / NL)); } }
+  for(let i = 0; i < NL; i++) for(let j = 0; j < NW; j++){ const a = top[i][j], b = top[i + 1][j], c = top[i + 1][j + 1], d = top[i][j + 1]; idx.push(a, b, c, a, c, d); }
+  const k0 = P(L, -W / 2, 0), k1 = P(L, W / 2, 0); idx.push(top[NL][0], k0, k1, top[NL][0], k1, top[NL][NW]);   // Kante hinten
+  for(const [j, w] of [[0, -W / 2], [NW, W / 2]]){ let alt = P(0, w, 0);                                     // Seitenwangen
+    for(let i = 1; i <= NL; i++){ const unten = P(L * i / NL, w, 0); idx.push(alt, unten, top[i][j], alt, top[i][j], top[i - 1][j]); alt = unten; } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
 // Objekt an (s, q) auf die Piste legen: +X in Fahrtrichtung, um das Gefaelle auf L Meter geneigt
 function aufPisteLegen(m, s, q, L){
   const o = ort(s, q), x0 = o.x, z0 = o.z, h = Math.atan2(-o.tx, -o.tz), y0 = grundAb(x0, z0);
@@ -468,18 +480,18 @@ function baueHindernisse(s0){
   const g = new THREE.Group(); story.welt(6).add(g); ab.g = g;
   let sd = 4242; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
   const SE = fin.piste.S, fels = new THREE.MeshLambertMaterial({ color: 0x6b6460, fog: false });
-  const schnee = new THREE.MeshLambertMaterial({ color: 0xb9d4ee, side: THREE.DoubleSide, fog: false });   // Rampen: Eisblau-Weiss
+  const schnee = new THREE.MeshLambertMaterial({ color: 0x8fb6e0, side: THREE.DoubleSide, fog: false });   // Rampen: kraeftiges Eisblau (hebt sich vom Schnee ab)
   const metall = new THREE.MeshLambertMaterial({ color: 0xa8b2bc, fog: false }), orange = new THREE.MeshLambertMaterial({ color: 0xff7a1a, fog: false });
   const neu = (typ, s, q) => {
     const h = { typ, s, q, weg: false };
     if(typ === 'fels'){
-      h.r = 1.0 + rnd() * 0.6; h.h = h.r * 1.05;
+      h.r = 0.8 + rnd() * 0.5; h.h = h.r * 1.05;
       const m = new THREE.Mesh(new THREE.IcosahedronGeometry(h.r, 0), fels); m.scale.set(1.1, 0.75, 1); m.rotation.y = rnd() * 6;
       const o = ort(s, q); m.position.set(o.x, grundAb(o.x, o.z) + h.r * 0.3, o.z); g.add(m);
     } else if(typ === 'rampe' || typ === 'mega'){
-      const mega = typ === 'mega'; h.L = mega ? 32 : 7; h.H = mega ? 11 : 1.6; h.W = mega ? PISTE_B - 4 : 9;
-      const kg = keil(h.L, h.H, h.W), m = new THREE.Mesh(kg, schnee); aufPisteLegen(m, s - h.L, q, h.L); g.add(m);
-      m.add(new THREE.LineSegments(new THREE.EdgesGeometry(kg, 1), new THREE.LineBasicMaterial({ color: 0x000000, fog: false })));   // Live-Wunsch: Rampen erkennbar
+      const mega = typ === 'mega'; h.L = mega ? 32 : 9; h.H = mega ? 11 : 2.2; h.W = mega ? PISTE_B - 4 : 9;
+      const kg = kickerGeo(s - h.L, q, h.L, h.H, h.W), m = new THREE.Mesh(kg, schnee); g.add(m);
+      g.add(new THREE.LineSegments(new THREE.EdgesGeometry(kg, 20), new THREE.LineBasicMaterial({ color: 0x000000, fog: false })));   // Live-Wunsch: Rampen erkennbar
       if(mega) for(const sx of [-1, 1]){
         const st = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 6, 6).translate(0, 3, 0), orange);
         const o = ort(s, q + sx * (h.W / 2 + 1)); st.position.set(o.x, grundAb(o.x, o.z) + h.H, o.z); g.add(st);
@@ -521,6 +533,7 @@ function abfahrtStart(k){
     luft: false, spin: 0, spin0: 0, flip: 0, luftT: 0, grind: null, rampe: null, i: bi, stolper: 0, tricks: [], mega: null, surfT: 0, ende: false });
   baueHindernisse(ab.s);
   const o = ort(ab.s, ab.q); ab.y = grundAb(o.x, o.z);
+  figurZurueck(); fin.kal = false; ab.kalT = 0; fin.camY = undefined;
   fin.schritt = 'abfahrt';
   haltung();
   zeige('🏂 Los geht’s! L-Stick: links/rechts · B: springen · R-Stick: Tricks', 6);
@@ -540,7 +553,7 @@ function trickName(){
   return t.join(' ');
 }
 function anstossen(text){
-  ab.v = Math.min(ab.v, 2.5); ab.stolper = 0.8; ab.qv = 0; ab.spin = Math.round(ab.spin / Math.PI) * Math.PI; ab.flip = 0;
+  ab.v = Math.min(ab.v, 2.5); ab.stolper = 0.8; ab.qv = 0; ab.spin = Math.round(ab.spin / (2 * Math.PI)) * 2 * Math.PI; ab.flip = 0;   // wieder vorwaerts
   if(typeof rumble === 'function') rumble(260, 0.7, 0.5);
   zeige(text, 2);
 }
@@ -557,12 +570,12 @@ function springen(){
   if(fin.schritt !== 'abfahrt') return;
   if(ab.grind){ ab.grind = null; ab.luft = true; ab.vy = 3.5; ab.hh = RAIL_H; ab.luftT = 0; ab.spin0 = ab.spin; ab.tricks.push('Rail-Grind'); zeige('✨ Rail-Grind!', 2); return; }
   if(ab.luft || ab.stolper > 0) return;
-  ab.luft = true; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0; ab.hh = 0; ab.vy = 3 + ab.v * 0.12;   // bei 50 km/h ~1 m hoch, ~0,9 s
+  ab.luft = true; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0; ab.hh = 0; ab.vy = 5.5 + ab.v * 0.12;   // bei 50 km/h ~1,9 m hoch, ~1 s
 }
 function abheben(h){
   ab.luft = true; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0;
   if(h.typ === 'mega'){ megaStart(); return; }
-  const o = ort(ab.s, ab.q); ab.hh = ab.y - grundAb(o.x, o.z); ab.vy = 4 + ab.v * 0.3;             // kleine Rampe: bei 50 km/h ~4,5 m ueber dem Hang, ~1,8 s
+  const o = ort(ab.s, ab.q); ab.hh = ab.y - grundAb(o.x, o.z); ab.vy = 9 + ab.v * 0.4;             // kleine Rampe: bei 50 km/h ~10 m ueber dem Hang, ~2,4 s, ~33 m weit
 }
 function pose(x, y, z, tx, tz, extraYaw, neig){
   const k = fin.k, h = Math.atan2(-tx, -tz); k.yaw = h;
@@ -577,7 +590,7 @@ function pose(x, y, z, tx, tz, extraYaw, neig){
 }
 function abfahrtSchritt(dt){
   const k = fin.k; if(!k) return;
-  k.t += dt;
+  k.t += dt; ab.kalT = (ab.kalT || 0) + dt;
   if(fin.schritt === 'mega'){ megaSchritt(dt); return; }
   if(fin.schritt === 'surf'){ surfSchritt(dt); return; }
   const st = stick(), rs = rStick(), P = fin.piste.pts;
@@ -615,6 +628,7 @@ function abfahrtSchritt(dt){
     else if(ab.y - grund > 0.5){ ab.luft = true; ab.vy = 0; ab.hh = ab.y - grund; ab.luftT = 0; }     // von der Rail/Rampenkante gefallen
     else ab.y = grund;
     ab.rampe = auf;
+    { const z = Math.round(ab.spin / (2 * Math.PI)) * 2 * Math.PI; ab.spin += (z - ab.spin) * Math.min(1, dt * 3); }   // zurueck nach vorn
     for(const h of ab.hinder) if(h.typ === 'rail' && !h.weg && ab.s > h.s - 0.5 && ab.s < h.s + 1.5 && Math.abs(ab.q - h.q) < 0.8){ h.weg = true; anstossen('Autsch – die Rail! Mit B draufspringen.'); }
   }
   if(fin.schritt !== 'abfahrt') return;                                         // Mega-Rampe: abgehoben
@@ -667,7 +681,34 @@ function surfSchritt(dt){
 }
 
 // Auf dem Brett: Kenjis normale Stehhaltung (idle), 90° nach rechts gedreht (brettUnter)
-function haltung(){ kAnim('idle'); }
+function haltung(){
+  kAnim('idle');
+  const a = story.kenji && story.kenji.acts.idle;
+  if(a && !a.paused){ a.time = 0.4; a.paused = true; }       // feste Stehhaltung, keine wandernden Fuesse
+}
+// Fuesse auf der Brettachse (Live-Test: stand noch schraeg): Fusslinie links->rechts auf +Z drehen (linker Fuss vorne = -Z),
+// Mitte auf das Brett schieben. Einmal je Abfahrt, nachdem Haltung und Ueberblendung stehen.
+const _fl = new THREE.Vector3(), _fr = new THREE.Vector3(), _mi = new THREE.Matrix4();
+function fussPunkte(g){
+  g.updateMatrixWorld(true); _mi.copy(g.matrixWorld).invert(); let l = null, r = null;
+  g.traverse(o => { if(o.name === 'mixamorigLeftFoot') l = o; else if(o.name === 'mixamorigRightFoot') r = o; });
+  if(!l || !r) return false; l.getWorldPosition(_fl).applyMatrix4(_mi); r.getWorldPosition(_fr).applyMatrix4(_mi); return true;
+}
+function fuesseAusrichten(){
+  const g = fin.k && fin.k.g, fig = g && g.children[0]; if(!fig || fin.kal || !(ab.kalT > 0.6)) return;
+  for(let i = 0; i < 4; i++){
+    if(!fussPunkte(g)) return;
+    const w = Math.atan2(_fr.x - _fl.x, _fr.z - _fl.z); if(Math.abs(w) < 0.03) break;
+    fig.rotation.y -= w;
+  }
+  if(!fussPunkte(g)) return;
+  fig.position.x -= (_fl.x + _fr.x) / 2; fig.position.z -= (_fl.z + _fr.z) / 2;
+  fin.kal = true;
+}
+function figurZurueck(){
+  const fig = fin.k && fin.k.g && fin.k.g.children[0]; if(fig){ fig.rotation.set(0, 0, 0); fig.position.set(0, 0, 0); }
+  const k = story.kenji; if(k && k.acts.idle) k.acts.idle.paused = false;
+}
 
 // ---- Zurueck an die C-400 (geschafft oder noch einmal) -------------------------------------------------------------
 function aufraeumen(){
@@ -675,7 +716,7 @@ function aufraeumen(){
   if(fin.k){ scene.remove(fin.k.g); fin.k = null; }
   if(fin.flieger){ scene.remove(fin.flieger.g); fin.flieger = null; }
   for(const r of fin.ringe) r.mesh.visible = false;
-  vulkanAus(); abWeg(); if(camera.fov !== 60){ camera.fov = 60; camera.updateProjectionMatrix(); }
+  vulkanAus(); abWeg(); figurZurueck(); if(camera.fov !== 60){ camera.fov = 60; camera.updateProjectionMatrix(); }
   if(fin.hudEl) fin.hudEl.style.display = 'none';
   state.crashed = false; state.crashTimer = 0; state.falling = false; state.ejected = false; state.stalling = false;
   if(typeof clearRescue === 'function') clearRescue();
@@ -759,8 +800,9 @@ function hookFinale(){
     const r = startOrig.apply(this, arguments);
     const n = story.finaleDirekt; if(!n) return r;
     story.finaleDirekt = 0;
-    story.spaeter(1, () => { if(!e6()) return; story.tage = n === 1 ? 5 : 11; story.e6ankunft(1, 'Test-Sprung Finale ' + n, true);
-      if(n === 1) fin.testPilot = true; });                // nach dem Globus (der leert alle Timer), siehe updateHUD
+    // sofort (noch im Schwarzen): Globus Tokio -> Fukuoka, danach der Strand; Finale 1 dann gleich ueber die Piste
+    story.e6ankunft(1, 'Test-Sprung Finale ' + n, true);
+    if(n === 1) fin.testPilot = true;                     // nach dem Globus (der leert alle Timer), siehe updateHUD
     return r;
   };
   // Y an der C-400 (am Strand, nach Etappe 6)
@@ -806,19 +848,21 @@ function hookFinale(){
   const camOrig = updateCamera, _cp = new THREE.Vector3();
   updateCamera = function(){
     if(!(fin.aktiv && hier() && fin.k)) return camOrig.apply(this, arguments);
-    haltungKnochen();
+    haltungKnochen(); fuesseAusrichten();
     const fahrt = fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf';
     const k = fin.k, p = fahrt ? state.pos : k.g.position, fx = -Math.sin(k.yaw), fz = -Math.cos(k.yaw);
     const fall = fin.schritt === 'fall', hinten = fahrt ? 6.5 : (fall ? 10 : (fin.schritt === 'gelandet' ? 8 : 16)), hoch = fahrt ? 2.4 : (fall ? 7 : 4);
     const fov = fahrt ? 60 + Math.min(1, ab.v / AB_VMAX) * 22 : 60;                       // Tempo: Sichtfeld weiter (60 -> 82°)
     if(Math.abs(camera.fov - fov) > 0.1){ camera.fov += (fov - camera.fov) * 0.08; camera.updateProjectionMatrix(); }
     _cp.set(p.x - fx * hinten, p.y + hoch, p.z - fz * hinten);
+    const hoch2 = fahrt && fin.schritt === 'abfahrt' && ab.luft ? ab.hh : 0;          // im Sprung: Kamera bleibt am Hang
+    if(fahrt){ const ziel = p.y - hoch2 * 0.8 + hoch; fin.camY = fin.camY === undefined || Math.abs(ziel - fin.camY) > 6 ? ziel : fin.camY + (ziel - fin.camY) * (fin.schritt === 'abfahrt' ? 0.15 : 0.06); _cp.y = fin.camY; }
     camera.up.set(0, 1, 0);
     camera.position.x += (_cp.x - camera.position.x) * 0.12; camera.position.z += (_cp.z - camera.position.z) * 0.12;
     camera.position.y = Math.max(_cp.y, bodenY(camera.position.x, camera.position.z) + 3);
     const zit = fahrt && !ab.luft && fin.schritt === 'abfahrt' ? (ab.v / AB_VMAX) * 0.05 : 0;   // Pistenrauheit
     if(zit){ camera.position.x += (Math.random() - 0.5) * zit; camera.position.y += (Math.random() - 0.5) * zit; }
-    camera.lookAt(p.x + fx * (fahrt ? 14 : 6), p.y + (fahrt ? 0.3 : -(fall ? 8 : 1)), p.z + fz * (fahrt ? 14 : 6));
+    camera.lookAt(p.x + fx * (fahrt ? 14 : 6), p.y + (fahrt ? 0.3 - hoch2 * 0.6 : -(fall ? 8 : 1)), p.z + fz * (fahrt ? 14 : 6));
   };
 }
 const hookOrig = window.STORY_HOOK;
