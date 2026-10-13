@@ -377,6 +377,20 @@ Globus (still): der Faden wächst von Tokio nach Fukuoka, der lila Punkt wird zu
 
 Hinweise (nur Text): *Freier Fall! Der Schirm geht von allein auf – mit dem linken Stick lenkst du auf der Piste nach links und rechts* (Schirm bei 120 m über Grund; jeder Sprung während des Autopiloten landet auf der Piste) · *🪂 Schirm offen – du schwebst zur weißen Piste* · *Erst zum roten Punkt über der Piste – mindestens 2300 m hoch!* · Blende: *Noch ein Versuch!*
 
+**Snowboard-Abfahrt** (keine Ansagen, nur Hinweise als Text):
+
+| Situation | Text |
+|---|---|
+| Start (nach der Landung auf der Piste) | 🏂 Los geht’s! L-Stick: links/rechts · B: springen · R-Stick: Tricks |
+| Trick gestanden | ✨ {360 / 720 / Frontflip / Backflip / Doppel-…}! |
+| Rail | Grind! · danach ✨ Rail-Grind! |
+| Gegen einen Felsen | Autsch – ein Felsen! |
+| Gegen die Rail gefahren | Autsch – die Rail! Mit B draufspringen. |
+| Unsauber gelandet | Uff – unsauber gelandet! |
+| Mega-Rampe | 🚀 MEGA-SPRUNG! |
+| Unsauber im Meer gelandet | Platsch! 🌊 |
+| Im Meer (Surfbrett) | 🌊 {n} Tricks! Monsterwellen-Surfen kommt bald! |
+
 ### Stufe 2 (9–12 Tage): Rundflug um den Fuji
 
 **Am Boden (Pilot):**

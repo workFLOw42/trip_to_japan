@@ -12,6 +12,9 @@ _intern/
 # ausser den App-Icons (PWA)
 !/icon-*.png
 
+# Lokale Claude-Code-Einstellungen (settings.json, settings.local.json)
+.claude/
+
 # Arbeitsnotizen
 /todo.md
 /FLUGSPIEL_UEBERNAHME.md

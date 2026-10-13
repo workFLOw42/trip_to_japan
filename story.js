@@ -643,7 +643,7 @@ function startbildschirm(weiter){
       + 'border:2px solid rgba(255,255,255,.45);background:rgba(255,255,255,.1);color:#fff;font:600 18px system-ui;'
       + 'cursor:pointer;transition:all .12s">' + o.t + '</button>').join('') + '</div>'
     + '<div style="font-size:14px;margin-top:16px;opacity:.7">Linker Stick / ← → wählen · A / Enter starten'
-    + '<br><span style="font-size:12px;opacity:.8">E2–E6: Test – direkt zur Etappe · E6 Höhle: direkt in den Autopiloten · E6 Zug: direkt in den Shinkansen · E6 Vulkan: Szene am Höhlenausgang, dann landen · Finale 1/2: am Strand an der C-400 (Fuji-Sprung / Rundflug)</span></div>';
+    + '<br><span style="font-size:12px;opacity:.8">E2–E6: Test – direkt zur Etappe · E6 Höhle: direkt in den Autopiloten · E6 Zug: direkt in den Shinkansen · E6 Vulkan: Szene am Höhlenausgang, dann landen · Finale 1: gleich über der Piste (Pilot kreist, B = Sprung) · Finale 2: Rundflug an der C-400</span></div>';
   document.body.appendChild(el);
   const knoepfe = [...el.querySelectorAll('button')];
   let wahl = 0;
