@@ -246,6 +246,7 @@ function kAnim(n, einmal){
   if(einmal){ a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; } else { a.setLoop(THREE.LoopRepeat); a.clampWhenFinished = false; }
   const alt = k.cur === 'haltung' ? k.acts.land : k.acts[k.cur];
   if(alt === a) a.paused = false;
+  if(alt && alt.paused){ alt.paused = false; alt.stop(); a.reset().play(); k.cur = n; return; }   // eingefrorene Haltung: hart wechseln
   a.reset().play();
   if(alt && alt !== a) alt.crossFadeTo(a, 0.25, false);
   k.cur = n;
@@ -472,7 +473,8 @@ function keil(L, H, W){
 // Kicker als Flaeche ueber der Piste: Raster entlang (s, q), jeder Punkt = Schnee + Hoehe (0 vorne -> H an der Kante). Dazu die
 // senkrechte Kante hinten und die Seitenwangen. Die Fahrhoehe auf dem Kicker (abfahrtSchritt) rechnet mit derselben Formel.
 function kickerGeo(s0, q, L, H, W){
-  const NL = 8, NW = 2, pos = [], idx = [], P = (u, w, y) => { const o = ort(s0 + u, q + w); pos.push(o.x, grundAb(o.x, o.z) + y, o.z); return pos.length / 3 - 1; };
+  const o0 = ort(s0, q), bx = o0.x, bz = o0.z, tx = o0.tx, tz = o0.tz;            // feste Richtung: gerader Keil
+  const NL = 8, NW = 2, pos = [], idx = [], P = (u, w, y) => { const x = bx + tx * u - tz * w, z = bz + tz * u + tx * w; pos.push(x, grundAb(x, z) + y, z); return pos.length / 3 - 1; };
   const top = [];
   for(let i = 0; i <= NL; i++){ top.push([]); for(let j = 0; j <= NW; j++){ const u = L * i / NL, w = -W / 2 + W * j / NW; top[i].push(P(u, w, H * i / NL)); } }
   for(let i = 0; i < NL; i++) for(let j = 0; j < NW; j++){ const a = top[i][j], b = top[i + 1][j], c = top[i + 1][j + 1], d = top[i][j + 1]; idx.push(a, b, c, a, c, d); }
@@ -505,6 +507,7 @@ function schneeSpray(dt, o){
   }
   for(const p of spray.teile) if(p.m.visible){ p.t += dt; p.v.y -= 9.81 * dt; p.m.position.addScaledVector(p.v, dt); p.m.scale.setScalar(Math.max(0.1, 1 - p.t * 1.5)); if(p.t > 0.6) p.m.visible = false; }
 }
+function kurvig(s, L){ const a = ort(s, 0), ax = a.tx, az = a.tz, b = ort(s + L, 0); return Math.acos(Math.max(-1, Math.min(1, ax * b.tx + az * b.tz))); }
 function abWeg(){
   spray.teile.length = 0;
   if(ab.g){ if(story.entsorgen) story.entsorgen(ab.g); else if(ab.g.parent) ab.g.parent.remove(ab.g); }
@@ -553,8 +556,8 @@ function baueHindernisse(s0){
     if(!frei(s)) continue;
     nr++; const w = rnd();
     if(w < 0.15 && s - letzteRail > 250){ neu('rail', s, (rnd() - 0.5) * 16); letzteRail = s; s += RAIL_L; nachRail = true; continue; }
-    if(w < 0.55 || nachRail){
-      nachRail = false; const qk = (rnd() - 0.5) * (PISTE_B - 18); neu('rampe', s, qk);
+    if((w < 0.55 || nachRail) && kurvig(s - 12, 40) < 0.35){                       // keine Kicker in engen Kehren (> 20° auf 40 m)
+      nachRail = false; const qk = (rnd() - 0.5) * (PISTE_B - 20); neu('rampe', s, qk);
       if(rnd() < 0.35 && s - letzteRail > 120){ neu('rail', s + 24, qk); letzteRail = s + 24; s += 24 + RAIL_L; continue; }   // Kicker -> Rail (Landung drauf)
       if(rnd() < 0.3) neu('fels', s - 4, qk + (qk > 0 ? -1 : 1) * (12 + rnd() * 4));   // daneben ein Fels: links oder rechts
       continue;
@@ -774,7 +777,7 @@ function brettWeg(m){
   const g = fin.k.g, b = g.userData.brett; g.userData.brett = null;
   if(b){ g.updateMatrixWorld(true); const w = new THREE.Vector3(); b.getWorldPosition(w); g.remove(b); b.position.copy(w); scene.add(b);
     m.brett = { b, v: new THREE.Vector3(m.tx * m.vh * 0.6 - m.tz * 4, ab.vy + 3, m.tz * m.vh * 0.6 + m.tx * 4), w: new THREE.Vector3(3, 1.2, 2) }; }
-  figurZurueck(); kAnim('fly');
+  kAnim('fly'); figurZurueck(); fin.kal = false;   // erst fly (beendet die eingefrorene Haltung), dann Figur zuruecksetzen
 
 }
 function megaSchirmAuf(m){
@@ -818,6 +821,7 @@ function surfSchritt(dt){
 
 // Auf dem Brett: Kenjis normale Stehhaltung (idle), 90° nach rechts gedreht (brettUnter)
 function haltung(){
+  if(!(fin.k && fin.k.g && fin.k.g.userData.brett)) return;   // nur auf dem Brett
   kAnim('idle');
   const a = story.kenji && story.kenji.acts.idle;
   if(a && !a.paused){ a.time = 0.4; a.paused = true; }       // feste Stehhaltung, keine wandernden Fuesse
@@ -1009,7 +1013,9 @@ function hookFinale(){
     const fov = fahrt ? 60 + Math.min(1, ab.v / AB_VMAX) * 22 : 60;                       // Tempo: Sichtfeld weiter (60 -> 82°)
     if(Math.abs(camera.fov - fov) > 0.1){ camera.fov += (fov - camera.fov) * 0.08; camera.updateProjectionMatrix(); }
     _cp.set(p.x - fx * hinten, p.y + hoch, p.z - fz * hinten);
-    const hoch2 = fahrt && fin.schritt === 'abfahrt' && ab.luft ? ab.hh : 0;          // im Sprung: Kamera bleibt am Hang
+    const hoch2 = fahrt && fin.schritt === 'abfahrt' && ab.luft ? ab.hh : 0;
+    fin.sprungK = (fin.sprungK || 0) + (Math.min(1, hoch2 / 8) - (fin.sprungK || 0)) * (hoch2 > 0 ? 0.12 : 0.08);   // 0..1 weich
+    const zurueck = fin.sprungK * 6;                                                      // Zoom: weiter weg
     if(fin.schritt === 'mega'){
       const ph = ab.mega && ab.mega.phase, nah = ph === 'frei' || ph === 'schirm';
       const hi = ph === 'schirm' ? 12 : (nah ? 6 : 6.5), ho = ph === 'schirm' ? 2 : (nah ? 2.5 : 4);
@@ -1020,13 +1026,16 @@ function hookFinale(){
       camera.lookAt(p.x + fx * (nah ? 4 : 25), p.y + (ph === 'schirm' ? 1.5 : (nah ? -1.5 : -6)), p.z + fz * (nah ? 4 : 25));
       return;
     }
-    if(fahrt){ const ziel = p.y - hoch2 * 0.8 + hoch; fin.camY = fin.camY === undefined || Math.abs(ziel - fin.camY) > 6 ? ziel : fin.camY + (ziel - fin.camY) * (fin.schritt === 'abfahrt' ? 0.15 : 0.06); _cp.y = fin.camY; }
+    if(fahrt && fin.schritt === 'abfahrt'){ _cp.x -= fx * zurueck; _cp.z -= fz * zurueck; }
+    if(fahrt){ const ziel = p.y - hoch2 * 0.45 + hoch + fin.sprungK * 1.5; fin.camY = fin.camY === undefined || Math.abs(ziel - fin.camY) > 6 ? ziel : fin.camY + (ziel - fin.camY) * (fin.schritt === 'abfahrt' ? 0.15 : 0.06); _cp.y = fin.camY; }
     camera.up.set(0, 1, 0);
     camera.position.x += (_cp.x - camera.position.x) * 0.12; camera.position.z += (_cp.z - camera.position.z) * 0.12;
     camera.position.y = Math.max(_cp.y, bodenY(camera.position.x, camera.position.z) + 3);
     const zit = fahrt && !ab.luft && fin.schritt === 'abfahrt' ? (ab.v / AB_VMAX) * 0.05 : 0;   // Pistenrauheit
     if(zit){ camera.position.x += (Math.random() - 0.5) * zit; camera.position.y += (Math.random() - 0.5) * zit; }
-    camera.lookAt(p.x + fx * (fahrt ? 14 : 6), p.y + (fahrt ? 0.3 - hoch2 * 0.6 : -(fall ? 8 : 1)), p.z + fz * (fahrt ? 14 : 6));
+    // Blick: am Boden voraus, im Sprung naeher an Kenji heran (er bleibt oben im Bild)
+    const vor = fahrt ? 14 - fin.sprungK * 8 : 6;
+    camera.lookAt(p.x + fx * vor, p.y + (fahrt ? 0.3 - hoch2 * 0.25 : -(fall ? 8 : 1)), p.z + fz * vor);
   };
 }
 const hookOrig = window.STORY_HOOK;
