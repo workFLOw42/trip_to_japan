@@ -693,7 +693,9 @@ function updateE6(dt){
   // Surfbrett am Fukuoka-Beach: Ring + gelber Pfeil "Surfen", nur zu Fuss und nach der Ankunft
   if(story.phase === 'ankunft' && eva){
     if(!surf.ring) surf.ring = story.einstiegsRing(SURF.x, ISLAND_Y, SURF.z);
-    if(!surf.marke && story.baueMarke) surf.marke = story.baueMarke(0xffd23f, story.finaleStufe && story.finaleStufe() >= 5 ? 'Außer Betrieb' : 'Surfen');   // Live-Wunsch: Stufe 5 wie die C-400
+    const surfText = story.finaleStufe && story.finaleStufe() >= 5 ? 'Außer Betrieb' : 'Surfen';   // Live-Wunsch: Stufe 5 wie die C-400
+    if(surf.marke && surf.markeText !== surfText){ for(const o of [surf.marke.saeule, surf.marke.pfeil, surf.marke.schild]) if(o && o.parent) o.parent.remove(o); surf.marke = null; }
+    if(!surf.marke && story.baueMarke){ surf.marke = story.baueMarke(0xffd23f, surfText); surf.markeText = surfText; }
   }
   const surfZeigen = story.phase === 'ankunft' && !!eva && locale === 'earth';
   if(surf.ring) surf.ring.zeigen(surfZeigen);

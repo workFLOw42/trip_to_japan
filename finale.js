@@ -1261,7 +1261,8 @@ function hookFinale(){
     const n = story.finaleDirekt; if(!n) return r;
     story.finaleDirekt = 0;
     // sofort (noch im Schwarzen): Globus Tokio -> Fukuoka, danach der Strand; Finale 1 dann gleich ueber die Piste
-    story.e6ankunft(1, 'Test-Sprung Finale ' + n, true);
+    story.hinweis('');                                    // kein Tokio-Starthinweis (etappe6Start)
+    story.e6ankunft(1, story.freiesSpiel ? 'Ab zum Strand' : 'Test-Sprung Finale ' + n, true);
     if(n === 1 && !story.freiesSpiel) fin.testPilot = true;   // nach dem Globus (der leert alle Timer), siehe updateHUD
     return r;
   };
