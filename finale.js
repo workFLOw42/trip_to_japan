@@ -881,9 +881,25 @@ function hookFinale(){
   hitsBuilding = function(x, y, z){ if(fin.aktiv && hier() && y < fujiMeshY(x, z)) return true; return hitsOrig.apply(this, arguments); };
   // Kamera beim Sprung: hinter Kenji, im freien Fall etwas hoeher
   const camOrig = updateCamera, _cp = new THREE.Vector3();
+  let seitK = 0, seitS = 1;                                // Seitenblick-Blende 0..1 und zuletzt gewaehlte Seite
   updateCamera = function(){
     if(!(fin.aktiv && hier() && fin.k)) return camOrig.apply(this, arguments);
     haltungKnochen(); fuesseAusrichten();
+    if(sideView !== 0) seitS = sideView;
+    seitK = sideView !== 0 ? Math.min(1, seitK + 0.12) : 0;
+    if(seitK > 0.02 && fin.k){
+      const fahrt = fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf';
+      const k = fin.k, p = fahrt ? state.pos : k.g.position, fx = -Math.sin(k.yaw), fz = -Math.cos(k.yaw);
+      const rx = -fz, rz = fx, schirm = fin.schritt === 'schirm', w = schirm ? 12 : 7;   // rechts quer zur Blickrichtung
+      const hy = schirm ? 2 : (fin.schritt === 'fall' ? 1 : 1.2);                         // am Schirm: Mitte zwischen Kenji und Schirm
+      _cp.set(p.x + rx * w * seitS + fx * 1.5, p.y + hy + 1.5, p.z + rz * w * seitS + fz * 1.5);
+      // aus der normalen Ansicht heruebergleiten: Position schrittweise zur Seite
+      camera.position.lerp(_cp, Math.min(1, 0.1 + seitK * 0.3));
+      if(!fahrt || fin.schritt === 'abfahrt') camera.position.y = Math.max(camera.position.y, bodenY(camera.position.x, camera.position.z) + 1.2);
+      camera.up.set(0, 1, 0);
+      camera.lookAt(p.x + fx * 2, p.y + hy + 0.6, p.z + fz * 2);
+      if(sideView !== 0){ fin.camY = camera.position.y; return; }   // beim Loslassen gleitet die normale Kamera zurueck
+    }
     const fahrt = fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf';
     const k = fin.k, p = fahrt ? state.pos : k.g.position, fx = -Math.sin(k.yaw), fz = -Math.cos(k.yaw);
     const fall = fin.schritt === 'fall', hinten = fahrt ? 6.5 : (fall ? 10 : (fin.schritt === 'gelandet' ? 8 : 16)), hoch = fahrt ? 2.4 : (fall ? 7 : 4);
