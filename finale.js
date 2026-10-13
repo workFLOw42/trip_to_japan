@@ -41,17 +41,19 @@ let pyI = 0;                                              // zuletzt gefundener 
 function pisteYschnell(x, z){
   const P = fin.piste && fin.piste.pts; if(!P || !P[0].hq) return null;
   const n = P.length - 1, d2 = i => { const p = P[i]; return (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z); };
-  const start = fin.schritt === 'abfahrt' && ab.i !== undefined ? ab.i : pyI;
+  if(fin.schritt !== 'abfahrt' || ab.i === undefined || ab.bauen) return null;     // nur in der Fahrt, nicht beim Aufbau
+  const start = ab.i;
   let i = Math.max(0, Math.min(n - 1, start)), best = d2(i);
   for(let k = Math.max(0, i - 12), e = Math.min(n, i + 12); k <= e; k++){ const d = d2(k); if(d < best){ best = d; i = k; } }
-  if(best > 30 * 30){ for(let k = 0; k <= n; k += 4){ const d = d2(k); if(d < best){ best = d; i = k; } } }   // weit weg: grob alles
+  if(best > 30 * 30 || Math.abs(i - start) > 15) return null;                     // nicht in Kenjis Naehe -> Raycast
   if(best > 60 * 60) return null;                         // weit weg von der Piste
   pyI = i;
   // Abschnitt [i0, i0+1] mit dem Lot von (x, z) dazwischen
   let i0 = i; const pi = P[i]; if(i > 0){ const q = P[i - 1], vx = pi.x - q.x, vz = pi.z - q.z; if((x - pi.x) * vx + (z - pi.z) * vz < 0) i0 = i - 1; }
   if(i0 >= n) i0 = n - 1;
   const a = P[i0], b = P[i0 + 1], lx = b.x - a.x, lz = b.z - a.z, ll = lx * lx + lz * lz || 1;
-  const f = Math.max(0, Math.min(1, ((x - a.x) * lx + (z - a.z) * lz) / ll));
+  const f0 = ((x - a.x) * lx + (z - a.z) * lz) / ll; if(f0 < -0.25 || f0 > 1.25) return null;
+  const f = Math.max(0, Math.min(1, f0));
   const mx = a.x + lx * f, mz = a.z + lz * f, nx = a.nx + (b.nx - a.nx) * f, nz = a.nz + (b.nz - a.nz) * f;
   const s = ((x - mx) * nx + (z - mz) * nz) / (PISTE_B / 2);  // quer: -1 .. 1
   if(Math.abs(s) > 1.4) return null;                      // weiter draussen (Boeschung) -> Raycast
@@ -623,6 +625,9 @@ function abWeg(){
   ab.g = null; ab.hinder = [];
 }
 function baueHindernisse(s0){
+  ab.bauen = true; try { baueHindernisse2(s0); } finally { ab.bauen = false; }
+}
+function baueHindernisse2(s0){
   abWeg();
   const g = new THREE.Group(); story.welt(6).add(g); ab.g = g;
   let sd = 4242; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
