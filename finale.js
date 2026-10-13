@@ -491,6 +491,69 @@ function aufPisteLegen(m, s, q, L){
   m.position.set(x0, y0 - 0.05, z0);
   m.quaternion.setFromAxisAngle(_Y, h + Math.PI / 2).multiply(_qb.setFromAxisAngle(_Z, -Math.atan2(y0 - y1, L)));
 }
+// Effekte auf dem Brett (Live-Wunsch): weicher Schatten unter dem Brett, zwei Kantenspuren im Schnee, Staubwolke bei der Landung,
+// Fahrtwind-Striche je nach Tempo. Alles in einer Gruppe, die beim Aufraeumen mit verschwindet.
+let fx = null;
+function fxBauen(){
+  if(fx) return fx;
+  const g = new THREE.Group(); scene.add(g);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d');
+  const gr = c.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(0, 0, 64, 64);
+  const schatten = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, fog: false }));
+  schatten.rotation.x = -Math.PI / 2; schatten.renderOrder = 2; g.add(schatten);
+  // Spuren: Ringpuffer aus Strichen (je Kante einer pro 0,6 m), verblassen ueber 6 s
+  const SP = 220, spurPos = new Float32Array(SP * 2 * 2 * 3), spurGeo = new THREE.BufferGeometry();
+  spurGeo.setAttribute('position', new THREE.BufferAttribute(spurPos, 3));
+  const spur = new THREE.LineSegments(spurGeo, new THREE.LineBasicMaterial({ color: 0xa9bfd6, transparent: true, opacity: 0.8, fog: false }));
+  spur.frustumCulled = false; g.add(spur);
+  // Staub: kleine Kugeln, die auseinanderfliegen und schrumpfen
+  const staubM = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, fog: false }), staub = [];
+  // Wind: duenne helle Striche vor/neben der Kamera, ziehen nach hinten
+  const WN = 40, windPos = new Float32Array(WN * 2 * 3), windGeo = new THREE.BufferGeometry();
+  windGeo.setAttribute('position', new THREE.BufferAttribute(windPos, 3));
+  const wind = new THREE.LineSegments(windGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, fog: false }));
+  wind.frustumCulled = false; g.add(wind);
+  const windT = []; for(let i = 0; i < WN; i++) windT.push({ x: 0, y: 0, z: 0, life: 0 });
+  fx = { g, schatten, spur, spurPos, spurN: 0, spurLetzt: null, staub, staubM, wind, windPos, windT,
+    puff(p, k){ for(let i = 0; i < 10 * k; i++){ let s = staub.find(x => !x.m.visible); if(!s){ if(staub.length > 40) return; s = { m: new THREE.Mesh(new THREE.IcosahedronGeometry(0.25, 0), staubM), v: new THREE.Vector3() }; g.add(s.m); staub.push(s); }
+      const a = Math.random() * 6.28; s.m.visible = true; s.t = 0; s.m.position.set(p.x, p.y + 0.1, p.z); s.v.set(Math.cos(a) * (2 + Math.random() * 3), 1 + Math.random() * 2, Math.sin(a) * (2 + Math.random() * 3)); } } };
+  return fx;
+}
+function fxWeg(){ if(!fx) return; scene.remove(fx.g); fx.g.traverse(o => { if(o.geometry) o.geometry.dispose(); }); fx = null; }
+function fxSchritt(dt, o, amBoden){
+  const f = fxBauen(), p = state.pos;
+  // Schatten: auf dem Schnee unter Kenji, im Sprung kleiner und heller
+  const boden = grundAb(p.x, p.z), hoehe = Math.max(0, p.y - boden), k = 1 / (1 + hoehe * 0.15);
+  f.schatten.position.set(p.x, boden + 0.04, p.z); f.schatten.scale.set(1.9 * k + 0.3, 0.9 * k + 0.2, 1);
+  f.schatten.rotation.z = -Math.atan2(-o.tx, -o.tz); f.schatten.material.opacity = Math.max(0.15, k);
+  // Spuren: am Boden alle 0,6 m ein Strich je Kante
+  if(amBoden){
+    const qx = -o.tz * 0.13, qz = o.tx * 0.13;
+    const jetzt = [p.x - qx, p.z - qz, p.x + qx, p.z + qz];
+    const l = f.spurLetzt;
+    if(!l || Math.hypot(p.x - l[4], p.z - l[5]) > 0.6){
+      if(l){ const P = f.spurPos, i = (f.spurN % 220) * 12, y = boden + 0.03;
+        P.set([l[0], l[6], l[1], jetzt[0], y, jetzt[1], l[2], l[6], l[3], jetzt[2], y, jetzt[3]], i);
+        f.spurN++; f.spur.geometry.attributes.position.needsUpdate = true; f.spur.geometry.setDrawRange(0, Math.min(f.spurN, 220) * 4); }
+      f.spurLetzt = [...jetzt, p.x, p.z, boden + 0.03];
+    }
+  } else f.spurLetzt = null;
+  // Staub
+  for(const s of f.staub) if(s.m.visible){ s.t += dt; s.v.y -= 6 * dt; s.m.position.addScaledVector(s.v, dt); s.m.scale.setScalar(Math.max(0.05, 1 - s.t * 1.6)); if(s.t > 0.6) s.m.visible = false; }
+  // Wind: ab ~20 km/h, mit dem Tempo dichter und deutlicher; Striche ziehen an der Kamera vorbei nach hinten
+  const v = Math.hypot(state.vel.x, state.vel.z) + Math.abs(state.vel.y) * 0.5, st = Math.max(0, Math.min(1, (v - 5) / 15));
+  f.wind.material.opacity = 0.55 * st;
+  const fwx = -Math.sin(fin.k.yaw), fwz = -Math.cos(fin.k.yaw), c = camera.position;
+  f.windT.forEach((w, i) => {
+    w.life -= dt;
+    if(w.life <= 0){ w.life = 0.25 + Math.random() * 0.3; const vor = 8 + Math.random() * 14, seite = (Math.random() < 0.5 ? -1 : 1) * (3 + Math.random() * 4), sy = (Math.random() - 0.5) * 4;
+      w.x = c.x + fwx * vor - fwz * seite; w.y = c.y + sy; w.z = c.z + fwz * vor + fwx * seite; }
+    w.x -= fwx * v * 2.2 * dt; w.z -= fwz * v * 2.2 * dt;                          // auf die Kamera zu
+    const len = 0.8 + v * 0.06;
+    f.windPos.set([w.x, w.y, w.z, w.x + fwx * len, w.y, w.z + fwz * len], i * 6);
+  });
+  f.wind.geometry.attributes.position.needsUpdate = true;
+}
 // Schneespray hinter dem Brett: kleine weisse Flocken, die zur Seite und nach hinten wegfliegen (Tempo-Gefuehl)
 const spray = { teile: [], mat: null, t: 0 };
 function schneeSpray(dt, o){
@@ -619,8 +682,10 @@ function landen(){
   const sr = ab.spin - Math.round(ab.spin / Math.PI) * Math.PI, fr = ab.flip - Math.round(ab.flip / (2 * Math.PI)) * 2 * Math.PI;
   ab.luft = false; ab.vy = 0;
   if(Math.abs(sr) > 0.87 || Math.abs(fr) > 1.05){ anstossen('Uff – unsauber gelandet!'); return false; }   // Toleranz +-50° / +-60°
-  const name = trickName(); ab.spin = Math.round(ab.spin / Math.PI) * Math.PI; ab.flip = 0;
+  const name = ab.kante && Math.abs(ab.spin - ab.spin0) < 1 && Math.abs(ab.flip) < 1 ? '' : trickName(); ab.kante = false;
+  ab.spin = Math.round(ab.spin / Math.PI) * Math.PI; ab.flip = 0;
   if(name) trick(name);
+  if(fx) fx.puff(state.pos, 1);                              // Schneestaub bei der Landung
   return true;
 }
 // Grind beendet: einmal pro Rail zaehlen (ab 3 m Grind), auch wenn man auf derselben Rail wieder landet
@@ -634,10 +699,10 @@ function springen(){
   if(ab.grind){ grindEnde(); ab.luft = true; ab.vy = 5.5 + ab.v * 0.12; ab.hh = RAIL_H; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0; return; }   // von der Rail: genauso hoch wie am Boden, ab Railhoehe
   if(ab.luft || ab.stolper > 0) return;
   if(ab.rampe){ ab.extra = true; return; }   // auf dem Kicker: an der Kante extra hoch und weit
-  ab.luft = true; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0; ab.hh = 0; ab.vy = 5.5 + ab.v * 0.12;   // bei 50 km/h ~1,9 m hoch, ~1 s
+  ab.kante = false; ab.luft = true; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0; ab.hh = 0; ab.vy = 5.5 + ab.v * 0.12;   // bei 50 km/h ~1,9 m hoch, ~1 s
 }
 function abheben(h){
-  ab.luft = true; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0;
+  ab.kante = false; ab.luft = true; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0;
   if(h.typ === 'mega'){ megaStart(); return; }
   const o = ort(ab.s, ab.q), extra = ab.extra; ab.extra = false; ab.rampe = null;
   ab.hh = ab.y - grundAb(o.x, o.z);                                                    // Hoehe ueber der Piste (Kante = Kickerhoehe)
@@ -709,8 +774,8 @@ function abfahrtSchritt(dt){
     if(ab.luft && ab.hh <= kick){ ab.y = grund + kick; ab.hh = 0; ab.rampe = null; landen(); }
   } else {
     if(ab.rampe && ab.rampe !== auf && ab.s > ab.rampe.s - 0.5) abheben(ab.rampe);
-    else if(ab.y - grund > 0.5){ ab.luft = true; ab.vy = 0; ab.hh = ab.y - grund; ab.luftT = 0; }     // von der Rail/Rampenkante gefallen
-    else ab.y = grund;
+    else if(ab.y - grund > 1.2 && !ab.rampe){ ab.luft = true; ab.vy = 0; ab.hh = ab.y - grund; ab.luftT = 0; ab.spin0 = ab.spin; ab.flip = 0; ab.kante = true; }   // ueber eine Kante
+    else ab.y = Math.max(grund, ab.y - 9.81 * 0.5 * dt * Math.max(1, ab.v));       // an Kuppen am Boden bleiben (sanft folgen)
     if(!ab.luft) ab.rampe = auf;
     if(!auf && !ab.luft) ab.extra = false;
     if(!ab.luft){ ab.grindS0 = undefined; ab.letzteRail = null; }
@@ -724,11 +789,13 @@ function abfahrtSchritt(dt){
   }
   const a = P[ab.i], b2 = P[ab.i + 1], neig = Math.atan2(a.y - b2.y, (b2.S - a.S) || 1);
   pose(o.x, ab.y, o.z, o.tx, o.tz, ab.grind ? -Math.PI / 2 : 0, ab.grind ? 0 : neig, !ab.luft && !ab.grind && !ab.rampe);
-  state.vel.set(o.tx * ab.v, 0, o.tz * ab.v);
+  state.vel.set(o.tx * ab.v, ab.luft ? ab.vy : 0, o.tz * ab.v);
   schneeSpray(dt, o);
+  fxSchritt(dt, o, !ab.luft && !ab.grind && !ab.rampe);
 }
 // Mega-Rampe: weit hinaus aufs Meer (bei 50 km/h ~34 m/s weg und 18 m/s hoch), Tricks gehen weiter
 function megaStart(){
+  if(fx){ fx.schatten.visible = false; fx.spur.visible = false; fx.wind.material.opacity = 0; }
   const o = ort(ab.s, ab.q);
   const m = ab.mega = { x: o.x, z: o.z, tx: o.tx, tz: o.tz, vh: 30 + ab.v, y: ab.y, y0: ab.y, ueberMeer: false };
   ab.vy = 16 + ab.v * 0.5; fin.schritt = 'mega'; ab.spin0 = ab.spin; ab.flip = 0; m.phase = 'brett'; m.t = 0;
@@ -856,7 +923,7 @@ function aufraeumen(){
   if(fin.k){ scene.remove(fin.k.g); fin.k = null; }
   if(fin.flieger){ scene.remove(fin.flieger.g); fin.flieger = null; }
   for(const r of fin.ringe) r.mesh.visible = false;
-  vulkanAus(); abWeg(); figurZurueck(); if(ab.mega && ab.mega.brett){ scene.remove(ab.mega.brett.b); ab.mega.brett = null; } if(story.hudSichtbar) story.hudSichtbar(true); if(camera.fov !== 60){ camera.fov = 60; camera.updateProjectionMatrix(); }
+  vulkanAus(); abWeg(); fxWeg(); figurZurueck(); if(ab.mega && ab.mega.brett){ scene.remove(ab.mega.brett.b); ab.mega.brett = null; } if(story.hudSichtbar) story.hudSichtbar(true); if(camera.fov !== 60){ camera.fov = 60; camera.updateProjectionMatrix(); }
   if(fin.hudEl) fin.hudEl.style.display = 'none';
   state.crashed = false; state.crashTimer = 0; state.falling = false; state.ejected = false; state.stalling = false;
   if(typeof clearRescue === 'function') clearRescue();
