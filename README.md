@@ -159,6 +159,9 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `etappe5b.js` | Etappe 5: U-Boot an der Küste, Code-Feld, Felsenschlucht mit Sonar-Karte |
 | `etappe6.js` | Etappe 6: Tokio mit Bahnhof (Ringgleis) und Alpha Jet, Startsequenz, Hinflug, Fuji (2 km) im Meer; Fukuoka-Beach (Festland: Strand, Torii, Meoto-Iwa, Surfbrett, Palmen, Lagerfeuer, Vorfeld, Bahn, Bahnhof, Stadt), Ende mit Globus |
 | `etappe6c.js` | Etappe 6c: Shinkansen – Weichen wählen (eigene Strecke, 2 → 3 Gleise, HUD, Notbremsung, Einfahrt) |
+| `finale.js` | Finale: Fuji-Sprung, Snowboard-Abfahrt, Surfen (Brandungswellen, Monsterwellen, Meoto-Iwa), Rundflug |
+| `abspann.js` | Ende der Reise: Reiselog, Abspann, „Ab zum Strand“, Stufe 5 am Strand |
+| `statistik.js` | Statistiken: alle Spiele (Startmenü „Statistiken“) und dieses Spiel (Abspann) – Reisezeiten, Mond/Mars, Bestzeiten, Monsterwellen, Tricks; nur echte Spiele, nur Gespieltes |
 | `etappe6b.js` | Etappe 6b: Höhle im Vulkan als eigene Szene (Autopilot, kurvige Röhre in Abschnitten, Ausgang ins Licht), Filmsequenz mit Ausbruch, Landung am Strand. Der frühere Senkrechtschacht liegt in `_intern/archiv/e6b_senkrechtschacht/` |
 | `flucht_glb.js` | Schnellboot und Polizeiboot (verkleinert) als Base64 |
 | `hafen_glb.js` | Frachtschiff (verkleinert), Container und Kran als Base64 |
@@ -171,6 +174,8 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `godzilla_glb.js` | Godzilla (Etappe 6): Mini-Godzillas (1 m) in der Stadt und am Strand-Flughafen, Riesen-Godzilla (60 m) hinter der Stadt; verkleinert und aufgehellt |
 | `samurai_glb.js` | Samurai am Fukuoka-Beach (Etappe 6), sitzend und stehend |
 | `surfboard_glb.js` | Surfbrett (Etappe 6: steckt am Fukuoka-Beach im Sand) |
+| `wolf_glb.js` | Wolf (Finale: Rudel im Wald neben der Snowboardpiste, unterhalb der Baumgrenze) |
+| `finale_snd.js` | Finale-Töne: Carving (Snowboard), Grind (Rail), Wind (Fallschirm, leise auf der Piste) |
 | `campfire_glb.js` | Lagerfeuer, animiert (Etappe 6, Fukuoka-Beach) |
 | `moewe_glb.js` | Möwen sitzend und fliegend (Etappe 1, 4, 5) |
 | `panda_glb.js` | Panda (Etappe 5) |
@@ -183,7 +188,7 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `sw.js`, `manifest.json` | Offline-Cache und App-Installation (PWA) |
 | `ENGINE_RISIKEN.md` | bekannte Stolperstellen der Engine-Übernahme |
 
-Ladeordnung: `kenji_glb.js` → `story.js` → `etappe1.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `schildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `surfboard_glb.js` → `campfire_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `etappe6c.js` → `engine/engine.js`. Die Engine ruft am Ende
+Ladeordnung: `kenji_glb.js` → `story.js` → `etappe1.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `schildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `surfboard_glb.js` → `campfire_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `etappe6c.js` → `snowboard_glb.js` → `wolf_glb.js` → `finale_snd.js` → `finale.js` → `abspann.js` → `statistik.js` → `engine/engine.js`. Die Engine ruft am Ende
 ihres Boot-Blocks `STORY_HOOK` (Wrapper setzen) und `STORY_START` (Startszene) auf – die zwei Zeilen fügt das Build-Skript ein.
 
 **Welten:** Jede Etappe baut ihre Kulisse in eine eigene Gruppe – `story.welt(n).add(obj)`, nie `scene.add(obj)`.
@@ -226,6 +231,7 @@ Dieses Spiel wäre ohne die großartige Arbeit vieler Künstlerinnen und Künstl
 | Modell / Sound | Künstler/in | Lizenz |
 |---|---|---|
 | [Prancha de Surf / Surfboard](https://sketchfab.com/3d-models/prancha-de-surf-surfboard-bafbc865dc8642b1bacc484dd9a5f1fc) | **Leandro Cruz** (Sketchfab) | [CC BY-SA 4.0](http://creativecommons.org/licenses/by-sa/4.0/) – ausgerichtet und skaliert |
+| [Wolf](https://sketchfab.com/3d-models/wolf-e319f122c2474d3186b841b019fb0edd) | **OLEKSO** (Sketchfab) | [CC BY-NC 4.0](http://creativecommons.org/licenses/by-nc/4.0/) – unverändert (nicht kommerziell) |
 | [Intermediate Advanced Snowboard](https://sketchfab.com/3d-models/intermediate-advanced-snowboard-267e04a025434d7d8587ec2ee60ad62e) | **Final Render Animation Studio** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – skaliert, Material auf PBR umgestellt |
 | Arabic Islamic Music (46 s) | **bombinsound** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
 | Desert Wind 2 | **tanweraman** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
@@ -233,6 +239,9 @@ Dieses Spiel wäre ohne die großartige Arbeit vieler Künstlerinnen und Künstl
 | Chinese Flute Relaxing Music (short, Etappe 5) | **nourishedbymusic** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
 | Summer Vacation (Etappe 1) | **kulakovka** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
 | Ancient Japan (Etappe 6) | **alec_koff** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
+| Intense Skiing Carving (Finale, Snowboard) | **u_sda88n6jzm** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
+| Can Sliding Across Wooden Desk (Finale, Rail-Grind) | **freesound_community** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
+| Soft Wind (Finale, Fallschirm/Snowboard) | **storegraphic** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
 | [Building crane low poly](https://sketchfab.com/3d-models/building-crane-low-poly-52d3ffdc37f844a892bebbd7e76f1939) | **Mostafa Hamed** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – Haken und Laufkatze ersetzt |
 | [Cargo Ship 06 without containers](https://sketchfab.com/3d-models/cargo-ship-06-without-containers-c73ae6cc314941069a0e3a7ca6acc26d) | **gogiart** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – verkleinert (Dreiecke, Texturen) |
 | [Container](https://sketchfab.com/3d-models/container-92bd84031ebc4ddcbf3b3d3689c4bf31) | **H.A.K_Niazi** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – skaliert, eingefärbt |

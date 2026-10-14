@@ -47,9 +47,12 @@ const STRANDPLATZ = { x: FEST.x + 14, z: FLUGFELD.z + 250, yaw: Math.PI / 2 };  
 const TORII = { x: FEST.x - 12, z: STRANDPLATZ.z + 4 };       // direkt vor Kenji im flachen Wasser (Live-Wunsch: nicht weit laufen)
 const SURF = { x: FEST.x + 6, z: STRANDPLATZ.z - 11 };         // Surfbrett rechts neben dem Torii im Sand (Blick -x: rechts = -z)
 const MEOTO = { x: FEST.x - 230, z: STRANDPLATZ.z - 120 };    // rechts dahinter (Blick -x: rechts = -z)
+// Felsen (Versatz quer dz, Hoehe h, Breite b) und Seil: beim Surfen feste Hindernisse (finale.js). Zwischen den Sockeln bleiben
+// ~18 m frei; das Seil haengt in der Mitte so tief (durch = m unter der Verbindungslinie), dass man es ueberspringen kann
+const MEOTO_FELS = [{ dz: -26, h: 16, b: 13 }, { dz: 24, h: 22, b: 16 }], MEOTO_SEIL = { durch: 8.5, kurve: null, g: null };
 const FEUER = { x: FEST.x + 30, z: STRANDPLATZ.z + 90 };       // Lagerfeuer auf einem freien Strandabschnitt links von Kenji
 const SAMURAI_GRUPPE = { x: FEST.x + 28, z: STRANDPLATZ.z - 92 };   // stehende Samurai, freie Flaeche rechts von Kenji
-story.e6 = { get VORFELD(){ return VORFELD; }, SURF, ALPHA, BAHNHOF, RING6, START6, FUJI, ZIEL6, FEST, FLUGFELD, BAHNHOF2, STRANDPLATZ, FEUER, SAMURAI_GRUPPE, get STADT(){ return STADT; } };
+story.e6 = { get VORFELD(){ return VORFELD; }, MEOTO, MEOTO_FELS, MEOTO_SEIL, SURF, ALPHA, BAHNHOF, RING6, START6, FUJI, ZIEL6, FEST, FLUGFELD, BAHNHOF2, STRANDPLATZ, FEUER, SAMURAI_GRUPPE, get STADT(){ return STADT; } };
 
 // Fuji-Hoehe an (x, z): Kegel nach dem vereinfachten Modell (fuji_glb.js, Hoehe 1 bei Radius 0, 0 bei Radius 1). Fuer
 // Kollision (Berg rammen) und damit die Hoehle (etappe6b.js) weiss, wo der Fels ist.
@@ -296,22 +299,24 @@ function baueMeotoIwa(g){
     for(let i = 0; i < p.count; i++){ const k = p.getX(i).toFixed(2) + p.getY(i).toFixed(2) + p.getZ(i).toFixed(2); if(!m.has(k)) m.set(k, 0.8 + rnd() * 0.4); const f = m.get(k); p.setXYZ(i, p.getX(i) * f, p.getY(i) * f, p.getZ(i) * f); }
     geo.computeVertexNormals(); return geo; };
   const M = new THREE.Group();
-  // [Versatz quer, Hoehe, Breite]: links kleiner (Frau), rechts groesser (Mann), wie auf dem Foto
-  const steine = [[-22, 16, 13], [20, 22, 16]], spitzen = [];   // links (naeher am Torii) kleiner, rechts groesser
+  // [Versatz quer, Hoehe, Breite]: links kleiner (Frau), rechts groesser (Mann), wie auf dem Foto. Live-Wunsch 14.10.2026:
+  // beim Surfen fest (MEOTO_FELS, finale.js) und man soll zwischen ihnen durch – Sockel schmaler, Felsen etwas auseinander
+  const steine = MEOTO_FELS.map(s => [s.dz, s.h, s.b]), spitzen = [];   // links (naeher am Torii) kleiner, rechts groesser
   steine.forEach(([dz, h, b], i) => {
     const f = new THREE.Mesh(brocken(1, 1), fels[i]); f.scale.set(b * 0.8, h, b); f.position.set(0, h * 0.35 - 2, dz); f.rotation.y = rnd() * 3; M.add(f);
-    const fuss = new THREE.Mesh(brocken(1, 0), fels[2]); fuss.scale.set(b * 1.3, 2.5, b * 1.5); fuss.position.set(0, -1, dz); M.add(fuss);   // flacher Sockel im Wasser
+    const fuss = new THREE.Mesh(brocken(1, 0), fels[2]); fuss.scale.set(b * 1.3, 2.5, b * 1.15); fuss.position.set(0, -1, dz); M.add(fuss);   // flacher Sockel im Wasser
     spitzen.push(new THREE.Vector3(0, h * 0.35 - 2 + h * 0.62, dz));
   });
   // Shimenawa: Bogen zwischen den Felsen (etwas unter den Spitzen), Strohfarbe
   const a = spitzen[0].clone().add(new THREE.Vector3(0, -1.2, 4)), b = spitzen[1].clone().add(new THREE.Vector3(0, -2.5, -4));
-  const mitte = a.clone().lerp(b, 0.5).add(new THREE.Vector3(0, -2.2, 0));
+  const mitte = a.clone().lerp(b, 0.5).add(new THREE.Vector3(0, -MEOTO_SEIL.durch * 2, 0));   // quadratisch: Mitte = halber Kontrollpunkt
   const kurve = new THREE.QuadraticBezierCurve3(a, mitte, b);
   M.add(new THREE.Mesh(new THREE.TubeGeometry(kurve, 24, 0.32, 8, false), new THREE.MeshLambertMaterial({ color: 0xd9c38a })));
   // Shide: weisse Papierstreifen am Seil
   const shideM = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }), shideG = new THREE.PlaneGeometry(0.35, 1.3);
   for(let i = 1; i < 6; i++){ const p = kurve.getPoint(i / 6), sh = new THREE.Mesh(shideG, shideM); sh.position.copy(p).add(new THREE.Vector3(0, -0.75, 0)); sh.rotation.y = Math.PI / 2; M.add(sh); }
   M.position.set(MEOTO.x, 0, MEOTO.z);
+  MEOTO_SEIL.kurve = kurve; MEOTO_SEIL.g = M;
   g.add(M);
 }
 // Surfbrett steckt schraeg im Sand (Nase nach oben, leicht zum Meer geneigt), drumherum der Einstiegsring, darueber der

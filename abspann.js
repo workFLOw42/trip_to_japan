@@ -50,14 +50,14 @@ function abspannText(){
     + '<div style="font-size:24px;font-weight:700;margin-bottom:10px">Die Reise</div><div style="min-width:440px;text-align:left">';
   for(const e of L) h += zeile('Etappe ' + e.etappe + ' · ' + e.ort, (e.tage === 1 ? '1 Tag' : e.tage + ' Tage') + (e.wie ? ' <span style="font-weight:400;opacity:.75">(' + e.wie + ')</span>' : ''));
   h += zeile('Zusammen', tage + ' von 42 Tagen', true) + zeile('Finale', 'Stufe ' + stufe + ' – ' + stufenName, true) + '</div>';
-  // Tricks je Name
-  const T = (story.finaleAb && story.finaleAb.tricks) || [], n = {};
-  for(const x of T) n[x] = (n[x] || 0) + 1;
-  const liste = Object.entries(n).sort((a, b) => b[1] - a[1]);
-  if(liste.length){
-    h += '<div style="font-size:24px;font-weight:700;margin:50px 0 10px">Tricks</div><div style="min-width:320px;text-align:left">';
-    for(const [k, v] of liste) h += zeile(k, v + '×');
-    h += zeile('Zusammen', T.length + ' Tricks', true) + '</div>';
+  // Live-Wunsch 14.10.2026: alle Statistiken dieses Spiels (nur was gemacht wurde), Ueberschriften in Gold (statistik.js).
+  // Die Reisezeit steht schon oben ("Zusammen"), die Trick-Zahl unten.
+  const T = (story.finaleAb && story.finaleAb.tricks) || [];
+  const st = story.statistikHtml ? story.statistikHtml('spiel', zeile, true) : '';   // ohne "Die Reise" (steht oben)
+  if(st){
+    h += '<div style="font-size:24px;font-weight:700;margin:50px 0 4px">Statistik</div><div style="min-width:360px;text-align:left">' + st;
+    const nT = T.filter(t => t && t.s !== 'welle').length; if(nT) h += zeile('Zusammen', nT + (nT === 1 ? ' Trick' : ' Tricks'), true);
+    h += '</div>';
   }
   h += '<div style="font-size:40px;font-weight:800;margin-top:90px;color:#ffd23f">Für Samu!</div>'
     + '<div style="font-size:30px;font-weight:700;margin-top:6px">Hab dich lieb!</div>'
@@ -66,6 +66,7 @@ function abspannText(){
 }
 story.abspann = function(){
   if(ab) return;
+  if(story.spielZiehen) story.spielZiehen();                // statistik.js: Reisezeit, Anzahl Spiele (einmal je Spiel)
   if(story.finaleStufe && story.finaleStufe() === 1) proMerken();
   const el = document.createElement('div');
   el.style.cssText = 'position:absolute;inset:0;z-index:28;pointer-events:none;overflow:hidden;color:#fff;font-family:system-ui,sans-serif;'

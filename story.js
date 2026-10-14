@@ -629,24 +629,52 @@ function hookTon(){
 }
 
 // ---- Startbildschirm -------------------------------------------------------------------------
-// Startbildschirm: Auswahl "Neues Spiel" oder (zum Testen) direkt Etappe 2..6.
-// Linker Stick / Pfeile links-rechts waehlen, A / Enter / Leertaste / Klick startet.
+// Startbildschirm: "Neues Spiel", "Ab zum Strand", "Statistiken", versteckt "Testzugang" (direkt Etappe 2..6, Finale 1-3).
 function startbildschirm(weiter){
+  // Live-Wunsch 14.10.2026: senkrecht "Neues Spiel", "Ab zum Strand" (nach einem Pro-Run, bleibt), "Statistiken" (alle Spiele,
+  // nur was es schon gibt). Die Testzugaenge liegen unter "Testzugang" – sichtbar erst, wenn man im Menue 3 s X haelt.
+  // Hoch/runter (Stick, D-Pad, Pfeile) waehlen, A / Enter startet, B / Esc zurueck. In der Test-Leiste: links/rechts.
   const el = document.createElement('div');
   el.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;'
     + 'justify-content:center;background:rgba(0,0,0,.55);color:#fff;font-family:system-ui,sans-serif;'
     + 'z-index:30;text-align:center;user-select:none;';
-  const OPT = [{ n: 1, t: 'Neues Spiel' }, ...(story.proGeschafft && story.proGeschafft() ? [{ n: 6, t: 'Ab zum Strand', strand: true }] : []), { n: 2, t: 'E2' }, { n: 3, t: 'E3' }, { n: 4, t: 'E4' }, { n: 5, t: 'E5' }, { n: 6, t: 'E6' }, { n: 6, t: 'E6 Höhle', hoehle: true }, { n: 6, t: 'E6 Zug', zug: true }, { n: 6, t: 'E6 Vulkan', vulkan: true }, { n: 6, t: 'Finale 1', finale: 1 }, { n: 6, t: 'Finale 2', finale: 2 }];
-  el.innerHTML = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>'
-    + '<div style="display:flex;gap:10px;justify-content:center;margin-top:34px">'
-    + OPT.map((o, i) => '<button data-i="' + i + '" style="min-width:' + (i ? 54 : 170) + 'px;height:44px;border-radius:10px;'
-      + 'border:2px solid rgba(255,255,255,.45);background:rgba(255,255,255,.1);color:#fff;font:600 18px system-ui;'
-      + 'cursor:pointer;transition:all .12s">' + o.t + '</button>').join('') + '</div>'
-    + '<div style="font-size:14px;margin-top:16px;opacity:.7">Linker Stick / ← → wählen · A / Enter starten'
-    + '<br><span style="font-size:12px;opacity:.8">E2–E6: Test – direkt zur Etappe · E6 Höhle: direkt in den Autopiloten · E6 Zug: direkt in den Shinkansen · E6 Vulkan: Szene am Höhlenausgang, dann landen · Finale 1: gleich über der Piste (Pilot kreist, B = Sprung) · Finale 2: Rundflug an der C-400</span></div>';
+  const TEST = [{ n: 2, t: 'E2' }, { n: 3, t: 'E3' }, { n: 4, t: 'E4' }, { n: 5, t: 'E5' }, { n: 6, t: 'E6' }, { n: 6, t: 'E6 Höhle', hoehle: true },
+    { n: 6, t: 'E6 Zug', zug: true }, { n: 6, t: 'E6 Vulkan', vulkan: true }, { n: 6, t: 'Finale 1', finale: 1 }, { n: 6, t: 'Finale 2', finale: 2 }, { n: 6, t: 'Finale 3', finale: 3 }];
+  const statDa = () => !!(story.statistikBloecke && story.statistikBloecke('gesamt').length);
+  let testFrei = false, seite = 'haupt', wahl = 0, knoepfe = [];
+  const HAUPT = () => [{ n: 1, t: 'Neues Spiel', echt: true }, ...(story.proGeschafft && story.proGeschafft() ? [{ n: 6, t: 'Ab zum Strand', strand: true, echt: true }] : []),
+    ...(statDa() ? [{ t: 'Statistiken', stat: true }] : []), ...(testFrei ? [{ t: 'Testzugang', test: true }] : [])];
+  let OPT = HAUPT();
+  const knopf = (o, i, breit) => '<button data-i="' + i + '" style="min-width:' + breit + 'px;height:44px;border-radius:10px;'
+    + 'border:2px solid rgba(255,255,255,.45);background:rgba(255,255,255,.1);color:#fff;font:600 18px system-ui;'
+    + 'cursor:pointer;transition:all .12s">' + o.t + '</button>';
+  const titel = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>';
+  function zeichnen(){
+    if(seite === 'haupt'){ OPT = HAUPT();
+      el.innerHTML = titel + '<div style="display:flex;flex-direction:column;gap:12px;align-items:center;margin-top:34px">'
+        + OPT.map((o, i) => knopf(o, i, 230)).join('') + '</div>'
+        + '<div style="font-size:14px;margin-top:18px;opacity:.7">Linker Stick / ↑ ↓ wählen · A / Enter starten</div>';
+    } else if(seite === 'test'){ OPT = TEST;
+      el.innerHTML = titel + '<div style="font-size:20px;margin-top:22px;opacity:.85">Testzugang</div>'
+        + '<div style="display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap;max-width:94vw">' + OPT.map((o, i) => knopf(o, i, 54)).join('') + '</div>'
+        + '<div style="font-size:14px;margin-top:16px;opacity:.7">← → wählen · A / Enter starten · B / Esc zurück'
+        + '<br><span style="font-size:12px;opacity:.8">E2–E6: direkt zur Etappe · E6 Höhle: direkt in den Autopiloten · E6 Zug: direkt in den Shinkansen · E6 Vulkan: Szene am Höhlenausgang, dann landen · Finale 1: gleich über der Piste (Pilot kreist, B = Sprung) · Finale 2: Rundflug an der C-400 · Finale 3: freier Fall hinter der Piste, dann Riesenwellen · Testzugänge zählen nicht in die Statistik</span></div>';
+    } else {                                               // Statistiken
+      OPT = [];
+      const zeile = (k, v) => '<div style="display:flex;justify-content:space-between;gap:28px"><span style="opacity:.8">' + k + '</span><b>' + v + '</b></div>';
+      el.innerHTML = titel + '<div style="font-size:24px;font-weight:700;margin-top:18px">Statistiken</div>'
+        + '<div id="statliste" style="min-width:min(460px,90vw);max-height:62vh;overflow:auto;text-align:left;margin-top:6px;padding:0 10px">'
+        + (story.statistikHtml ? story.statistikHtml('gesamt', zeile) : '') + '</div>'
+        + '<div style="font-size:14px;margin-top:14px;opacity:.7">↑ ↓ blättern · B / Esc zurück</div>';
+    }
+    knoepfe = [...el.querySelectorAll('button')];
+    knoepfe.forEach((b, i) => {
+      b.addEventListener('pointerenter', () => { wahl = i; zeige(); });
+      b.addEventListener('pointerdown', (e) => { e.stopPropagation(); wahl = i; zeige(); waehlen(); });
+    });
+    wahl = Math.min(wahl, Math.max(0, OPT.length - 1)); zeige();
+  }
   document.body.appendChild(el);
-  const knoepfe = [...el.querySelectorAll('button')];
-  let wahl = 0;
   function zeige(){
     knoepfe.forEach((b, i) => {
       const an = i === wahl;
@@ -656,52 +684,75 @@ function startbildschirm(weiter){
       b.style.transform = an ? 'scale(1.08)' : 'none';
     });
   }
-  zeige();
+  zeichnen();
   let los = false;
-  function start(){
+  function zurueck(){ if(seite !== 'haupt'){ seite = 'haupt'; wahl = 0; zeichnen(); } }
+  function waehlen(){
+    const o = OPT[wahl]; if(!o) return;
+    if(o.stat){ seite = 'stat'; wahl = 0; zeichnen(); return; }
+    if(o.test){ seite = 'test'; wahl = 0; zeichnen(); return; }
+    start(o);
+  }
+  function start(o){
     if(los) return; los = true;
     el.remove();
-    window.removeEventListener('keydown', taste, true);
+    window.removeEventListener('keydown', taste, true); window.removeEventListener('keyup', tasteHoch, true);
     story.ton = true;
     story.gestartet = true;
+    story.echtesSpiel = !!o.echt;                  // statistik.js: nur echte Spiele zaehlen
     if(!soundOn) toggleSound();      // die Geste erlaubt jetzt Audio: Ton an (D-Pad runter / N schaltet um)
-    const n = OPT[wahl].n;
-    if(OPT[wahl].hoehle){ story.hoehleDirekt = true; springeZu(n); return; }
-    if(OPT[wahl].strand){ story.freiesSpiel = true; finaleDirekt(1); return; }   // nach dem Pro-Run: am Strand, alles frei
-    if(OPT[wahl].finale){ finaleDirekt(OPT[wahl].finale); return; }   // Test: Finale (finale.js) – nur Globus Tokio -> Fukuoka
-    if(OPT[wahl].zug){ story.zugDirekt = true; springeZu(n); return; }         // Test: direkt in den Shinkansen (etappe6c.js)
-    if(OPT[wahl].vulkan){ story.vulkanDirekt = true; springeZu(n, 5); return; } // Test: Szene am Hoehlenausgang, bisher 5 Tage   // Test: direkt in die Hoehle (etappe6.js)
+    const n = o.n;
+    if(o.hoehle){ story.hoehleDirekt = true; springeZu(n); return; }
+    if(o.strand){ story.freiesSpiel = true; finaleDirekt(1); return; }   // nach dem Pro-Run: am Strand, alles frei
+    if(o.finale){ finaleDirekt(o.finale); return; }   // Test: Finale (finale.js) – nur Globus Tokio -> Fukuoka
+    if(o.zug){ story.zugDirekt = true; springeZu(n); return; }         // Test: direkt in den Shinkansen (etappe6c.js)
+    if(o.vulkan){ story.vulkanDirekt = true; springeZu(n, 5); return; } // Test: Szene am Hoehlenausgang, bisher 5 Tage
     if(n > 1){ springeZu(n); return; }
     weiter();
   }
-  function schritt(d){ wahl = (wahl + d + OPT.length) % OPT.length; zeige(); }
+  function schritt(d){ if(!OPT.length) return; wahl = (wahl + d + OPT.length) % OPT.length; zeige(); }
+  function blaettern(d){ const l = el.querySelector('#statliste'); if(l) l.scrollTop += d * 60; }
+  // X 3 s halten: Testzugang einblenden (Tastatur und Controller)
+  let xSeit = 0;
+  function xPruefen(gedrueckt){
+    if(!gedrueckt){ xSeit = 0; return; }
+    if(!xSeit) xSeit = performance.now();
+    if(!testFrei && performance.now() - xSeit > 3000){ testFrei = true; if(seite === 'haupt') zeichnen(); }
+  }
+  let xTaste = false;
   function taste(e){
     if(los) return;
-    if(e.code === 'ArrowRight' || e.code === 'KeyD'){ e.preventDefault(); e.stopPropagation(); schritt(1); return; }
-    if(e.code === 'ArrowLeft'  || e.code === 'KeyA'){ e.preventDefault(); e.stopPropagation(); schritt(-1); return; }
-    if(e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter'){ e.preventDefault(); e.stopPropagation(); start(); }
+    const quer = seite === 'test';
+    if(e.code === 'KeyX'){ e.preventDefault(); e.stopPropagation(); xTaste = true; return; }
+    if(e.code === 'Escape' || e.code === 'Backspace' || e.code === 'KeyB'){ e.preventDefault(); e.stopPropagation(); zurueck(); return; }
+    const vor = quer ? (e.code === 'ArrowRight' || e.code === 'KeyD') : (e.code === 'ArrowDown' || e.code === 'KeyS');
+    const rueck = quer ? (e.code === 'ArrowLeft' || e.code === 'KeyA') : (e.code === 'ArrowUp' || e.code === 'KeyW');
+    if(vor || rueck){ e.preventDefault(); e.stopPropagation(); if(seite === 'stat') blaettern(vor ? 1 : -1); else schritt(vor ? 1 : -1); return; }
+    if(e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter'){ e.preventDefault(); e.stopPropagation(); waehlen(); }
   }
-  window.addEventListener('keydown', taste, true);
-  knoepfe.forEach((b, i) => {
-    b.addEventListener('pointerenter', () => { wahl = i; zeige(); });
-    b.addEventListener('pointerdown', (e) => { e.stopPropagation(); wahl = i; zeige(); start(); });
-  });
-  // Gamepad: Stick/D-Pad links-rechts waehlen, A startet (Flanken, damit nichts durchrutscht)
-  let prevA = true, prevL = true, prevR = true;       // erst nach dem Loslassen zaehlen
+  function tasteHoch(e){ if(e.code === 'KeyX') xTaste = false; }
+  window.addEventListener('keydown', taste, true); window.addEventListener('keyup', tasteHoch, true);
+  // Gamepad: Stick/D-Pad waehlen, A startet, B zurueck, X 3 s halten = Testzugang (Flanken, damit nichts durchrutscht)
+  let prevA = true, prevB = true, prevV = true, prevR = true;       // erst nach dem Loslassen zaehlen
   (function pad(){
     if(los) return;
+    let xPad = false;
     for(const gp of (navigator.getGamepads ? navigator.getGamepads() : [])){
       if(!gp) continue;
-      const x = gp.axes[0] || 0;
-      const a = !!(gp.buttons[0] && gp.buttons[0].pressed);
-      const l = x < -0.5 || !!(gp.buttons[14] && gp.buttons[14].pressed);
-      const r = x >  0.5 || !!(gp.buttons[15] && gp.buttons[15].pressed);
-      if(l && !prevL) schritt(-1);
-      if(r && !prevR) schritt(1);
-      if(a && !prevA){ start(); return; }
-      prevA = a; prevL = l; prevR = r;
+      const quer = seite === 'test', ax = quer ? (gp.axes[0] || 0) : (gp.axes[1] || 0);
+      const vorK = quer ? 15 : 13, rueckK = quer ? 14 : 12;
+      const a = !!(gp.buttons[0] && gp.buttons[0].pressed), bb = !!(gp.buttons[1] && gp.buttons[1].pressed);
+      xPad = !!(gp.buttons[2] && gp.buttons[2].pressed);
+      const v = ax > 0.5 || !!(gp.buttons[vorK] && gp.buttons[vorK].pressed);
+      const r = ax < -0.5 || !!(gp.buttons[rueckK] && gp.buttons[rueckK].pressed);
+      if(seite === 'stat'){ if(v) blaettern(0.15); if(r) blaettern(-0.15); }
+      else { if(v && !prevV) schritt(1); if(r && !prevR) schritt(-1); }
+      if(bb && !prevB) zurueck();
+      if(a && !prevA){ waehlen(); if(los) return; }
+      prevA = a; prevB = bb; prevV = v; prevR = r;
       break;
     }
+    xPruefen(xTaste || xPad);
     requestAnimationFrame(pad);
   })();
 }
@@ -743,7 +794,7 @@ function finaleDirekt(nr){
   story.e1aufraeumen && story.e1aufraeumen();
   story.reise = [0, 1, 2, 3, 4, 5];
   story.e1weg = story.e1weg || 'uboot'; story.e2weg = story.e2weg || 'transall';
-  story.tage = nr === 1 ? 5 : 11;                       // + 1 Tag Ankunft = 6 bzw. 12
+  story.tage = nr === 2 ? 11 : 5;                       // + 1 Tag Ankunft = 6 bzw. 12 (Finale 1 und 3: Stufe 1)
   story.etappe = 6; story.finaleDirekt = nr;
   schwarz('', 0.1, () => { if(story.etappe6Start) story.etappe6Start(); });
 }
@@ -1910,13 +1961,13 @@ function pfFertig(ok){
   story.preflightZeit = ok ? pf.t : null;
   if(pf.danach){                                   // eigener Ablauf (z. B. Transall-Flugschule)
     const f = pf.danach; pf.danach = null;
-    if(ok) neueZeit(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz', pf.t);
+    if(ok) story.neueZeit(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz', pf.t);   // ueber story: statistik.js haengt sich ein
     spaeter(2.5, () => { pf.gruen = false; pfHud(); });
     f(ok);
     return;
   }
   if(ok){
-    neueZeit(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz', pf.t);   // still speichern
+    story.neueZeit(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz', pf.t);   // still speichern (statistik.js)
     sprich(['Startsequenz abgeschlossen. Guten Flug!']);
     spaeter(2.5, () => { pf.gruen = false; pfHud(); });
     story.phase = 'freiflug';
