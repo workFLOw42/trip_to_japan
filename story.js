@@ -693,7 +693,9 @@ function startbildschirm(weiter){
     { n: 6, t: 'E6 Zug', zug: true }, { n: 6, t: 'E6 Vulkan', vulkan: true }, { n: 6, t: 'Finale 1', finale: 1 }, { n: 6, t: 'Finale 2', finale: 2 }, { n: 6, t: 'Finale 3', finale: 3 }];
   const statDa = () => !!(story.statistikBloecke && story.statistikBloecke('gesamt').length);
   let testFrei = false, seite = 'haupt', wahl = 0, knoepfe = [];
-  const HAUPT = () => [{ n: 1, t: 'Neues Spiel', echt: true }, ...(story.proGeschafft && story.proGeschafft() ? [{ n: 6, t: 'Ab zum Strand', strand: true, echt: true }] : []),
+  // "Ab zum Strand" (freies Spiel nach dem Pro-Run) ist vorerst aus dem Menue genommen (Live-Wunsch 14.10.2026) –
+  // der Code dahinter (story.freiesSpiel, finale.js) bleibt, ist aber nicht erreichbar.
+  const HAUPT = () => [{ n: 1, t: 'Neues Spiel', echt: true },
     ...(statDa() ? [{ t: 'Statistiken', stat: true }] : []), ...(testFrei ? [{ t: 'Testzugang', test: true }] : [])];
   let OPT = HAUPT();
   const knopf = (o, i, breit) => '<button data-i="' + i + '" style="min-width:' + breit + 'px;height:44px;border-radius:10px;'
@@ -986,6 +988,17 @@ function hudSichtbar(an){
   document.body.classList.toggle('filmszene', !an);
 }
 story.hudSichtbar = hudSichtbar;      // finale.js: Snowboard/Surfen ohne HUD
+// Zu Fuss (Kenji laeuft, kein Fahrzeug, kein Schlauchboot/Rover) kein HUD: links die Anzeige, Radar und Gyroskop
+// aus (Live-Wunsch 14.10.2026) – in allen Etappen. In Fahrzeugen bleibt alles wie bisher. #big bleibt sichtbar.
+function hudZuFuss(){
+  if(!document.getElementById('zufuss-css')){
+    const st = document.createElement('style'); st.id = 'zufuss-css';
+    st.textContent = 'body.zufuss #hud, body.zufuss #radar, body.zufuss #gyro, body.zufuss #pad { visibility: hidden; }';
+    document.head.appendChild(st);
+  }
+  const an = !!(eva && !eva.boat && !eva.rover);
+  if(document.body.classList.contains('zufuss') !== an) document.body.classList.toggle('zufuss', an);
+}
 function introVorbereiten(){
   if(!document.getElementById('filmszene-css')){
     const st = document.createElement('style'); st.id = 'filmszene-css';
@@ -1759,6 +1772,7 @@ function hookLoop(){
     skipTick(dt);
     updateKenji(dt);
     kenjiWache(dt);
+    hudZuFuss();
     weltenSichtbar();                         // nur die Welt der aktuellen Etappe, nur auf der Erde
     kenjiTasten();
     updateAufgabe();

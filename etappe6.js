@@ -594,7 +594,7 @@ function ankunft(tage, wie, alphaDa){
     }
     snapCamera();
     story.phase = 'ankunft';
-    // \
+    if(!story.freiesSpiel) story.spaeter(4, () => { story.hinweis('Angekommen am Strand neben dem Fuji – die Reise geht bald weiter …'); story.spaeter(10, () => story.hinweis('')); });
   });
 }
 story.e6ankunft = ankunft;
@@ -709,10 +709,7 @@ function updateE6(dt){
   if(c400Marke) story.setzeMarke(c400Marke, VORFELD.x, ISLAND_Y, VORFELD.z, 9, surfZeigen && !!welt.c400);
 }
 story.updateE6 = updateE6;
-story.aufgabeE6 = () => (story.aufgabeE6c && story.aufgabeE6c()) || (e6() && story.phase === 'ankunft' && story.freiesSpiel ? ['Freies Spiel am Strand', [
-  ['C-400 (gelb)', 'hinlaufen · Y: Abenteuer · B: Rundflug'],
-  ['Surfbrett', 'im Ring am Strand · Y'],
-]] : null) || (e6() && story.phase === 'ankunft' ? ['Etappe 6: am Strand neben dem Fuji', [
+story.aufgabeE6 = () => (story.aufgabeE6c && story.aufgabeE6c()) || (e6() && story.phase === 'ankunft' && !story.freiesSpiel ? ['Etappe 6: am Strand neben dem Fuji', [
   ['Geschafft', 'die Reise geht bald weiter'],
   ...(story.finaleStufe && story.finaleStufe() <= 2 ? [['C-400 (gelb)', story.finaleSchild() + ' – hinlaufen, Y']] : []),
   ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],

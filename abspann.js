@@ -71,7 +71,9 @@ function abspannText(){
 story.abspann = function(){
   if(ab) return;
   if(story.spielZiehen) story.spielZiehen();                // statistik.js: Reisezeit, Anzahl Spiele (einmal je Spiel)
-  if(story.finaleStufe && story.finaleStufe() === 1) proMerken();
+  // Nur ein echtes Spiel ("Neues Spiel" aus dem Menue) schaltet frei – vorher reichte der Testzugang "Finale 1-3"
+  // (springt mit 0 Tagen, also Stufe 1, direkt ins Finale) und "Ab zum Strand" stand ohne Durchspielen im Menue.
+  if(story.echtesSpiel && story.finaleStufe && story.finaleStufe() === 1) proMerken();
   const el = document.createElement('div');
   el.style.cssText = 'position:absolute;inset:0;z-index:28;pointer-events:none;overflow:hidden;color:#fff;font-family:system-ui,sans-serif;'
     + 'text-shadow:0 2px 6px rgba(0,0,0,.7);background:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.15) 40%,rgba(0,0,0,.35))';
