@@ -35,9 +35,13 @@ function proMerken(){ try { localStorage.setItem(PRO_KEY, String(Date.now())); }
 // ---- Abspann -------------------------------------------------------------------------------------------------------
 let ab = null;
 function zeile(k, v, gross){ return '<div style="display:flex;justify-content:space-between;gap:28px;' + (gross ? 'font-size:22px;font-weight:700;margin-top:10px' : '') + '"><span style="opacity:.8">' + k + '</span><b>' + v + '</b></div>'; }
+// Sicherheitsnetz: fehlt eine Etappe im Log, nicht stillschweigend alle Resttage Etappe 6 zuschlagen (Live-Befund 14.10.: E2/E3
+// fehlten, E6 hatte "3 Tage") – nur wenn genau Etappe 6 fehlt, bekommt sie den Rest
 function e6Nachtrag(){
   if(story.reiseLog.some(e => e.etappe === 6)) return;
+  const fehlt = [2, 3, 4, 5].filter(n => !story.reiseLog.some(e => e.etappe === n));
   const rest = story.tage - story.reiseLog.reduce((s, e) => s + e.tage, 0);
+  if(fehlt.length){ for(const n of fehlt) story.reiseLog.push({ etappe: n, ort: ORT[n - 1], tage: 0, wie: '?' }); return; }
   if(rest > 0) story.reiseLog.push({ etappe: 6, ort: ORT[5], tage: rest, wie: rest === 1 ? 'mit dem Alpha Jet' : rest === 4 ? 'mit dem Shinkansen' : '' });
 }
 function abspannText(){
@@ -48,7 +52,7 @@ function abspannText(){
   let h = '<div style="font-size:44px;font-weight:800;margin-bottom:6px">Reise nach Japan</div>'
     + '<div style="font-size:20px;opacity:.85;margin-bottom:40px">Kenji hat es nach Fukuoka geschafft!</div>'
     + '<div style="font-size:24px;font-weight:700;margin-bottom:10px">Die Reise</div><div style="min-width:440px;text-align:left">';
-  for(const e of L) h += zeile('Etappe ' + e.etappe + ' · ' + e.ort, (e.tage === 1 ? '1 Tag' : e.tage + ' Tage') + (e.wie ? ' <span style="font-weight:400;opacity:.75">(' + e.wie + ')</span>' : ''));
+  for(const e of L) h += zeile('Etappe ' + e.etappe + ' · ' + e.ort, e.wie === '?' ? '–' : (e.tage === 1 ? '1 Tag' : e.tage + ' Tage') + (e.wie ? ' <span style="font-weight:400;opacity:.75">(' + e.wie + ')</span>' : ''));
   h += zeile('Zusammen', tage + ' von 42 Tagen', true) + zeile('Finale', 'Stufe ' + stufe + ' – ' + stufenName, true) + '</div>';
   // Live-Wunsch 14.10.2026: alle Statistiken dieses Spiels (nur was gemacht wurde), Ueberschriften in Gold (statistik.js).
   // Die Reisezeit steht schon oben ("Zusammen"), die Trick-Zahl unten.

@@ -559,7 +559,7 @@ story.e6absturz = absturz;
 function flugEnde(ok, wie){
   if(story.ende) return;
   story.ende = true; flug.aktiv = false; flug.laeuft = false; story.ziel = null;
-  ankunft(ok ? 1 : 7, wie, ok);
+  story.e6ankunft(ok ? 1 : 7, wie, ok);                 // ueber story: das Reiselog (abspann.js) haengt sich ein
 }
 story.e6flugEnde = flugEnde;
 // Ende der Etappe (Live-Wunsch 09.10.2026): egal ob geschafft oder nicht, Schwarzblende mit den Tagen, danach steht Kenji

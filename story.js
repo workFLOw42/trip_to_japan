@@ -801,6 +801,8 @@ function finaleDirekt(nr){
 story.finaleDirektStart = finaleDirekt;
 story.sprich = sprich;
 story.hinweis = hinweis;
+// Alle Etappen-Enden laufen ueber story.etappeEnde (Live-Befund 14.10.: X-Wing, U-Boot, Mond/Mars und Absturz riefen die
+// Funktion direkt auf – Reiselog und Statistik haengen an story.etappeEnde, die Etappen fehlten im Abspann)
 story.etappeEnde = (t, w) => etappeEnde(t, w);
 
 // ---- Schule ----------------------------------------------------------------------------------
@@ -2029,7 +2031,7 @@ function absturzEnde(){
   if(mars.phase) mars.phase = 'fertig';
   hinweis('');
   state.vel.set(0, 0, 0);
-  etappeEnde(7, story.phase === 'mars' ? 'Absturz auf dem ' + TRIP[mars.ort || 'mars'].ziel + '-Trip'
+  story.etappeEnde(7, story.phase === 'mars' ? 'Absturz auf dem ' + TRIP[mars.ort || 'mars'].ziel + '-Trip'
     : (story.phase === 'flugschule' ? 'Absturz mit der Transall' : 'nach Absturz'));
 }
 
@@ -2249,7 +2251,7 @@ function marsSteinHolen(){
 function marsErde(){
   if(mars.phase === 'zurueck'){
     mars.phase = 'fertig';
-    etappeEnde(7, 'mit dem ' + TRIP[mars.ort || 'mars'].ziel + '-Trip');
+    story.etappeEnde(7, 'mit dem ' + TRIP[mars.ort || 'mars'].ziel + '-Trip');
     return true;
   }
   return false;
@@ -2323,7 +2325,7 @@ function freiflugUpdate(){
   const d = Math.hypot(state.pos.x - story.ziel.x, state.pos.z - story.ziel.z);
   if(d < ZIEL_R && !story.ende){
     story.ende = true;
-    etappeEnde(1, 'mit dem X-Wing');
+    story.etappeEnde(1, 'mit dem X-Wing');
   }
 }
 
@@ -2436,7 +2438,7 @@ function fotoMachen(){
     ub.nah = null; fotoAnzeige();
     spaeter(3.5, () => {
       ub.fotoEl.style.display = 'none'; ub.padEl.style.display = 'none';
-      etappeEnde(4, 'mit dem U-Boot');
+      story.etappeEnde(4, 'mit dem U-Boot');
     });
   }
 }
@@ -2549,8 +2551,11 @@ function baueSchild(text, col){
   const g = cv.getContext('2d');
   g.fillStyle = 'rgba(0,0,0,0.55)';
   g.beginPath(); g.roundRect ? g.roundRect(8, 8, 496, 144, 36) : g.rect(8, 8, 496, 144); g.fill();
-  g.font = 'bold 92px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.lineWidth = 10; g.strokeStyle = '#000'; g.strokeText(text, 256, 84);
+  // Live-Befund 14.10.2026: "Außer Betrieb" passte nicht aufs Schild – die Schrift schrumpft, bis der Text (mit Rand) hineinpasst
+  let px = 92; g.font = 'bold ' + px + 'px system-ui,sans-serif';
+  while(px > 30 && g.measureText(text).width > 496 - 2 * 34){ px -= 2; g.font = 'bold ' + px + 'px system-ui,sans-serif'; }
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = Math.max(6, px * 0.11); g.strokeStyle = '#000'; g.strokeText(text, 256, 84);
   g.fillStyle = col; g.fillText(text, 256, 84);
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv),
     depthTest: false, transparent: true }));
