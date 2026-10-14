@@ -346,23 +346,36 @@ function preloadKenji(){
     const wrap = new THREE.Group(); wrap.add(obj);
     kenji.obj = wrap;
     kenji.mixer = new THREE.AnimationMixer(obj);
+    // Root-Motion x/z der Tricks (merge_clips.py legt sie als Kurve in extras.weg ab): damit wird Kenji bei
+    // Aerial Evade / Butterfly Twirl so weit bewegt, wie die Animation es tut (vorher rutschte er auf der Stelle)
+    kenji.weg = (gltf.parser && gltf.parser.json.extras && gltf.parser.json.extras.weg) || {};
     for(const clip of gltf.animations){
-      // Root Motion entfernen: die Engine bewegt die Figur selbst
-      clip.tracks = clip.tracks.filter(t => !/Hips\.position$/.test(t.name));
+      // Hueftspur: nur x/z festhalten (die Engine bewegt die Figur), die Hoehe bleibt – sonst schwebten die Fuesse
+      // und Sprung/Salto blieben flach. Die Clips selbst sind seit 14.10.2026 mit 60 fps gebacken (vorher 24).
+      for(const t of clip.tracks){
+        if(!/Hips\.position$/.test(t.name)) continue;
+        const v = t.values, x0 = v[0], z0 = v[2];
+        for(let i = 0; i < v.length; i += 3){ v[i] = x0; v[i + 2] = z0; }
+      }
       kenji.acts[clip.name] = kenji.mixer.clipAction(clip);
     }
-    kenjiAnim('idle');
+    if(kenji.acts[STAND_CLIP]) STAND = STAND_CLIP;
+    kenjiAnim(STAND);
     // Steht schon der Platzhalter in der Welt, gegen Kenji tauschen
     if(eva && eva.group){ eva.group.clear(); eva.group.add(kenji.obj); }
   }, (err) => { console.warn('Kenji-GLB Ladefehler:', err); });
 }
 
-function kenjiAnim(name){
+function kenjiAnim(name, blend){
   if(kenji.cur === name || !kenji.acts[name]) return;
   const a = kenji.acts[name];
   if(!Object.values(TRICK_CLIP).includes(name)){ a.setLoop(THREE.LoopRepeat); a.clampWhenFinished = false; }
-  a.reset().play();
-  if(kenji.cur && kenji.acts[kenji.cur]) kenji.acts[kenji.cur].crossFadeTo(a, 0.25, false);
+  // Nur der neue und der ausblendende Clip laufen. Vorher setzte trickStart kenji.cur = null: der alte Clip
+  // wurde nicht ausgeblendet, lief mit vollem Gewicht weiter und mischte sich in den Trick – das war das Abgehackte.
+  const alt = kenji.cur && kenji.acts[kenji.cur];
+  for(const n in kenji.acts){ const b = kenji.acts[n]; if(b !== a && b !== alt) b.stop(); }
+  a.reset(); a.setEffectiveWeight(1); a.play();
+  if(alt && alt !== a) alt.crossFadeTo(a, blend || 0.25, false);
   kenji.cur = name;
 }
 
@@ -380,11 +393,14 @@ function hookKenji(){
 
 // ---- Kenji zu Fuss: Tempo nach Stick-Ausschlag, Tasten fuer Tricks ---------------------------
 // Stick bis 50 % = gehen, darueber = rennen. Abseits der Fahrzeuge:
-//   A / Leertaste = springen · B = Aerial Evade · X = Silly Dance · Y = Butterfly Twirl
+//   A / Leertaste = springen · B = Aerial Evade · X = Hip Hop Dance · Y = Butterfly Twirl
 //   L3 (linken Stick druecken) / M halten = Moonwalk – gelaufen wird dabei mit dem linken Stick
 // Am Fahrzeug bleibt Y Einsteigen. Tanz/Twirl spielen einmal ab; Stick bewegen bricht sie ab.
 const GEH_MAX = 0.3;          // Anteil von EVA_SPEED bei 50 % Stick (≈ 1,8 m/s)
-const TRICK_CLIP = { tanz: 'dance_silly', twirl: 'butterfly_twirl', evade: 'aerial_evade' };
+// Live-Wunsch 14.10.2026: X = Hip Hop Dancing (statt Silly Dancing). Evade und Twirl sind Spruenge und laufen immer
+// ganz durch; der 18 s lange Tanz bleibt mit dem Stick jederzeit abbrechbar.
+const TRICK_CLIP = { tanz: 'dance_hiphop', twirl: 'butterfly_twirl', evade: 'aerial_evade' };
+const TRICK_DURCH = { twirl: true, evade: true };
 const tricks = story.tricks = { aktiv: null, t: 0, moon: false, ausschlag: 0, prev: {} };
 
 function amFahrzeug(){ return !!eva && (evaCanBoard() || !!harborSubNear() || marsSteinNah() || !!(story.transallNah && story.transallNah()) || !!(story.bootNah && story.bootNah()) || !!(story.kranNah && story.kranNah()) || !!(story.bootNah4 && story.bootNah4())); }
@@ -405,10 +421,31 @@ function trickTasten(){
 function trickStart(name){
   const a = kenji.acts[TRICK_CLIP[name]];
   if(!a) return;
-  tricks.aktiv = name; tricks.t = 0;
+  tricks.aktiv = name; tricks.t = 0; tricks.w = null;
   a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true;
-  kenji.cur = null;                       // erzwingt den Wechsel in kenjiAnim
-  kenjiAnim(TRICK_CLIP[name]);
+  if(kenji.cur === TRICK_CLIP[name]) kenji.cur = 'neu';     // derselbe Trick nochmal: von vorn (ohne alten Clip zu verlieren)
+  kenjiAnim(TRICK_CLIP[name], 0.2);
+}
+// Weg des Tricks bis Zeit t, aus der Hueftkurve des Clips: { vor, seit } in Metern relativ zu Kenji
+// (Modell: +z = vorn, +x = links von ihm aus gesehen). Aerial Evade geht vor allem zur Seite, der Twirl nach vorn.
+function trickWeg(clip, t){
+  const k = kenji.weg && kenji.weg[clip]; if(!k) return { vor: 0, seit: 0 };
+  let i = 0; while(i < k.t.length - 1 && k.t[i + 1] <= t) i++;
+  const j = Math.min(k.t.length - 1, i + 1), f = k.t[j] > k.t[i] ? Math.min(1, (t - k.t[i]) / (k.t[j] - k.t[i])) : 0;
+  const s = kenji.obj && kenji.obj.children[0] ? kenji.obj.children[0].scale.x : 1;
+  return { vor: (k.z[i] + (k.z[j] - k.z[i]) * f) * s, seit: (k.x[i] + (k.x[j] - k.x[i]) * f) * s };
+}
+// Waehrend eines Tricks Kenji um den Kurvenzuwachs verschieben (vor + zur Seite), auf festem Grund und ohne Wand
+function trickSchieben(){
+  if(!tricks.aktiv || !eva || !eva.group) return;
+  const clip = TRICK_CLIP[tricks.aktiv], a = kenji.acts[clip]; if(!a) return;
+  const w = trickWeg(clip, a.time), alt = tricks.w || { vor: 0, seit: 0 }; tricks.w = w;
+  const dv = w.vor - alt.vor, ds = w.seit - alt.seit; if(!dv && !ds) return;
+  const y = eva.yaw, g = eva.group.position;
+  const fx = -Math.sin(y), fz = -Math.cos(y);             // vorn (Engine: Nase -Z)
+  const lx = -Math.cos(y), lz = Math.sin(y);              // links
+  const nx = g.x + fx * dv + lx * ds, nz = g.z + fz * dv + lz * ds;
+  if(evaSolid(nx, nz) && !hitsBuilding(nx, evaFootY(nx, nz) + 1, nz, false)){ g.x = nx; g.z = nz; g.y = evaFootY(nx, nz); }
 }
 
 // Vor updateEva: Eingabe umformen (Tempo-Kurve, Stillstand bei Tricks/Moonwalk)
@@ -417,12 +454,14 @@ function kenjiEingabe(inp){
   const roh = -(inp.pitch || 0);
   const a = Math.abs(roh);
   tricks.ausschlag = a;
-  if(a > 0.15 && tricks.aktiv) tricks.aktiv = null;           // Stick bricht den Trick ab
-  if(tricks.aktiv) return Object.assign({}, inp, { pitch: 0, yaw: 0 });
+  if(a > 0.15 && tricks.aktiv && !TRICK_DURCH[tricks.aktiv]) tricks.aktiv = null;   // Stick bricht den Tanz ab (Spruenge nicht)
+  if(tricks.aktiv) return Object.assign({}, inp, { pitch: 0, yaw: 0 });   // bewegt wird er von trickSchieben
   let f;
   if(a <= 0.5) f = a / 0.5 * GEH_MAX;                         // gehen
   else f = GEH_MAX + (a - 0.5) / 0.5 * (1 - GEH_MAX);         // rennen
   if(tricks.moon) f = Math.min(f, GEH_MAX) * 0.6;             // Moonwalk: langsam
+  if(a <= 0.05 && (tricks.steht || 0) > MOON_NACH && !tricks.moon && eva.onGround)
+    return Object.assign({}, inp, { pitch: MOON_V / EVA_SPEED, yaw: 0 });   // von selbst: langsam rueckwaerts
   return Object.assign({}, inp, { pitch: -Math.sign(roh) * f });
 }
 
@@ -457,20 +496,32 @@ function updateKenji(dt){
   if(!kenji.mixer) return;
   kenji.mixer.update(dt);
   if(!eva || !eva.group || kenji.obj.parent !== eva.group) return;
+  tricks.dt = dt;
   if(tricks.aktiv){
     const a = kenji.acts[TRICK_CLIP[tricks.aktiv]];
     tricks.t += dt;
-    if(a && tricks.t < a.getClip().duration) return;
+    trickSchieben();
+    if(a && tricks.t < a.getClip().duration - TRICK_AUSBLENDEN) return;   // kurz vor Schluss schon zurueckblenden
     tricks.aktiv = null;
+    kenjiAnim(tricks.ausschlag > 0.5 ? 'run' : tricks.ausschlag > 0.05 ? 'walk' : STAND, TRICK_AUSBLENDEN);
   }
   const a = tricks.ausschlag;
-  if(sw.aktiv){ kenjiAnim('swim'); return; }
+  if(sw.aktiv){ kenjiAnim('swim'); tricks.steht = 0; return; }
+  if(a > 0.05 || !eva.onGround || tricks.moon || !steuerbar() || story.phase === 'platzhalter' || story.phase === 'reise') tricks.steht = 0;
+  else tricks.steht = (tricks.steht || 0) + dt;
   if(!eva.onGround) kenjiAnim('jump');
-  else if(tricks.moon) kenjiAnim('moonwalk');
+  else if(tricks.moon || tricks.steht > MOON_NACH) kenjiAnim('moonwalk');
   else if(a > 0.5) kenjiAnim('run');
   else if(a > 0.05) kenjiAnim('walk');
-  else kenjiAnim('idle');
+  else kenjiAnim(STAND);
 }
+// Live-Wunsch 14.10.2026: steht Kenji lange, faengt er von selbst mit dem Moonwalk an und gleitet dabei langsam
+// rueckwaerts (kenjiEingabe); jede Eingabe beendet ihn. Tricks blenden TRICK_AUSBLENDEN s vor Clipende zurueck.
+const MOON_NACH = 25, MOON_V = 0.45, TRICK_AUSBLENDEN = 0.3;
+// Stillstehen zu Fuss: Mixamo 'Standing W/ Briefcase Idle' (Clip 'stand', Live-Wunsch 14.10.2026). Das alte 'idle'
+// (Mixamo 'Standing Idle', breitbeinig) bleibt die Haltung auf Surfbrett und Snowboard (finale.js haltung()).
+const STAND_CLIP = 'stand';
+let STAND = 'idle';                                   // bis das GLB geladen ist; preloadKenji setzt 'stand', wenn vorhanden
 
 // ---- Stimme + Untertitel ---------------------------------------------------------------------
 // Browser erlauben Sprachausgabe erst nach einer Nutzergeste – deshalb der Startbildschirm.
@@ -2783,7 +2834,7 @@ const ANLEITUNG = [
     ['A', 'springen'],
     ['B', 'Aerial Evade'],
     ['L3 (halten) + L-Stick', 'Moonwalk'],
-    ['X', 'Silly Dance'],
+    ['X', 'Hip Hop Dance (Stick bricht ab)'],
     ['Y', 'Butterfly Twirl · am Fahrzeug: einsteigen'],
     ['im Wasser', 'L-Stick schwimmen · RT tauchen · LT auftauchen'],
     ['D-Pad ↑', 'diese Anleitung (Pause)'],
@@ -2796,7 +2847,7 @@ const ANLEITUNG = [
     ['Leertaste', 'springen'],
     ['B', 'Aerial Evade'],
     ['M (halten) + Pfeile', 'Moonwalk'],
-    ['X / Y', 'Silly Dance / Butterfly Twirl'],
+    ['X / Y', 'Hip Hop Dance / Butterfly Twirl'],
     ['Y am Fahrzeug', 'einsteigen (U-Boot: im gelben Ring am Strand)'],
     ['im Wasser', 'Pfeile schwimmen · E tauchen · Q auftauchen'],
     ['H / T', 'Anleitung / Aufgabe (Pause)'],

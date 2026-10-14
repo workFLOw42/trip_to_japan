@@ -594,7 +594,7 @@ function ankunft(tage, wie, alphaDa){
     }
     snapCamera();
     story.phase = 'ankunft';
-    story.spaeter(4, () => { story.hinweis('Angekommen am Strand neben dem Fuji – die Reise geht bald weiter …'); story.spaeter(10, () => story.hinweis('')); });
+    // \
   });
 }
 story.e6ankunft = ankunft;
@@ -698,7 +698,7 @@ function updateE6(dt){
   // Surfbrett am Fukuoka-Beach: Ring + gelber Pfeil "Surfen", nur zu Fuss und nach der Ankunft
   if(story.phase === 'ankunft' && eva){
     if(!surf.ring) surf.ring = story.einstiegsRing(SURF.x, ISLAND_Y, SURF.z);
-    const surfText = story.finaleStufe && story.finaleStufe() >= 5 ? 'Außer Betrieb' : 'Surfen';   // Live-Wunsch: Stufe 5 wie die C-400
+    const surfText = story.finaleStufe && story.finaleStufe() >= 5 && !story.freiesSpiel ? 'Außer Betrieb' : 'Surfen';   // frei: immer offen   // Live-Wunsch: Stufe 5 wie die C-400
     if(surf.marke && surf.markeText !== surfText){ for(const o of [surf.marke.saeule, surf.marke.pfeil, surf.marke.schild]) if(o && o.parent) o.parent.remove(o); surf.marke = null; }
     if(!surf.marke && story.baueMarke){ surf.marke = story.baueMarke(0xffd23f, surfText); surf.markeText = surfText; }
   }
@@ -709,7 +709,10 @@ function updateE6(dt){
   if(c400Marke) story.setzeMarke(c400Marke, VORFELD.x, ISLAND_Y, VORFELD.z, 9, surfZeigen && !!welt.c400);
 }
 story.updateE6 = updateE6;
-story.aufgabeE6 = () => (story.aufgabeE6c && story.aufgabeE6c()) || (e6() && story.phase === 'ankunft' ? ['Etappe 6: am Strand neben dem Fuji', [
+story.aufgabeE6 = () => (story.aufgabeE6c && story.aufgabeE6c()) || (e6() && story.phase === 'ankunft' && story.freiesSpiel ? ['Freies Spiel am Strand', [
+  ['C-400 (gelb)', 'hinlaufen · Y: Abenteuer · B: Rundflug'],
+  ['Surfbrett', 'im Ring am Strand · Y'],
+]] : null) || (e6() && story.phase === 'ankunft' ? ['Etappe 6: am Strand neben dem Fuji', [
   ['Geschafft', 'die Reise geht bald weiter'],
   ...(story.finaleStufe && story.finaleStufe() <= 2 ? [['C-400 (gelb)', story.finaleSchild() + ' – hinlaufen, Y']] : []),
   ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],

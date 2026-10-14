@@ -136,7 +136,7 @@ function baueRinge(){
 // ---- Einsteigen ------------------------------------------------------------------------------------------------
 function c400Nah(){
   const v = L() && L().VORFELD;
-  return !!(hier() && story.phase === 'ankunft' && eva && v && stufe() <= 2 && Math.hypot(eva.group.position.x - v.x, eva.group.position.z - v.z) < 22);
+  // \eva.group.position.x - v.x, eva.group.position.z - v.z) < 22);
 }
 story.c400Nah = c400Nah;
 const TEXT_RUNDFLUG = [
@@ -158,7 +158,7 @@ function bahnStart(){
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat); planeGroup.scale.setScalar(1);
 }
 function einsteigen(art){
-  fin.aktiv = true; fin.art = art || (stufe() === 1 ? 'sprung' : 'rundflug'); fin.schritt = 'ansage';
+  fin.aktiv = true; fin.art = art || (stufe() === 1 || story.freiesSpiel ? 'sprung' : 'rundflug'); fin.schritt = 'ansage';   // frei: Y = Abenteuer, B = Rundflug
   fin.abgehoben = false; fin.crash = false; fin.ringNr = 0;
   story.phase = 'finale'; story.hinweis('');
   story.schwarz('', 0.6, () => {                       // von der C-400 auf dem Vorfeld an den Anfang der Bahn
@@ -404,7 +404,7 @@ function gelandet(p){
   const k = fin.k; fin.schritt = 'gelandet'; k.v.set(0, 0, 0);
   while(k.g.children.length > 1) k.g.remove(k.g.children[k.g.children.length - 1]);   // Schirm ab (Kenji ist das erste Kind)
   k.g.rotation.set(0, k.yaw, 0, 'YXZ'); kAnim('land', true);
-  const kl = story.kenji && story.kenji.acts.land; story.spaeter(kl ? kl.getClip().duration : 0.5, () => { if(fin.k === k && fin.schritt === 'gelandet') kAnim('idle'); });
+  const kl = story.kenji && story.kenji.acts.land; story.spaeter(kl ? kl.getClip().duration : 0.5, () => { if(fin.k === k && fin.schritt === 'gelandet') kAnim(story.kenji && story.kenji.acts.stand ? 'stand' : 'idle'); });   // zu Fuss: Briefcase-Idle
   story.hinweis(''); story.ziel = null;
   if(aufPiste(p.x, p.z)){                                // Live-Wunsch: ohne Ansage gleich aufs Snowboard, es geht sofort los
     brettUnter(k.g);
