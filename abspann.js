@@ -84,7 +84,7 @@ story.abspann = function(){
   el.appendChild(roll); el.appendChild(sig); document.body.appendChild(el);
   const F = story.e6, mitte = { x: F.STRANDPLATZ.x - 120, z: F.STRANDPLATZ.z };
   ab = { el, roll, t: 0, h: 0, mitte, dauer: 0 };
-  ab.h = roll.offsetHeight; ab.dauer = (innerHeight + ab.h) / 42;   // ~42 px/s
+  ab.h = roll.offsetHeight; ab.dauer = story.abspannTestDauer || (innerHeight + ab.h) / 42;   // ~42 px/s (Testdauer fuer den Browser-Test)
   if(story.hudSichtbar) story.hudSichtbar(false);
   story.abspannLaeuft = true;
 };
@@ -92,7 +92,51 @@ function abspannSchritt(dt){
   if(!ab) return;
   ab.t += dt;
   ab.roll.style.top = (innerHeight - ab.t * 42) + 'px';
-  if(ab.t > ab.dauer){ ab.el.remove(); ab = null; story.abspannLaeuft = false; if(story.hudSichtbar) story.hudSichtbar(true); }
+  if(ab.t > ab.dauer){ ab.el.remove(); ab = null; story.abspannLaeuft = false; if(story.hudSichtbar) story.hudSichtbar(true); nachDemAbspann(); }
+}
+// Live-Wunsch 14.10.2026: nach dem Abspann (jede Stufe) kurz fragen – ins Hauptmenue (Seite neu laden, die Statistik ist schon
+// gespeichert) oder weiterspielen. Stick/Pfeile waehlen, A/Enter bestaetigt, B/Esc = weiterspielen.
+function nachDemAbspann(){
+  const el = document.createElement('div');
+  el.style.cssText = 'position:absolute;inset:0;z-index:29;display:flex;flex-direction:column;align-items:center;justify-content:center;'
+    + 'background:rgba(0,0,0,.45);color:#fff;font-family:system-ui,sans-serif;text-align:center;user-select:none';
+  const OPT = [{ t: 'Weiterspielen' }, { t: 'Ins Hauptmenü', menue: true }];
+  el.innerHTML = '<div style="font-size:30px;font-weight:700">Wie geht es weiter?</div>'
+    + '<div style="display:flex;flex-direction:column;gap:12px;align-items:center;margin-top:24px">'
+    + OPT.map((o, i) => '<button data-i="' + i + '" style="min-width:240px;height:44px;border-radius:10px;border:2px solid rgba(255,255,255,.45);'
+      + 'background:rgba(255,255,255,.1);color:#fff;font:600 18px system-ui;cursor:pointer;transition:all .12s">' + o.t + '</button>').join('') + '</div>'
+    + '<div style="font-size:14px;margin-top:16px;opacity:.7">↑ ↓ wählen · A / Enter</div>';
+  document.body.appendChild(el);
+  const kn = [...el.querySelectorAll('button')]; let wahl = 0, fertig = false;
+  story.abspannFrage = true;                                        // solange die Frage steht, keine Spielsteuerung
+  const zeige = () => kn.forEach((b, i) => { const an = i === wahl; b.style.background = an ? '#ffd23f' : 'rgba(255,255,255,.1)'; b.style.color = an ? '#1a1a1a' : '#fff';
+    b.style.borderColor = an ? '#ffd23f' : 'rgba(255,255,255,.45)'; b.style.transform = an ? 'scale(1.08)' : 'none'; });
+  const ende = (i) => { if(fertig) return; fertig = true; window.removeEventListener('keydown', taste, true); el.remove(); story.abspannFrage = false;
+    if(OPT[i].menue) location.reload(); };
+  function taste(e){
+    const c = e.code; if(!['ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'Enter', 'Space', 'NumpadEnter', 'Escape', 'KeyB'].includes(c)) return;
+    e.preventDefault(); e.stopPropagation();
+    if(c === 'ArrowUp' || c === 'KeyW' || c === 'ArrowDown' || c === 'KeyS'){ wahl = 1 - wahl; zeige(); }
+    else if(c === 'Escape' || c === 'KeyB') ende(0); else ende(wahl);
+  }
+  window.addEventListener('keydown', taste, true);
+  kn.forEach((b, i) => { b.addEventListener('pointerenter', () => { wahl = i; zeige(); }); b.addEventListener('pointerdown', (e) => { e.stopPropagation(); ende(i); }); });
+  zeige();
+  // Gamepad: Flanken (erst nach dem Loslassen zaehlen – sonst rutscht ein noch gedrueckter Knopf durch)
+  let pA = true, pB = true, pV = true;
+  (function pad(){
+    if(fertig) return;
+    for(const gp of (navigator.getGamepads ? navigator.getGamepads() : [])){
+      if(!gp) continue;
+      const y = gp.axes[1] || 0, a = !!(gp.buttons[0] && gp.buttons[0].pressed), b = !!(gp.buttons[1] && gp.buttons[1].pressed);
+      const v = Math.abs(y) > 0.5 || !!(gp.buttons[12] && gp.buttons[12].pressed) || !!(gp.buttons[13] && gp.buttons[13].pressed);
+      if(v && !pV){ wahl = 1 - wahl; zeige(); }
+      if(a && !pA){ ende(wahl); return; }
+      if(b && !pB){ ende(0); return; }
+      pA = a; pB = b; pV = v; break;
+    }
+    requestAnimationFrame(pad);
+  })();
 }
 // Kamerafahrt: langsamer Kreis ueber dem Strand, Blick zwischen Strand und Fuji
 function abspannKamera(){
@@ -123,6 +167,13 @@ function hookAbspann(){
     if(story.etappe === 6 && story.phase === 'ankunft' && story.finaleStufe && story.finaleStufe() >= 5 && eva) stufe5();
     return r;
   };
+  // Waehrend Abspann und Frage: keine Spielsteuerung (A/B/Y kaemen sonst im Spiel an – huepfen, einsteigen)
+  const gesperrt = () => !!(story.abspannLaeuft || story.abspannFrage);
+  const yOrig = buttonY, bOrig = buttonB;
+  buttonY = function(){ if(gesperrt()) return; return yOrig.apply(this, arguments); };
+  buttonB = function(){ if(gesperrt()) return; return bOrig.apply(this, arguments); };
+  const evaOrig = updateEva;
+  updateEva = function(dt, inp){ return evaOrig.call(this, dt, gesperrt() ? {} : inp); };
   // Etappe 6 endet mit der Ankunft (Globus nach Fukuoka): eintragen
   if(story.e6ankunft){ const ankOrig = story.e6ankunft; story.e6ankunft = function(tage, wie){ loggen(6, tage, wie); return ankOrig.apply(this, arguments); }; }
 }

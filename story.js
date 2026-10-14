@@ -659,13 +659,23 @@ function startbildschirm(weiter){
         + '<div style="display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap;max-width:94vw">' + OPT.map((o, i) => knopf(o, i, 54)).join('') + '</div>'
         + '<div style="font-size:14px;margin-top:16px;opacity:.7">← → wählen · A / Enter starten · B / Esc zurück'
         + '<br><span style="font-size:12px;opacity:.8">E2–E6: direkt zur Etappe · E6 Höhle: direkt in den Autopiloten · E6 Zug: direkt in den Shinkansen · E6 Vulkan: Szene am Höhlenausgang, dann landen · Finale 1: gleich über der Piste (Pilot kreist, B = Sprung) · Finale 2: Rundflug an der C-400 · Finale 3: freier Fall hinter der Piste, dann Riesenwellen · Testzugänge zählen nicht in die Statistik</span></div>';
+    } else if(seite === 'loeschen' || seite === 'sicher'){  // Live-Wunsch 14.10.: in den Statistiken 3 s X -> loeschen / zuruecksetzen
+      const sicher = seite === 'sicher';
+      OPT = sicher ? [{ t: 'Ja, ' + (loeschArt === 'alles' ? 'zurücksetzen' : 'löschen'), ja: true }, { t: 'Nein', nein: true }]
+                   : [{ t: 'Alle Statistiken löschen', art: 'stat' }, { t: 'Gesamtes Spiel zurücksetzen', art: 'alles' }, { t: 'Abbrechen', nein: true }];
+      const frage = !sicher ? 'Was möchtest du tun?'
+        : loeschArt === 'alles' ? 'Wirklich alles zurücksetzen? Statistiken, Bestzeiten und „Ab zum Strand“ sind dann weg – wie beim ersten Spiel.'
+        : 'Wirklich alle Statistiken und Bestzeiten löschen? „Ab zum Strand“ bleibt.';
+      el.innerHTML = titel + '<div style="font-size:22px;font-weight:700;margin-top:20px">' + frage + '</div>'
+        + '<div style="display:flex;flex-direction:column;gap:12px;align-items:center;margin-top:24px">' + OPT.map((o, i) => knopf(o, i, 300)).join('') + '</div>'
+        + '<div style="font-size:14px;margin-top:18px;opacity:.7">↑ ↓ wählen · A / Enter · B / Esc zurück</div>';
     } else {                                               // Statistiken
       OPT = [];
       const zeile = (k, v) => '<div style="display:flex;justify-content:space-between;gap:28px"><span style="opacity:.8">' + k + '</span><b>' + v + '</b></div>';
       el.innerHTML = titel + '<div style="font-size:24px;font-weight:700;margin-top:18px">Statistiken</div>'
         + '<div id="statliste" style="min-width:min(460px,90vw);max-height:62vh;overflow:auto;text-align:left;margin-top:6px;padding:0 10px">'
         + (story.statistikHtml ? story.statistikHtml('gesamt', zeile) : '') + '</div>'
-        + '<div style="font-size:14px;margin-top:14px;opacity:.7">↑ ↓ blättern · B / Esc zurück</div>';
+        + '<div style="font-size:14px;margin-top:14px;opacity:.7">↑ ↓ blättern · B / Esc zurück · X 3 s halten: löschen / zurücksetzen</div>';
     }
     knoepfe = [...el.querySelectorAll('button')];
     knoepfe.forEach((b, i) => {
@@ -686,11 +696,22 @@ function startbildschirm(weiter){
   }
   zeichnen();
   let los = false;
-  function zurueck(){ if(seite !== 'haupt'){ seite = 'haupt'; wahl = 0; zeichnen(); } }
+  let loeschArt = null;
+  function zurueck(){ if(seite === 'sicher' || seite === 'loeschen'){ seite = 'stat'; wahl = 0; zeichnen(); return; } if(seite !== 'haupt'){ seite = 'haupt'; wahl = 0; zeichnen(); } }
+  // Loeschen: 'stat' = Statistik + Bestzeiten (Ab zum Strand bleibt), 'alles' = alle Spielstaende (wie beim ersten Spiel)
+  function loeschen(art){
+    const keys = art === 'alles' ? ['statistik', 'highscores', 'pro', 'gesehen'] : ['statistik', 'highscores'];
+    for(const k of keys) try { localStorage.removeItem('reise-nach-japan-' + k); } catch(e){}
+    if(art === 'alles'){ location.reload(); return; }
+    seite = 'haupt'; wahl = 0; zeichnen();
+  }
   function waehlen(){
     const o = OPT[wahl]; if(!o) return;
     if(o.stat){ seite = 'stat'; wahl = 0; zeichnen(); return; }
     if(o.test){ seite = 'test'; wahl = 0; zeichnen(); return; }
+    if(o.art){ loeschArt = o.art; seite = 'sicher'; wahl = 1; zeichnen(); return; }   // Rueckfrage, "Nein" vorausgewaehlt
+    if(o.nein){ zurueck(); return; }
+    if(o.ja){ loeschen(loeschArt); return; }
     start(o);
   }
   function start(o){
@@ -717,7 +738,10 @@ function startbildschirm(weiter){
   function xPruefen(gedrueckt){
     if(!gedrueckt){ xSeit = 0; return; }
     if(!xSeit) xSeit = performance.now();
-    if(!testFrei && performance.now() - xSeit > 3000){ testFrei = true; if(seite === 'haupt') zeichnen(); }
+    if(performance.now() - xSeit > 3000){
+      if(seite === 'stat'){ xSeit = Infinity; seite = 'loeschen'; wahl = 2; zeichnen(); return; }   // erst nach dem Loslassen wieder
+      if(!testFrei && seite === 'haupt'){ testFrei = true; zeichnen(); }
+    }
   }
   let xTaste = false;
   function taste(e){
