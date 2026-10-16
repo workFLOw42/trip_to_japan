@@ -150,6 +150,8 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `index.html` | wird von `tools/build_engine.ps1` erzeugt (HUD-Markup aus dem Flugspiel) |
 | `engine/` | Flugspiel-Engine + Modelle, **unverändert** kopiert von `tools/build_engine.ps1` |
 | `story.js` | Spiellogik und Etappe 1 – hängt sich per Wrapper in die Engine ein |
+| `objekte.js` | **Objekt-Katalog mit Grenzen** (aus „Das Geheimland“ übernommen, 16.10.2026): jedes Objekt einmal global als Typ (`story.typ`), gesetzt mit `story.setze(typ, etappe, { x, z, dreh, … })`. Jedes Bauteil ist eine Grenze in seiner echten Form (Quader, Zylinder, Kugel, freie Formen in Scheiben) – Kenji läuft nicht hinein oder hindurch, wer drinsteckt, kommt immer hinaus. Bewegliche Dinge (`beweglich: true`) nehmen ihre Grenze mit. Bisher nutzt es das Uferdorf in Etappe 5; die übrigen Etappen werden nach und nach umgestellt |
+| `haeuser.js` | **Häuser im Stil ihrer Region, im Anime-Look**: global der Typ `haus` (Grundfläche, Höhe, Tür vorn, Grenze), je Region nur das Aussehen (`story.hausStile`). Toon-Shading mit drei harten Lichtstufen und dunklem Umriss. Erster Stil: `china` (Etappe 5: weiße Wände, rote Säulen und Laternen, geschwungenes Ziegeldach) |
 | `etappe1.js` | Etappe 1 als Festland: Strand, Nadelbäume, Schule „AEG“ (fest), Stadt, Ariane, X-Wing-Parkplatz, U-Boot und Ring |
 | `etappe2.js` | Etappe 2 (Wüste, X-Wing-Falle, Transall-Flugschule) |
 | `etappe3.js` | Etappe 3 (Fluss, Feuerwehrboot, X-Wing ohne Kurzschluss) |
@@ -168,7 +170,7 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `kenji_glb.js` | Kenji als eingebettetes GLB (aus `models/kenji.glb`) |
 | `schildkroete_glb.js` | Schildkröten für Etappe 3 (verkleinert und aufgehellt, 1,5 MB) |
 | `krokodil_glb.js` | Krokodile im Fluss (Etappe 3), unverändert (Lizenz ND), 7,7 MB |
-| `tiere.js` | Tiere und Inseln: fliegende Möwen (Etappe 1, 4, 5, 6 und an jeder Insel), Hunde (1), Pandas (5), Godzillas und Samurai (6), Mount Fuji statt der Kegel-Hügel |
+| `tiere.js` | Tiere und Inseln: fliegende Möwen (Etappe 1, 4, 5, 6 und an jeder Insel), **sitzende Möwen** (`story.sitzMoewen`: kommt Kenji zu nahe, fliegen sie als fliegende Möwen auf, ziehen einen Bogen und landen wieder auf ihrem Platz – bisher am Kai in Etappe 4), Hunde (1), Pandas (5), Godzillas und Samurai (6), Mount Fuji statt der Kegel-Hügel |
 | `fuji_glb.js` | Mount Fuji für alle Inselberge (vereinfacht: 2.752 Dreiecke, Höhe und Farbe vom Original abgetastet) |
 | `zug_glb.js` | Shinkansen (Etappe 6): Triebwagen und Mittelwagen aus dem Original geschnitten, hinterer Triebwagen gedreht (3,3 MB statt 26 MB) |
 | `godzilla_glb.js` | Godzilla (Etappe 6): Mini-Godzillas (1 m) in der Stadt und am Strand-Flughafen, Riesen-Godzilla (60 m) hinter der Stadt; verkleinert und aufgehellt |

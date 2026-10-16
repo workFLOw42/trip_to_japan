@@ -6,6 +6,12 @@ Ein 3D-Abenteuerspiel im Browser auf Basis der WebGL/Three.js-Engine des „Flug
 
 ## 📌 Arbeitsstand (08.10.2026)
 
+**Neu (16.10.2026, aus „Das Geheimland“ übernommen):** Objekt-Katalog mit echten Grenzen (`objekte.js`), Häuser im Stil
+ihrer Region im Anime-Look (`haeuser.js`, zuerst das chinesische Fischerdorf in Etappe 5), sitzende Möwen, die auffliegen
+und wieder landen (Etappe 4). Schubbalken in der Größe wie im Geheimland (so breit wie das Radar), weiter rechts.
+**Als Nächstes dafür:** Etappe für Etappe Gebäude, Bäume, Tiere und Fahrzeuge in den Katalog (zuerst Etappe 2–4, dort
+läuft man heute durch alles), weitere Hausstile (Japan, Hafen, Wüste), sitzende Möwen auch an anderen Stränden.
+
 **Gebaut und spielbar:** Etappe 1 (alle Wege inkl. Mars-Trip) und Etappe 2 (X-Wing-Falle mit Kurzschluss,
 Mond-Trip, Transall-Flugschule) und Etappe 3 (Fluss mit Feuerwehrboot, X-Wing ohne Kurzschluss), Etappe 4 (Kran, Schnellboot-Flucht), Etappe 5 (Air Race,
 U-Boot-Schlucht) und in Etappe 6 der Alpha-Jet-Weg (Vulkanhöhle) · Startmenü mit Etappen-Sprung (Test) · Globus-Reise zwischen den Etappen ·

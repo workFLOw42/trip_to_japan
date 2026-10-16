@@ -519,8 +519,9 @@ function etappe5Start(){
 }
 story.etappe5Start = etappe5Start;
 
-// ---- Uferdorf beim U-Boot: Haeuser wie auf den Inseln (Wand + Walmdach), mit Kollision ---------------------------
-// Steht landeinwaerts hinter dem Einstiegsring, laesst den Weg Ring <-> Kenji frei. hitsBuilding kennt die Haeuser.
+// ---- Uferdorf beim U-Boot: chinesisches Fischerdorf im Anime-Look (haeuser.js, Stil 'china') ---------------------
+// Steht landeinwaerts hinter dem Einstiegsring, laesst den Weg Ring <-> Kenji frei. Die Grenzen kommen aus dem
+// Objekt-Katalog (objekte.js: jedes Bauteil in seiner echten Form) – Live-Wunsch 16.10.: global gebaut, Stil je Region.
 const dorf = { haeuser: [], gebaut: false };
 function baueUferdorf(rg){
   if(dorf.gebaut) return; dorf.gebaut = true;
@@ -528,9 +529,6 @@ function baueUferdorf(rg){
   const ix = (rg.x - info.wx), iz = (rg.z - info.wz), il = Math.hypot(ix, iz) || 1;
   const rx = ix / il, rz = iz / il, tx = -rz, tz = rx;                  // radial nach aussen / tangential
   let s = 307; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  const wand = [0xe8ddc8, 0xd8c0a0, 0xcfe0ec, 0xf0d0c0].map(c => new THREE.MeshLambertMaterial({ color: c }));
-  const dach = [0xb04030, 0x8a5a3a, 0x9a4a4a].map(c => new THREE.MeshLambertMaterial({ color: c }));
-  const box = new THREE.BoxGeometry(1, 1, 1), kegel = new THREE.ConeGeometry(0.75, 1, 4);
   // zwei Reihen: 28 und 50 m hinter dem Ring, seitlich -55..55 m, Luecke in der Mitte (Weg zu Kenji)
   for(const [ab, n] of [[28, 6], [52, 5]]){
     for(let i = 0; i < n; i++){
@@ -538,13 +536,10 @@ function baueUferdorf(rg){
       if(Math.abs(q) < 12) continue;                                     // Weg frei
       const x = rg.x - rx * ab + tx * q, z = rg.z - rz * ab + tz * q;
       if(!isOnLand(x, z) || (typeof isOnRunway === 'function' && isOnRunway(x, z))) continue;
-      const b = 7 + rnd() * 5, t = 7 + rnd() * 5, h = 5 + rnd() * 4;
-      const g = new THREE.Group();
-      const k = new THREE.Mesh(box, wand[Math.floor(rnd() * wand.length)]); k.scale.set(b, h, t); k.position.y = h / 2; g.add(k);
-      const d = new THREE.Mesh(kegel, dach[Math.floor(rnd() * dach.length)]); d.scale.set(Math.max(b, t), 3, Math.max(b, t));
-      d.rotation.y = Math.PI / 4; d.position.y = h + 1.5; g.add(d);
-      g.position.set(x, ISLAND_Y, z); g.rotation.y = Math.atan2(rx, rz) + (rnd() - 0.5) * 0.3;
-      w.add(g); dorf.haeuser.push({ x, z, r: Math.max(b, t) / 2 + 0.5, h: h + 3 });
+      const b = 7 + rnd() * 5, t = 7 + rnd() * 5, h = 3.6 + rnd() * 1.6;
+      // Tuer (lokal +z) zum Wasser hin, also zum Ring
+      const d = story.setze('haus', 5, { x, z, y: ISLAND_Y, dreh: Math.atan2(rx, rz) + (rnd() - 0.5) * 0.3, stil: 'china', b, t, h, seed: 300 + dorf.haeuser.length, fest: true });
+      dorf.haeuser.push(d);
     }
   }
 }
@@ -553,11 +548,6 @@ story.e5ankunft = ankunft;                          // tiere.js: Pandas und Moew
 
 // ---- Hooks ------------------------------------------------------------------------------------
 function hookE5(){
-  const hitsOrig = hitsBuilding;
-  hitsBuilding = function(x, y, z){
-    if(hier() && dorf.haeuser.some(hh => Math.hypot(x - hh.x, z - hh.z) < hh.r && y < ISLAND_Y + hh.h)) return true;
-    return hitsOrig.apply(this, arguments);
-  };
   // Auf der Race-Bahn darf niemand starten und landen: die Engine-Flotte sucht sich Inseln mit Bahn, und hier gibt es
   // nur diese eine. Am Himmel fliegen trotzdem Maschinen (story.js: himmelUpdate, nur Reiseflug, keine Landung).
   const updateTrafficOrig = updateTraffic, updateFlybyOrig = updateFlyby;

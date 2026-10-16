@@ -97,6 +97,85 @@ function updateFlieger(n, dt){
   }
 }
 
+// ---- Sitzende Moewen, die auffliegen und wieder landen (uebernommen aus Spiel_JFG/insel.js, 16.10.2026) ----------
+// Ring-Billed Gull (sitzend, "Head Turn") + in Flight (Oregon State University Ecampus, CC-BY-4.0). Kommt Kenji zu nahe,
+// wird aus der sitzenden die FLIEGENDE Moewe: sie steigt weg, zieht einen Bogen, fliegt zurueck und landet genau auf
+// ihrem Platz (dann wieder sitzend). Kommt er beim Anflug wieder zu nah, fliegt sie erneut auf. Fuer jede Etappe gleich:
+//   story.sitzMoewen(etappe, welt, gruppen, opt)
+//     gruppen: [{ x, z, n, blick?, reihe? }]  blick = Blickrichtung (rad, Kopf +Z), reihe = lockere Reihe entlang z
+//     opt: { y (Hoehe des Platzes; Standard Boden dort), mass (Laenge sitzend, 0,7 m), streu (m, 6), seed, frei(x, z) }
+const SITZ_L = 0.7, SCHEU_R = 3.5, MOEWE_BOGEN_H = 9;
+const sitzer = {};                                     // Etappe -> [Moewen]
+story.sitzMoewen = function(n, w, gruppen, opt){
+  opt = opt || {};
+  const liste = sitzer[n] = [];
+  const rnd = zufall(opt.seed || (53 + n * 7));
+  vorlage('moeweSitz', window.MOEWE_SITZ_GLB, opt.mass || SITZ_L, 'z', null, (v) => {
+    if(story.etappe !== n || sitzer[n] !== liste) return;
+    const streu = opt.streu === undefined ? 6 : opt.streu;
+    for(const gr of gruppen){
+      const blick = gr.blick !== undefined ? gr.blick : rnd() * Math.PI * 2;
+      for(let i = 0; i < gr.n; i++){
+        let x = gr.reihe ? gr.x + (rnd() - 0.5) * 0.8 : gr.x + (rnd() - 0.5) * streu;
+        let z = gr.reihe ? gr.z + (i - (gr.n - 1) / 2) * (0.9 + rnd() * 0.8) : gr.z + (rnd() - 0.5) * streu;
+        if(opt.frei && !opt.frei(x, z)){ x = gr.x; z = gr.z; }
+        const o = tierNeu(v, w, rnd);
+        const y = opt.y !== undefined ? opt.y : evaFootY(x, z);
+        o.platz = { x, y, z }; o.k.position.set(x, y, z);
+        o.k.rotation.y = blick + (rnd() - 0.5) * (gr.reihe ? 1.2 : 2.5);
+        o.k.scale.multiplyScalar(0.9 + rnd() * 0.2);
+        liste.push(o);
+      }
+    }
+  });
+  // das fliegende Modell schon vorladen (fuers Auffliegen)
+  vorlage('moeweFlug', window.MOEWE_FLUG_GLB, MOEWE_FLUG_B, 'x', null, () => {});
+};
+function moeweAuf(o, von, w){
+  const v = vorlagen.moeweFlug; if(!v || !v.tpl) return;
+  if(!o.flieg){ o.flieg = tierNeu(v, w, Math.random); o.flieg.k.userData.deko = true; }
+  o.weg = 'auf'; o.t = 0; o.vy = 3; o.v = 6;
+  o.yaw = Math.atan2(o.k.position.x - von.x, o.k.position.z - von.z) + (Math.random() - 0.5) * 0.8;
+  o.dreh = (Math.random() < 0.5 ? 1 : -1) * (0.25 + Math.random() * 0.15);
+  o.tKreis = 10 + Math.random() * 6;
+}
+const klemmeT = (v, a, b) => Math.max(a, Math.min(b, v));
+function moeweFliegt(o, dt){
+  o.t += dt; const p = o.k.position, P = o.platz;
+  let neig = 0, kipp = 0;
+  if(o.weg === 'auf'){
+    o.vy = Math.max(0.8, o.vy - dt * 0.6); p.y += o.vy * dt; neig = -0.25;
+    if(o.t > 6){ o.weg = 'kreis'; o.t = 0; }
+  } else if(o.weg === 'kreis'){
+    o.yaw += o.dreh * dt; kipp = Math.sign(o.dreh) * 0.35;
+    p.y += (P.y + MOEWE_BOGEN_H - p.y) * Math.min(1, dt * 0.5);
+    if(o.t > o.tKreis){ o.weg = 'anflug'; o.t = 0; }
+  } else if(o.weg === 'anflug'){
+    const dx = P.x - p.x, dz = P.z - p.z, d = Math.hypot(dx, dz);
+    let soll = Math.atan2(dx, dz) - o.yaw; soll = Math.atan2(Math.sin(soll), Math.cos(soll));
+    o.yaw += klemmeT(soll, -1.2 * dt, 1.2 * dt); kipp = klemmeT(soll, -0.4, 0.4);
+    o.v = Math.max(2, Math.min(6, d * 0.4));
+    p.y += (P.y + Math.min(MOEWE_BOGEN_H, d * 0.25) - p.y) * Math.min(1, dt * 1.5); neig = 0.15;
+    if(d < 0.4){ p.set(P.x, P.y, P.z); o.weg = 0; o.k.rotation.y = o.yaw; return; }   // gelandet
+  }
+  p.x += Math.sin(o.yaw) * o.v * dt; p.z += Math.cos(o.yaw) * o.v * dt;
+  o.k.rotation.y = o.yaw;
+  const f = o.flieg.k; f.position.copy(p); f.position.y += 0.15; f.rotation.set(neig, o.yaw, kipp, 'YXZ');
+  if(o.flieg.mixer) o.flieg.mixer.update(dt * (o.weg === 'anflug' && o.v < 3 ? 0.7 : 1.3));
+}
+function updateSitzer(n, dt){
+  const liste = sitzer[n]; if(!liste) return;
+  const fig = eva && eva.group && !eva.boat ? eva.group.position : null, w = story.welt(n);
+  for(const o of liste){
+    const nah = fig && Math.hypot(fig.x - o.k.position.x, fig.z - o.k.position.z) < SCHEU_R && Math.abs(fig.y - o.k.position.y) < 3;
+    if(nah && (!o.weg || o.weg === 'anflug')) moeweAuf(o, fig, w);
+    if(o.weg) moeweFliegt(o, dt);
+    const fliegt = !!(o.weg && o.flieg);
+    if(fliegt){ o.k.visible = false; sichtAnim(o.flieg, 0); }
+    else { sichtAnim(o, dt); if(o.flieg) o.flieg.k.visible = false; }
+  }
+}
+
 // ---- Bodentiere: Hunde (Etappe 1), Pandas (Etappe 5) -----------------------------------------------------
 // Sie stehen, schauen herum und laufen ab und zu ein Stueck (Hund: walk/iddle, Panda: eine Animation, beim Gehen
 // schneller abgespielt). frei(x, z) sagt, wo sie hinduerfen (Wiese, nicht auf Bahn/Ring/Fahrzeug).
@@ -466,8 +545,10 @@ story.tiereUpdate = function(dt){
   updateStrandTiere(dt);
   updateInselMoewen(dt);
   for(const n of Object.keys(gebaut)) if(+n !== story.etappe){ delete gebaut[n]; delete flieger[n]; delete boden[n]; }
+  for(const n of Object.keys(sitzer)) if(+n !== story.etappe) delete sitzer[n];
   etappeAufbauen(story.etappe);
   updateFlieger(story.etappe, dt);
   updateBoden(story.etappe, dt);
+  updateSitzer(story.etappe, dt);
 };
 })();

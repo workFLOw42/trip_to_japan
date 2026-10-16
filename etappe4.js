@@ -231,55 +231,12 @@ const MOEWEN_SITZ = [
   { x: 10.6, z: 40, n: 5, kante: true }, { x: 10.6, z: 120, n: 6, kante: true }, { x: 10.6, z: -150, n: 4, kante: true },
   { x: -18, z: -12, n: 3 }, { x: -45, z: 60, n: 4 },
 ];
-const moewen = [];
-function moeweVorlage(gltf, mass){
-  const obj = gltf.scene;
-  obj.traverse(o => { if(o.isMesh){ o.frustumCulled = false; o.castShadow = false; } });
-  // Groesse aus der gehaeuteten Haltung messen (Bindepose-Box stimmt bei Skinned Meshes nicht)
-  const mx = new THREE.AnimationMixer(obj); if(gltf.animations[0]) mx.clipAction(gltf.animations[0]).play(); mx.update(0.01);
-  obj.updateMatrixWorld(true);
-  const bb = new THREE.Box3(), v = new THREE.Vector3();
-  obj.traverse(m => { if(!m.isSkinnedMesh) return; const n = m.geometry.attributes.position.count;
-    for(let i = 0; i < n; i += 5){ m.boneTransform(i, v); v.applyMatrix4(m.matrixWorld); bb.expandByPoint(v); } });
-  obj.scale.setScalar(mass / bb.getSize(new THREE.Vector3()).z);
-  obj.position.y -= bb.min.y * obj.scale.x;          // Fuesse auf y = 0
-  mx.stopAllAction(); mx.uncacheRoot(obj);
-  const tpl = new THREE.Group(); tpl.add(obj);
-  return { tpl, clip: gltf.animations[0] };
-}
+// Gesetzt und bewegt ueber tiere.js (story.sitzMoewen): sie fliegen auf, wenn Kenji kommt, und landen wieder.
 function ladeMoewen(w){
-  moewen.length = 0;
-  let s = 53;
-  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  ladeGlb(window.MOEWE_SITZ_GLB, (g) => {
-    if(!e4()) return;
-    const v = moeweVorlage(g, MOEWE_SITZ_L);
-    for(const gr of MOEWEN_SITZ){
-      const blick = gr.kante ? Math.PI / 2 : rnd() * Math.PI * 2;     // an der Kante: Blick aufs Wasser (+x; Kopf +Z -> yaw pi/2)
-      for(let i = 0; i < gr.n; i++){
-        const x = gr.kante ? gr.x + (rnd() - 0.5) * 0.8 : gr.x + (rnd() - 0.5) * 6;
-        const z = gr.kante ? gr.z + (i - (gr.n - 1) / 2) * (0.9 + rnd() * 0.8) : gr.z + (rnd() - 0.5) * 6;
-        const k = cloneSkinned(v.tpl);
-        k.position.set(Math.min(KAI_X - 0.4, x), KAI_Y, z);
-        k.rotation.y = blick + (rnd() - 0.5) * (gr.kante ? 1.2 : 2.5);
-        k.scale.setScalar(0.9 + rnd() * 0.2);
-        w.add(k);
-        let mixer = null;
-        if(v.clip){ mixer = new THREE.AnimationMixer(k); mixer.clipAction(v.clip).play(); mixer.setTime(rnd() * v.clip.duration); mixer.timeScale = 0.8 + rnd() * 0.4; }
-        moewen.push({ k, mixer });
-      }
-    }
-  });
+  story.sitzMoewen(4, w, MOEWEN_SITZ.map(g => ({ x: g.x, z: g.z, n: g.n, reihe: g.kante, blick: g.kante ? Math.PI / 2 : undefined })),
+    { y: KAI_Y, mass: MOEWE_SITZ_L, seed: 53, frei: (x) => x <= KAI_X - 0.4 });
 }
-const MOEWE_SICHT = 300, MOEWE_ANIM = 120;          // m: bis hier gezeichnet / bis hier animiert
-function updateMoewen(dt){
-  const cp = camera.position, auf = locale === 'earth';
-  for(const o of moewen){
-    const d = Math.hypot(o.k.position.x - cp.x, o.k.position.z - cp.z);
-    o.k.visible = auf && d < MOEWE_SICHT;
-    if(o.k.visible && o.mixer && d < MOEWE_ANIM) o.mixer.update(dt);
-  }
-}
+function updateMoewen(){}
 
 // ---- Hinter Kenji: Containerlager, dahinter eine grosse Stadt ----------------------------------------------
 // Live-Wunsch: hinter Kenji (er schaut zum Rennboot, also nach Nordost) lag nur leerer Beton. Jetzt erst ein

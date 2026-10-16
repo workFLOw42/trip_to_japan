@@ -2753,6 +2753,19 @@ function hookJetLandung(){
     return r;
   };
 }
+// Schubbalken in der Groesse von "Das Geheimland" (JFG segeln.js, Live-Wunsch 16.10.): so breit wie das Radar, 293 px hoch,
+// SCHUB_ABST px unter Gyroskop bzw. Radar – bleibt aber rechts (die Engine baut ihn 24 x 240 px).
+const SCHUB_H = 293, SCHUB_ABST = 20;
+function schubWieJFG(){
+  if(!schubEl || schubEl.style.display === 'none') return;
+  const gy = document.getElementById('gyro'), ra = document.getElementById('radar');
+  const ueber = gy && gy.style.display !== 'none' && getComputedStyle(gy).visibility !== 'hidden' ? gy : ra;
+  if(!ueber) return;
+  const r = ueber.getBoundingClientRect(), top = Math.round(r.bottom + SCHUB_ABST) + 'px', w = Math.round(r.width - 6) + 'px';
+  if(schubEl.style.top !== top) schubEl.style.top = top;
+  if(schubEl.style.width !== w){ schubEl.style.width = w; schubEl.style.height = SCHUB_H + 'px'; schubEl.style.right = '12px';
+    schubEl.style.borderRadius = '9px'; schubEl.style.gap = '3px'; }
+}
 function hookSchubGerade(){
   const schubOrig = schubBalken;
   schubBalken = function(){
@@ -2760,7 +2773,9 @@ function hookSchubGerade(){
       if(schubEl && schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; }
       return;
     }
-    return schubOrig.apply(this, arguments);
+    const r = schubOrig.apply(this, arguments);
+    schubWieJFG();
+    return r;
   };
   const geradeOrig = geradeMoeglich;
   geradeMoeglich = function(){
