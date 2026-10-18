@@ -1,6 +1,6 @@
 // Trip to Japan – Etappe 4b: Schnellboot-Flucht (Risiko, "1 Tag").
 // Laedt nach etappe4.js und flucht_glb.js. Gleiche Welt (story.welt(4)), gleicher Hafen.
-// Kenji kapert das Schnellboot am Kai, zwei Polizeiboote verfolgen ihn: eines von hinten, eines
+// Samu kapert das Schnellboot am Kai, zwei Polizeiboote verfolgen ihn: eines von hinten, eines
 // kommt an einer Abzweigung aus dem Seitenarm. Strecke: raus aus dem Hafenbecken, dann ein Kanal mit
 // fuenf Kurven bis zur Muendung (gerechnet in C:\tmp\sfg\e4\kanal.js).
 //   Geschafft (Muendung erreicht) -> 1 Tag. Eingeholt (Polizei < FANG_R) oder 3 Felskontakte ->
@@ -107,14 +107,11 @@ function wand(d, mat, z0, z1){
   return new THREE.Mesh(g, mat);
 }
 const UFER_B = 160;                                  // m Uferbeton beidseits des Kanals
-// Haeuser entlang des Kanals: Lagerhallen und Wohnhaeuser, Front zum Wasser (fester Zufall)
+// Haeuser entlang des Kanals: Lagerhallen und Wohnhaeuser, Front zum Wasser (fester Zufall). Live-Wunsch 16.10.2026: aus
+// dem Katalog im Stil des Hafens (haeuser.js: 'halle', 'hafen', 'turm') – mit Grenze in ihrer echten Form (objekte.js),
+// vorher ein verschmolzenes Mesh ohne Grenze (man lief hindurch). Tuer (lokal +z) zum Kanal.
 function baueHaeuser(w){
   let s = 911; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  const waende = [0xd8cbb4, 0xb9a48a, 0x9fb3c2, 0xc7a28f, 0xe6e0d4, 0x8f9a84].map(c => new THREE.MeshLambertMaterial({ color: c }));
-  const daecher = [0x8a3b2c, 0x4f5660, 0x6b4a33, 0x3d5a6e].map(c => new THREE.MeshLambertMaterial({ color: c }));
-  const fenster = new THREE.MeshLambertMaterial({ color: 0x2b3a4a });
-  const box = new THREE.BoxGeometry(1, 1, 1), dach = new THREE.ConeGeometry(0.72, 1, 4);
-  const g = new THREE.Group();
   for(let z = BECKEN.z1 - 40; z > KANAL_Z1 + 40; z -= 34 + rnd() * 30){
     for(const seite of [-1, 1]){
       const r = [rnd(), rnd(), rnd(), rnd(), rnd(), rnd(), rnd(), rnd()];
@@ -129,32 +126,11 @@ function baueHaeuser(w){
       // In engen Kurven ragt die Querlinie zum Kanal der Nachbarkurve: dann kein Haus
       const rad = Math.hypot(b, t) / 2 + 12;
       if([[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => imKanal(hx + a * rad, hz + c * rad, -12) || imArm(hx + a * rad, hz + c * rad))) continue;
-      const haus = new THREE.Group();
-      const k = new THREE.Mesh(box, waende[Math.floor(r[6] * waende.length)]); k.scale.set(b, h, t); k.position.y = h / 2; haus.add(k);
-      if(halle){ const d = new THREE.Mesh(box, daecher[1]); d.scale.set(b + 1, 0.8, t + 1); d.position.y = h + 0.4; haus.add(d); }
-      else if(h < 16){ const dh = Math.min(5, h * 0.45), d = new THREE.Mesh(dach, daecher[Math.floor(r[7] * daecher.length)]);
-        d.scale.set(Math.max(b, t), dh, Math.max(b, t)); d.rotation.y = Math.PI / 4; d.position.y = h + dh / 2; haus.add(d); }
-      // Zur Kanalseite: Tor (Halle) bzw. Fensterbaender je Stockwerk (Wohnhaus)
-      if(halle){ const tor = new THREE.Mesh(box, fenster); tor.scale.set(b * 0.4, h * 0.6, 0.3); tor.position.set(0, h * 0.3, -t / 2 - 0.1); haus.add(tor); }
-      else for(let y = 3; y < h - 1.5; y += 3.2){ const f = new THREE.Mesh(box, fenster); f.scale.set(b * 0.8, 1.2, 0.3); f.position.set(0, y, -t / 2 - 0.1); haus.add(f); }
-      haus.position.set(hx, KAI_Y4, hz);
-      haus.rotation.y = Math.atan2(nx * seite, nz * seite);                        // lokal -z zeigt zum Kanal
-      g.add(haus);
+      const stil = halle ? 'halle' : (h > 16 ? 'turm' : 'asien');   // Wohnhaeuser: suedostasiatische Shophouses (18.10.2026)
+      // lokal +z (Tuer) zeigt zum Kanal: Richtung -(nx, nz) * seite
+      story.setze('haus', 4, { x: hx, z: hz, y: KAI_Y4, dreh: Math.atan2(-nx * seite, -nz * seite), stil, b, t, h, seed: Math.floor(r[6] * 1e6) + 1, fest: true });
     }
   }
-  // Je Material zu EINEM Mesh verschmelzen: ~1000 Einzelteile (jedes Fenster) waren ~350 Zeichenaufrufe
-  g.updateMatrixWorld(true);
-  const proMat = new Map();
-  g.traverse(o => { if(!o.isMesh) return; const geo = o.geometry.clone().applyMatrix4(o.matrixWorld).toNonIndexed();
-    if(!proMat.has(o.material)) proMat.set(o.material, []); proMat.get(o.material).push(geo); });
-  for(const [mat, geos] of proMat){
-    let n = 0; for(const q of geos) n += q.attributes.position.count;
-    const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3); let o = 0;
-    for(const q of geos){ pos.set(q.attributes.position.array, o * 3); nor.set(q.attributes.normal.array, o * 3); o += q.attributes.position.count; q.dispose(); }
-    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-    w.add(new THREE.Mesh(geo, mat));
-  }
-  box.dispose(); dach.dispose();
 }
 // Offenes Meer hinter der Muendung: Schiffe (Engine-Modelle), ruhige eigene Fahrt auf der glatten Flaeche.
 // [Typ, x relativ zur Muendung, z relativ zur Muendung, Kurs]
@@ -272,6 +248,7 @@ function baueKulisse(){
   ladeGlb(window.FLUCHT_RENNBOOT_GLB, (o) => {
     const b = normiere(o, 13, false); b.position.set(START.x, -0.5, START.z); b.rotation.y = START.yaw + Math.PI;   // Bug bei +z im Modell
     w.add(b); fl.parkBoot = b; fl.bootVorlage = o;
+    if(story.ding) story.ding(b, { welt: 4, typ: 'schnellboot', nurZuFuss: true });  // Grenze (18.10.2026); eingestiegen = unsichtbar
   });
   // Polizeiboote (zwei Klone), warten an ihren Plaetzen
   ladeGlb(window.FLUCHT_POLIZEI_GLB, (o) => {
@@ -282,6 +259,7 @@ function baueKulisse(){
       const licht = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), new THREE.MeshBasicMaterial({ color: 0x3b82ff }));
       licht.position.y = 6; b.add(licht);
       w.add(b);
+      if(story.ding) story.ding(b, { welt: 4, typ: 'polizeiboot', beweglich: true, nurZuFuss: true });   // Grenze, faehrt mit
       fl.polizei.push({ obj: b, licht, x: 0, z: 0, yaw: 0, v: 0, aktiv: false, spurI: 0 });
     }
     polizeiParken();
@@ -293,11 +271,11 @@ const START = { x: 24, z: -110, yaw: 0 };           // vor dem Kai, Bug nach -z 
 function polizeiParken(){
   if(fl.polizei.length < 2) return;
   const p1 = fl.polizei[0], p2 = fl.polizei[1];
-  Object.assign(p1, { x: 40, z: -20, yaw: 0, v: 0, aktiv: false, spurI: 0, px: 40, pz: -20 });   // im Becken hinter Kenji
+  Object.assign(p1, { x: 40, z: -20, yaw: 0, v: 0, aktiv: false, spurI: 0, px: 40, pz: -20 });   // im Becken hinter Samu
   Object.assign(p2, { x: mitteX(ARM.z) + KANAL_B / 2 + 40, z: ARM.z, yaw: Math.PI / 2, v: 0, aktiv: false, spurI: 0, wartet: true });
   for(const p of fl.polizei){ p.obj.position.set(p.x, -0.6, p.z); p.obj.rotation.y = p.yaw; }
 }
-// Kenjis Spur (alle 4 m ein Punkt): Polizei 1 faehrt sie nach
+// Samus Spur (alle 4 m ein Punkt): Polizei 1 faehrt sie nach
 const spur = [];
 function spurMerken(){
   const l = spur[spur.length - 1];
@@ -316,7 +294,7 @@ const POL = { v1: 41, v2: 33, aq: 5 };               // Boot 2 deutlich langsame
 // Kruemmung -> 86 % des Kanals mit 20 m/s (72 km/h); Live-Test: mit 50 % Schub (75 km/h) 260 m Vorsprung.
 // Ziel (Risiko-Variante): nur perfekt gefahren (Vollgas, vor jeder Kurve passend runter) knapp entkommen.
 // C:\tmp\e4perfekt.js: perfekt = Kurventempo aus Wendekreis*1,25 <= Radius -> 62 s, Boot 1 am Ziel ~58 m
-// hinter Kenji (Boot 2 ~140 m). Je 10 % schlechter in den Kurven ~ 3 s / 60 m mehr -> eingeholt.
+// hinter Samu (Boot 2 ~140 m). Je 10 % schlechter in den Kurven ~ 3 s / 60 m mehr -> eingeholt.
 function kanalRadius(z){ const d1 = (mitteX(z - 2) - mitteX(z + 2)) / 4, d2 = (mitteX(z - 2) - 2 * mitteX(z) + mitteX(z + 2)) / 4;
   return Math.pow(1 + d1 * d1, 1.5) / Math.max(1e-9, Math.abs(d2)); }
 story.flucht4.POL = POL;                             // fuer den Bot (C:\tmp\sfg\test_e4bot2.js)
@@ -412,7 +390,7 @@ function fluchtUpdate(dt){
     }
     planeGroup.position.copy(state.pos);
   }
-  // Stroemung: im Kanal nach -z (in der Mitte voll, zur Mauer schwaecher), schiebt Kenji wie die Polizei
+  // Stroemung: im Kanal nach -z (in der Mitte voll, zur Mauer schwaecher), schiebt Samu wie die Polizei
   if(imKanal(state.pos.x, state.pos.z)){
     const L = lage(state.pos.x, state.pos.z), k = 1 - Math.min(1, Math.abs(L.d) / (KANAL_B / 2)) * 0.6;
     const nx = state.pos.x + L.rx * STROM_V * k * dt, nz = state.pos.z + L.rz * STROM_V * k * dt;
@@ -426,23 +404,23 @@ function fluchtUpdate(dt){
   }
   fluchtHud();
 }
-// Polizei: faehrt AUF DER KANALLINIE (sie kennt den Kanal). Vorher fuhr Boot 1 Kenjis Spur nach – stand
-// Kenji, blieb es am letzten Spurpunkt stehen (Live-Test: Abstand blieb konstant), und in Kurven klebte
+// Polizei: faehrt AUF DER KANALLINIE (sie kennt den Kanal). Vorher fuhr Boot 1 Samus Spur nach – stand
+// Samu, blieb es am letzten Spurpunkt stehen (Live-Test: Abstand blieb konstant), und in Kurven klebte
 // es an der Mauer (es bewegte sich nur, wenn der naechste Schritt nass war: 300 m Vorsprung nach Kurve 2).
-// Jetzt: Position z entlang des Kanals, x = Kanalmitte + Querversatz zu Kenji hin. Bremst nur in Kurven.
-// Unter NAH m faehrt sie direkt auf Kenji zu – wer steht, wird eingeholt.
-const NAH = 60;                                      // direkt auf Kenji zu erst unter 60 m (vorher 90)
+// Jetzt: Position z entlang des Kanals, x = Kanalmitte + Querversatz zu Samu hin. Bremst nur in Kurven.
+// Unter NAH m faehrt sie direkt auf Samu zu – wer steht, wird eingeholt.
+const NAH = 60;                                      // direkt auf Samu zu erst unter 60 m (vorher 90)
 // Stroemung Richtung Muendung (nach -z) im Kanal; im Becken still
 const STROM_V = 2.5;
 function polizeiFahre(p, vSoll, dt){
   p.v += Math.sign(vSoll - p.v) * Math.min(Math.abs(vSoll - p.v), 6 * dt);
   const dz = state.pos.z - p.z, d = Math.hypot(state.pos.x - p.x, dz);
   if(d < NAH){
-    // direkt auf Kenji zu
+    // direkt auf Samu zu
     const ux = (state.pos.x - p.x) / (d || 1), uz = dz / (d || 1);
     p.x += ux * p.v * dt; p.z += uz * p.v * dt;
   } else {
-    // entlang des Kanals Richtung Kenji (nach -z), seitlich langsam zu seiner Querlage
+    // entlang des Kanals Richtung Samu (nach -z), seitlich langsam zu seiner Querlage
     p.z -= p.v * dt * Math.sign(-dz || -1);
     const L = lage(mitteX(p.z), p.z), quer = Math.max(-KANAL_B / 2 + 6, Math.min(KANAL_B / 2 - 6, lage(state.pos.x, state.pos.z).d));
     const zielX = mitteX(p.z) + (-L.rz) * quer * 0.5;
@@ -457,7 +435,7 @@ function polizeiUpdate(dt){
   const t = performance.now() / 1000;
   for(const [i, p] of fl.polizei.entries()){
     p.licht.material.color.set(Math.floor(t * 4 + i) % 2 ? 0x3b82ff : 0xff3030);
-    // Boot 2 schiesst erst heraus, wenn Kenji an der Einfahrt VORBEI ist – es wird zum zweiten Verfolger hinter
+    // Boot 2 schiesst erst heraus, wenn Samu an der Einfahrt VORBEI ist – es wird zum zweiten Verfolger hinter
     // ihm (Live-Test: startete 140 m davor und stand ihm im Weg, man konnte nicht entkommen)
     if(i === 1 && p.wartet && state.pos.z < ARM.z - 30){ p.wartet = false; p.aktiv = true; p.v = 10; p.ausArm = true; }
     if(!p.aktiv) continue;
@@ -517,7 +495,7 @@ function naechstePolizei(){ let b = Infinity; for(const p of fl.polizei) if(p.ak
 
 const GEFAENGNIS = [
   'Halt, Polizei! Das war\'s mit der Flucht.',
-  'Kenji muss mit auf die Wache. Ein geklautes Boot ist kein Spaß!',
+  'Samu muss mit auf die Wache. Ein geklautes Boot ist kein Spaß!',
 ];
 function fluchtEnde(ok, wie){
   if(fl.fertig) return;

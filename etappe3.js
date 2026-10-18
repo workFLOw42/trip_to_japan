@@ -256,6 +256,10 @@ function baueKulisse(){
   stI.count = nS; krI[0].count = nK[0]; krI[1].count = nK[1];
   for(const m of [stI, krI[0], krI[1]]){ m.frustumCulled = false; g.add(m); }   // Huelle gilt nur um den Ursprung
   w.add(g); kul.baeume = g;
+  // Grenze (objekte.js, Live-Wunsch 16.10.2026): der untere Stamm (bis ~35 % Hoehe, dort ist er kaum geneigt), die Kronen
+  // sind Deko – wie die Palmen im Geheimland. 5000 Stuecke: objekte.js sortiert sie in ein Raster.
+  krI.forEach(m => { m.userData.deko = true; });
+  if(story.instanzen) story.instanzen(stI, { welt: 3, form: 'kreis', typ: 'palme', box: new THREE.Box3(new THREE.Vector3(-0.45, 0, -0.45), new THREE.Vector3(0.45, PALME_H * 0.35, 0.45)) });
   // Fluss als Band entlang der Mittellinie: Wasser (WASSER_Y) und beidseits ein Sandstreifen, der
   // von der Wiese zum Wasser abfaellt. Fein aufgeloest (alle 8 m ein Querschnitt), damit das Ufer
   // scharf ist.
@@ -412,7 +416,7 @@ function baueFeuer(){
 }
 
 // ---- Fahrzeuge am Start ------------------------------------------------------------------------
-// Kenji steht am Steg. Links das Feuerwehrboot am Wasser, rechts auf der Wiese der X-Wing.
+// Samu steht am Steg. Links das Feuerwehrboot am Wasser, rechts auf der Wiese der X-Wing.
 function stegPlatz(){
   const z = FLUSS_Z0 - 40;
   const L = flussLage(mitteX(z), z);
@@ -432,7 +436,7 @@ function xwingPlatz(){
   const L = flussLage(sp.x, sp.z);
   const nx = -L.rz, nz = L.rx;
   // Live-Wunsch (Screenshot 08.10.2026, lila Punkt): landeinwaerts knapp hinter dem Sandstreifen und 47 m flussabwaerts –
-  // rechts im Bild, wenn Kenji zum Fluss schaut. Vorher 70 m landeinwaerts und 40 m flussaufwaerts, also hinter Kenji.
+  // rechts im Bild, wenn Samu zum Fluss schaut. Vorher 70 m landeinwaerts und 40 m flussaufwaerts, also hinter Samu.
   // Der Punkt lag 22 m vom Steg (Sand endet bei 20 m); mit ~10 m Spannweite 28 m, damit kein Fluegel im Sand steht.
   return { x: sp.x + nx * 28 + L.rx * 47, z: sp.z + nz * 28 + L.rz * 47, yaw: Math.atan2(-L.rx, -L.rz) };
 }
@@ -484,7 +488,7 @@ function flussStart(){
   ladeSchildkroeten();
   ladeKrokodile();
   if(locale !== 'earth') enterEarth();
-  // X-Wing parkt auf der Wiese, Kenji steht am Steg
+  // X-Wing parkt auf der Wiese, Samu steht am Steg
   const xp = xwingPlatz();
   clearEva();
   currentModel = MODEL_NAMES.indexOf('XWing');
@@ -499,7 +503,7 @@ function flussStart(){
   const an = ankunft();
   eva.group.position.set(an.x, WIESE_Y, an.z);
   // Blick quer ueber den Fluss (Live-Wunsch, Screenshot 08.10.2026): Boot und Steg links, X-Wing rechts vorn am Ufer.
-  // Vorher schaute Kenji zwischen Boot und X-Wing, der X-Wing stand dabei hinter ihm.
+  // Vorher schaute Samu zwischen Boot und X-Wing, der X-Wing stand dabei hinter ihm.
   const La = flussLage(an.x, an.z), seite = Math.sign(La.d) || 1;
   // senkrecht zur Flussrichtung zum Wasser hin, etwas flussaufwaerts gedreht (~11 Grad), damit Ring und Schild links im Bild sind
   const mx = La.rz * seite - La.rx * 0.2, mz = -La.rx * seite - La.rz * 0.2;
@@ -521,8 +525,8 @@ story.etappe3Start = flussStart;
 // ---- Schildkroeten: kleine Gruppen auf der Wiese (wie die Kamele in Etappe 2) ------------------
 // Modell: Tortoise - turtle by Daniel Zuleta Art, CC-BY-4.0 (schildkroete_glb.js). Normal-Maps entfernt, Farbtexturen als
 // 512er JPEG und aufgehellt (im Original fast schwarz, Mittel ~25/255) -> 1,2 statt 5,2 MB. Ohne Animation: sie stehen.
-// Gruppe: z am Fluss, seite wie FEUER_DEF (+1 = Ufer mit Steg und Kenji), ab = m hinter dem Sandstreifen.
-const SK_LAENGE = 1.4;        // m Riesenschildkroete (~0,6 m hoch; Kenji 1,55 m)
+// Gruppe: z am Fluss, seite wie FEUER_DEF (+1 = Ufer mit Steg und Samu), ab = m hinter dem Sandstreifen.
+const SK_LAENGE = 1.4;        // m Riesenschildkroete (~0,6 m hoch; Samu 1,55 m)
 // Live-Wunsch "mehr Schildkroeten": 16 Gruppen mit je 3-6 Tieren (vorher 9 mit 3-4), drei davon nah am Start.
 const SK_GRUPPEN = [
   { z: 330, seite: -1, ab: 30, n: 5 }, { z: 150, seite: 1, ab: 60, n: 5 }, { z: -250, seite: -1, ab: 25, n: 4 },
@@ -531,12 +535,12 @@ const SK_GRUPPEN = [
   { z: 420, seite: 1, ab: 45, n: 4 }, { z: 260, seite: 1, ab: 25, n: 3 }, { z: 0, seite: -1, ab: 40, n: 5 },
   { z: -400, seite: -1, ab: 70, n: 4 }, { z: -800, seite: 1, ab: 55, n: 5 }, { z: -1500, seite: 1, ab: 30, n: 4 },
   { z: -1950, seite: -1, ab: 60, n: 5 },
-  { vorKenji: true, n: 6 },    // direkt vor Kenji, auf dem Weg zum Boot
+  { vorSamu: true, n: 6 },    // direkt vor Samu, auf dem Weg zum Boot
 ];
 const SK_SICHT = 700;         // m: weiter weg nicht zeichnen (je Tier 26.000 Dreiecke)
 const schildkroeten = [];
 function skMitte(gr){
-  if(gr.vorKenji){
+  if(gr.vorSamu){
     const an = ankunft(), bp = bootPlatz();
     const dx = bp.x - an.x, dz = bp.z - an.z, l = Math.hypot(dx, dz) || 1;
     return { x: an.x + dx / l * 9, z: an.z + dz / l * 9, r: 3 };
@@ -619,6 +623,7 @@ function ladeKrokodile(){
       let mixer = null;
       if(clip){ mixer = new THREE.AnimationMixer(k2); mixer.clipAction(clip).play(); mixer.setTime(rnd() * clip.duration); mixer.timeScale = 0.7 + rnd() * 0.3; }
       krokodile.push({ k: k2, mixer, z, q, dir, z0: z, t: rnd() * 20, v: 0.9 + rnd() * 0.6 });
+      if(story.wasserTier) story.wasserTier(k2, KROKO_L, WASSER_Y);   // Wasserspur wie ein kleines Boot (spuren.js, 18.10.2026)
     }
   }, (e) => console.warn('Krokodil-GLB', e));
 }
@@ -640,6 +645,11 @@ function updateKrokodile(dt){
     if(o.k.visible && o.mixer && d < 200) o.mixer.update(dt);
   }
 }
+// Grenze (objekte.js, Live-Wunsch 18.10.2026): nicht durch die Schildkroeten (niedrig, aber zu hoch zum Drueberlaufen)
+if(story.tierQuelle) story.tierQuelle(() => story.etappe !== 3 ? null
+  : schildkroeten.filter(k => k.visible && k.parent).map(k => {
+    if(!k.userData.schatten && story.tierSchatten) story.tierSchatten(k, SK_LAENGE * 1.1 * k.scale.x, SK_LAENGE * 0.8 * k.scale.x);   // Schatten (18.10.2026)
+    return { x: k.position.x, z: k.position.z, y: k.position.y, r: SK_LAENGE * 0.42 * k.scale.x, h: 0.8 }; }));
 function updateSchildkroeten(){
   const cp = camera.position, auf = locale === 'earth';
   for(const k of schildkroeten) k.visible = auf && Math.hypot(k.position.x - cp.x, k.position.z - cp.z) < SK_SICHT;

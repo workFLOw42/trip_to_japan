@@ -1,7 +1,7 @@
 {
   "name": "Reise nach Japan",
   "short_name": "Reise nach Japan",
-  "description": "Kenjis Sommerferien-Abenteuer: auf eigene Faust nach Japan – mit Controller steuern.",
+  "description": "Samus Sommerferien-Abenteuer: auf eigene Faust nach Japan – mit Controller steuern.",
   "lang": "de",
   "start_url": "./index.html",
   "scope": "./",

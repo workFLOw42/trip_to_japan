@@ -1,9 +1,9 @@
 // Trip to Japan – Finale am Fukuoka-Beach (nach Etappe 6) mit der C-400 auf dem Vorfeld (Live-Wunsch 13.10.2026: Transall statt
 // Mustang). Laedt nach etappe6c.js, vor der Engine. Welche Stufe es gibt, haengt an den verbrauchten Tagen (Konzept.md, 5-Stufen-Finale):
-//   Stufe 1 (6 Tage)    "Abenteuer" (Fuji-Sprung): Kenji fliegt selbst hoch ueber den Fuji. Ueber der Piste uebernimmt der Pilot, B = abspringen,
+//   Stufe 1 (6 Tage)    "Abenteuer" (Fuji-Sprung): Samu fliegt selbst hoch ueber den Fuji. Ueber der Piste uebernimmt der Pilot, B = abspringen,
 //                       freier Fall (linker Stick lenkt), der Schirm geht von allein auf, Landung auf der verschneiten Piste.
 //                       Danach die Snowboard-Abfahrt (Felsen, Rampen, Rail, Tricks) und die Mega-Rampe hinaus aufs Meer.
-//   Stufe 2 (9-12 Tage) "Rundflug": Kenji fliegt selbst durch Ringe um den Fuji und ueber den Gipfel, dann zurueck und landen.
+//   Stufe 2 (9-12 Tage) "Rundflug": Samu fliegt selbst durch Ringe um den Fuji und ueber den Gipfel, dann zurueck und landen.
 // Steigen bis 500 m ueber den Gipfel (maxAlt 2500 m). Absturz oder daneben = noch einmal (Blende, zurueck an die C-400).
 (function(){
 'use strict';
@@ -45,7 +45,7 @@ function pisteYschnell(x, z){
   const start = ab.i;
   let i = Math.max(0, Math.min(n - 1, start)), best = d2(i);
   for(let k = Math.max(0, i - 12), e = Math.min(n, i + 12); k <= e; k++){ const d = d2(k); if(d < best){ best = d; i = k; } }
-  if(best > 30 * 30 || Math.abs(i - start) > 15) return null;                     // nicht in Kenjis Naehe -> Raycast
+  if(best > 30 * 30 || Math.abs(i - start) > 15) return null;                     // nicht in Samus Naehe -> Raycast
   if(best > 60 * 60) return null;                         // weit weg von der Piste
   pyI = i;
   // Abschnitt [i0, i0+1] mit dem Lot von (x, z) dazwischen
@@ -136,7 +136,9 @@ function baueRinge(){
 // ---- Einsteigen ------------------------------------------------------------------------------------------------
 function c400Nah(){
   const v = L() && L().VORFELD;
-  // \eva.group.position.x - v.x, eva.group.position.z - v.z) < 22);
+  // Live-Befund 18.10.2026: die Zeile war seit f2f76a1 verstuemmelt (kein return) – Y an der C-400 ging nie. Frei
+  // (story.freiesSpiel) immer offen, sonst nur in Stufe 1 und 2 (Schild "Abenteuer" / "Rundflug")
+  return !!(hier() && story.phase === 'ankunft' && eva && v && (stufe() <= 2 || story.freiesSpiel) && Math.hypot(eva.group.position.x - v.x, eva.group.position.z - v.z) < 22);
 }
 story.c400Nah = c400Nah;
 const TEXT_RUNDFLUG = [
@@ -187,7 +189,7 @@ function zielSetzen(){
   } else if(fin.piste) story.ziel = { x: fin.piste.ziel.x, z: fin.piste.ziel.z };
 }
 
-// ---- Flug (Kenji steuert) ---------------------------------------------------------------------------------------
+// ---- Flug (Samu steuert) ---------------------------------------------------------------------------------------
 function flugUpdate(){
   if(state.crashed){
     if(!fin.crash){ fin.crash = true; story.ziel = null;
@@ -267,7 +269,7 @@ function pilotSchritt(dt){
 
 // ---- Absprung, freier Fall, Schirm, Landung ---------------------------------------------------------------------
 function kAnim(n, einmal){
-  const k = story.kenji; if(!k || !k.acts[n] || k.cur === n) return;
+  const k = story.samu; if(!k || !k.acts[n] || k.cur === n) return;
   const a = k.acts[n];
   if(einmal){ a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; } else { a.setLoop(THREE.LoopRepeat); a.clampWhenFinished = false; }
   const alt = k.cur === 'haltung' ? k.acts.land : k.acts[k.cur];
@@ -335,7 +337,7 @@ story.trickStatistik = trickStatistik;
 function statistikZeilen(){ const z = []; for(const [titel, liste] of trickStatistik(ab.tricks)){ z.push(['<b style="color:#ffd23f">' + titel + '</b>', '']); for(const [x, n] of liste) z.push(['&nbsp;&nbsp;' + x, n + '×']); } return z; }
 function abspringen(){
   fin.schritt = 'fall';
-  // Der Flieger fliegt als Kopie geradeaus weiter; state.pos folgt ab jetzt Kenji (Radar, Hoehe im HUD)
+  // Der Flieger fliegt als Kopie geradeaus weiter; state.pos folgt ab jetzt Samu (Radar, Hoehe im HUD)
   const f = planeGroup.clone(true); scene.add(f); planeGroup.visible = false;
   fin.flieger = { g: f, v: state.vel.clone(), t: 0 };
   const g = makeAstronaut(), back = new THREE.Vector3(0, 0, 1).applyQuaternion(state.quat);
@@ -402,9 +404,9 @@ function sprungSchritt(dt){
 }
 function gelandet(p){
   const k = fin.k; fin.schritt = 'gelandet'; k.v.set(0, 0, 0);
-  while(k.g.children.length > 1) k.g.remove(k.g.children[k.g.children.length - 1]);   // Schirm ab (Kenji ist das erste Kind)
+  while(k.g.children.length > 1) k.g.remove(k.g.children[k.g.children.length - 1]);   // Schirm ab (Samu ist das erste Kind)
   k.g.rotation.set(0, k.yaw, 0, 'YXZ'); kAnim('land', true);
-  const kl = story.kenji && story.kenji.acts.land; story.spaeter(kl ? kl.getClip().duration : 0.5, () => { if(fin.k === k && fin.schritt === 'gelandet') kAnim(story.kenji && story.kenji.acts.stand ? 'stand' : 'idle'); });   // zu Fuss: Briefcase-Idle
+  const kl = story.samu && story.samu.acts.land; story.spaeter(kl ? kl.getClip().duration : 0.5, () => { if(fin.k === k && fin.schritt === 'gelandet') kAnim(story.samu && story.samu.acts.stand ? 'stand' : 'idle'); });   // zu Fuss: Briefcase-Idle
   story.hinweis(''); story.ziel = null;
   if(aufPiste(p.x, p.z)){                                // Live-Wunsch: ohne Ansage gleich aufs Snowboard, es geht sofort los
     brettUnter(k.g);
@@ -416,7 +418,7 @@ function gelandet(p){
     () => zurueck('Noch ein Versuch!'));
 }
 
-// Snowboard unter Kenjis Fuesse (snowboard_glb.js, 1,45 m, Laenge entlang Z); quer wie beim Snowboarden
+// Snowboard unter Samus Fuesse (snowboard_glb.js, 1,45 m, Laenge entlang Z); quer wie beim Snowboarden
 let brettVorlage = null;
 function ladeBrett(){
   if(brettVorlage !== null || !window.SNOWBOARD_GLB || !THREE.GLTFLoader) return; brettVorlage = false;
@@ -424,7 +426,7 @@ function ladeBrett(){
   new THREE.GLTFLoader().parse(u.buffer, '', (g) => { brettVorlage = g.scene; }, (e) => { console.warn('Snowboard-GLB', e); brettVorlage = null; });
 }
 story.finaleBrett = () => brettVorlage || null;
-// Kenji auf dem Brett (Live-Befund 13.10.2026): in 'idle' steht der linke Fuss vor dem rechten. Die Figur bleibt deshalb in
+// Samu auf dem Brett (Live-Befund 13.10.2026): in 'idle' steht der linke Fuss vor dem rechten. Die Figur bleibt deshalb in
 // Fahrtrichtung (linker Fuss vorne auf dem Brett), nur Becken und Oberkoerper drehen 90° nach rechts zur Seite, der Kopf
 // schaut zurueck in Fahrtrichtung – die typische Snowboard-Haltung. Die Drehung kommt nach dem Mixer auf die Knochen (haltungKnochen).
 const BRETT_DREH = { mixamorigSpine: 0.35, mixamorigSpine1: 0.3, mixamorigSpine2: 0.25, mixamorigNeck: 0.25, mixamorigHead: 0.25 };   // Three.js nimmt den ':' aus den Namen
@@ -432,12 +434,12 @@ function brettUnter(g){
   if(!brettVorlage) return;
   const b = brettVorlage.clone(true); b.position.y = 0;
   g.add(b); g.userData.brett = b;
-  if(g.children[0] && g.children[0] !== b) g.children[0].position.y = 0.045;   // Kenji steht auf der Brettoberseite
+  if(g.children[0] && g.children[0] !== b) g.children[0].position.y = 0.045;   // Samu steht auf der Brettoberseite
 }
 const _qk = new THREE.Quaternion(), _ya = new THREE.Vector3(0, 1, 0);
 let knochen = null;
 function haltungKnochen(){
-  const k = story.kenji; if(!k || !k.obj || !fin.k || !fin.k.g.userData.brett) return;
+  const k = story.samu; if(!k || !k.obj || !fin.k || !fin.k.g.userData.brett) return;
   if(!knochen){ knochen = []; k.obj.traverse(o => { if(BRETT_DREH[o.name] !== undefined) knochen.push([o, BRETT_DREH[o.name]]); }); }
   for(const [o, w] of knochen){
     const u = o.userData;
@@ -563,10 +565,10 @@ function woelfeSchritt(dt){
   if(!woelfe.rudel.length || !fin.piste) return;
   const cp = camera.position, an = hier() && locale === 'earth';
   for(const r of woelfe.rudel){
-    // Live-Wunsch 14.10. (2): faehrt Kenji in der Naehe vorbei, rennt das Rudel neben ihm her (etwas voraus), sonst streift es
+    // Live-Wunsch 14.10. (2): faehrt Samu in der Naehe vorbei, rennt das Rudel neben ihm her (etwas voraus), sonst streift es
     const nah = fin.schritt === 'abfahrt' && ab.s > r.a - 150 && ab.s < r.b + 60;
-    // (etwas voraus: so sind sie vor Kenji im Bild)
-    // Live-Befund 14.10. (3): sie liefen kurz rueckwaerts, wenn Kenji bremste (Ziel hinter dem Rudel -> Richtung kippte). Jetzt
+    // (etwas voraus: so sind sie vor Samu im Bild)
+    // Live-Befund 14.10. (3): sie liefen kurz rueckwaerts, wenn Samu bremste (Ziel hinter dem Rudel -> Richtung kippte). Jetzt
     // immer bergab mit ihm; ist das Rudel zu weit vorn, trabt es langsamer, bis er aufholt.
     if(nah){ const ziel = Math.min(r.b + 60, ab.s + 30), d = ziel - r.s; r.dir = 1;
       const v = d > 0 ? Math.max(WOLF.V, Math.min(15, ab.v + 3)) : Math.max(2.5, Math.min(WOLF.V, ab.v * 0.7));
@@ -682,9 +684,9 @@ function fxBauen(){
 function fxWeg(){ if(!fx) return; scene.remove(fx.g); fx.g.traverse(o => { if(o.geometry) o.geometry.dispose(); }); fx = null; }
 function fxSchritt(dt, o, amBoden){
   const f = fxBauen(), p = state.pos; f.schatten.visible = true; f.spur.visible = true;
-  // Schatten: auf dem Schnee unter Kenji, im Sprung kleiner und heller
+  // Schatten: auf dem Schnee unter Samu, im Sprung kleiner und heller
   const boden = grundAb(p.x, p.z), hoehe = Math.max(0, p.y - boden), k = 1 / (1 + hoehe * 0.15);
-  // Hangebene aus vier Punkten um Kenji (1 m vor/hinter, links/rechts) -> Normale; Schatten liegt darin, 8 cm ueber dem Schnee
+  // Hangebene aus vier Punkten um Samu (1 m vor/hinter, links/rechts) -> Normale; Schatten liegt darin, 8 cm ueber dem Schnee
   const rx = -o.tz, rz = o.tx;
   const yv = grundAb(p.x + o.tx, p.z + o.tz), yh = grundAb(p.x - o.tx, p.z - o.tz), yr = grundAb(p.x + rx, p.z + rz), yl = grundAb(p.x - rx, p.z - rz);
   const ax = new THREE.Vector3(2 * o.tx, yv - yh, 2 * o.tz), az = new THREE.Vector3(2 * rx, yr - yl, 2 * rz), nrm = new THREE.Vector3().crossVectors(az, ax).normalize();
@@ -1024,7 +1026,7 @@ function megaSchritt(dt){
   pose(m.x, m.y, m.z, m.tx, m.tz);
   state.vel.set(m.tx * m.vh, ab.vy, m.tz * m.vh);
 }
-// Snowboard fliegt davon (eigene Bahn, dreht sich), Kenji geht in den Freiflug
+// Snowboard fliegt davon (eigene Bahn, dreht sich), Samu geht in den Freiflug
 function brettWeg(m){
   const name = trickName(); if(name) trick('Mega ' + name, 'snow');
   ab.spin = 0; ab.flip = 0; m.phase = 'frei'; freiflugStart();
@@ -1049,7 +1051,7 @@ function megaSchirm(dt){
   const meer = typeof seaYAt === 'function' ? seaYAt(m.x, m.z) : 0;
   if(m.y <= meer) insWasser(m, meer);
 }
-// Aufs Wasser: Schirm weg, Kenji steht auf dem Surfbrett (wie auf dem Snowboard)
+// Aufs Wasser: Schirm weg, Samu steht auf dem Surfbrett (wie auf dem Snowboard)
 function insWasser(m, meer){
   m.y = meer; ab.luft = false; ab.vy = 0; ab.stolper = 0; ab.spin = 0; ab.flip = 0;
   fin.schritt = 'surf'; ab.surfT = 0; ab.v = Math.max(6, m.vh);
@@ -1074,11 +1076,11 @@ function surfSchritt(dt){
   }
 }
 
-// Auf dem Brett: Kenjis normale Stehhaltung (idle), 90° nach rechts gedreht (brettUnter)
+// Auf dem Brett: Samus normale Stehhaltung (idle), 90° nach rechts gedreht (brettUnter)
 function haltung(){
   if(!(fin.k && fin.k.g && fin.k.g.userData.brett)) return;   // nur auf dem Brett
   kAnim('idle');
-  const a = story.kenji && story.kenji.acts.idle;
+  const a = story.samu && story.samu.acts.idle;
   if(a && !a.paused){ a.time = 0.4; a.paused = true; }       // feste Stehhaltung, keine wandernden Fuesse
 }
 // Fuesse auf der Brettachse (Live-Test: stand noch schraeg): Fusslinie links->rechts auf +Z drehen (linker Fuss vorne = -Z),
@@ -1103,14 +1105,14 @@ function fuesseAusrichten(){
 }
 function figurZurueck(){
   const g = fin.k && fin.k.g, fig = g && g.children[0]; if(fig && fig !== g.userData.brett){ fig.rotation.set(0, 0, 0); fig.position.set(0, g.userData.brett ? 0.045 : 0, 0); }
-  const k = story.kenji; if(k && k.acts.idle) k.acts.idle.paused = false;
+  const k = story.samu; if(k && k.acts.idle) k.acts.idle.paused = false;
 }
 
 // ==== Surfen auf Brandungswellen (Live-Wunsch 13.10.2026, Umbau 14.10.2026) ==========================================
 // Eigenes, feines Wellenfeld (die Engine-Duenung ist mit 62,5 m Stuetzabstand zu grob; sie wird beim Surfen abgesenkt, damit
 // sie nicht durch die Taeler sticht): einzelne Wellenreihen laufen von der See (-x) auf den Fukuoka-Beach zu (+x), Kaemme
 // laengs z, jede Reihe mit eigener Hoehe. Profil: steile Front zum Strand hin, flacher Ruecken zur See.
-// Live-Befund 14.10. (2): an "seine" Welle gekoppelt fuhr Kenji auf der Stelle und kam nie von ihr weg. Jetzt freie Fahrt
+// Live-Befund 14.10. (2): an "seine" Welle gekoppelt fuhr Samu auf der Stelle und kam nie von ihr weg. Jetzt freie Fahrt
 // mit Schwung im Bezugssystem der Wellen (dort steht das Profil still): die Schwerkraft zieht die Wand hinunter, auf der Front
 // traegt die Welle, sonst steht das Wasser (die naechste Welle holt einen ab). L-Stick links/rechts = lenken (Carven: Schwung
 // bleibt erhalten), vor = pumpen, zurueck = bremsen. Wer schnell die Wand hinauf faehrt, hebt ueber den Kamm ab und landet
@@ -1205,7 +1207,7 @@ function felsSchaum(x, z){
 }
 function wellenY(x, z){ return profil(x) * felsSchatten(x, z) * (1 + 0.06 * Math.sin(z * 0.045 + welle.t * 0.7)) - 0.3 + Math.sin(z * 0.11 + welle.t * 1.6) * 0.06; }
 story.finaleWellenY = wellenY;
-// Mesh, das mit Kenji mitwandert: fein in x (2 m, das Profil), grob in z (6 m, dort aendert sich kaum etwas) – so reicht es
+// Mesh, das mit Samu mitwandert: fein in x (2 m, das Profil), grob in z (6 m, dort aendert sich kaum etwas) – so reicht es
 // seitlich 600 m weit, die Kueste links und rechts liegt auf ihm. Am Rand sinkt es auf die abgesenkte Engine-See.
 function wellenBauen(){
   if(welle.mesh) return;
@@ -1243,7 +1245,7 @@ function wellenMesh(){
   P.needsUpdate = true; C.needsUpdate = true; m.geometry.computeVertexNormals();
 }
 // ---- Surfen starten / Schritt / Waschgang / aussteigen ----------------------------------------------------------------
-// Surfbrett unter Kenji (Live-Befund 14.10.: das Modell hat die Nase auf +Z, Kenji schaut nach -Z – deshalb 180° gedreht)
+// Surfbrett unter Samu (Live-Befund 14.10.: das Modell hat die Nase auf +Z, Samu schaut nach -Z – deshalb 180° gedreht)
 function surfBrett(g){
   if(!g || g.userData.brett || !surfVorlage) return false;
   const b = surfVorlage.clone(true); b.rotation.y = Math.PI; g.add(b); g.userData.brett = b;
@@ -1323,12 +1325,12 @@ function welleSchritt(dt){
     ab.luftT += dt; ab.vy -= 14 * dt; ab.y += ab.vy * dt;
     ab.spin -= rs.x * 8 * dt; ab.flip += rs.y * 7.5 * dt;
     // Live-Befund 14.10. (4): "mitten durch die Welle" – gelandet wurde nur im Fallen; rollte die naechste Wand unter einen
-    // steigenden Kenji, steckte er in ihr. Jetzt: unter der Oberflaeche = aufsetzen (im Steigen nimmt die Wand ihn mit)
+    // steigenden Samu, steckte er in ihr. Jetzt: unter der Oberflaeche = aufsetzen (im Steigen nimmt die Wand ihn mit)
     if(ab.y <= wy){ const vyW = ab.yAlt !== undefined ? Math.min(VY_MAX, (wy - ab.wyAlt) / Math.max(dt, 0.008)) : 0; ab.y = wy; ab.drift = -WEL.V * (aufFront ? WEL.HALT : 1);
       if(ab.luftT < 0.15 && ab.vy > 0){ ab.luft = false; ab.vy = Math.max(ab.vy, vyW); }   // gerade erst abgehoben: weiterfahren
       else { ab.vy = Math.max(0, vyW); if(!surfLanden()) return; } }
   } else {
-    // ueber den Kamm (oder mit B): faellt das Wasser schneller weg als Kenji steigt, hebt er ab – der Schwung bleibt
+    // ueber den Kamm (oder mit B): faellt das Wasser schneller weg als Samu steigt, hebt er ab – der Schwung bleibt
     const vyW = Math.max(-VY_MAX, Math.min(VY_MAX, (wy - ab.y) / Math.max(dt, 0.008)));   // begrenzt: dt schwankt im Browser
     if(ab.vy > 2.5 && vyW < ab.vy - 6 * dt){ surfAbheben(wx, wz); ab.y += ab.vy * dt; }
     else { ab.vy += (vyW - ab.vy) * Math.min(1, dt * 30); ab.y = wy; }   // folgt der Wand (sie steigt bei Monsterwellen ~10 m/s)
@@ -1359,7 +1361,7 @@ function welleSchritt(dt){
   gischt(dt, dx, dz);
   landeSchatten(vx, wz);
 }
-// Landeschatten (Live-Wunsch 14.10.): in der Luft liegt unter Kenji ein Schatten auf der Welle (groesser und blasser, je hoeher),
+// Landeschatten (Live-Wunsch 14.10.): in der Luft liegt unter Samu ein Schatten auf der Welle (groesser und blasser, je hoeher),
 // dazu ein Ring, der bis zum Aufsetzen auf den Schatten zusammenschrumpft – gruen: Zeit fuer noch eine halbe Drehung (~0,4 s),
 // gelb: knapp, rot: gleich. Die Zeit bis zur Landung wird vorausgerechnet (Flugbahn gegen die anrollende Welle).
 const lande = { g: null, sch: null, ring: null, mat: null, rmat: null };
@@ -1472,7 +1474,7 @@ function gischt(dt, tx, tz){
   for(const p of gisch.teile) if(p.m.visible){ p.t += dt; p.v.y -= 9.81 * dt; p.m.position.addScaledVector(p.v, dt); p.m.scale.setScalar(Math.max(0.1, 1 - p.t * 1.4)); if(p.t > 0.7) p.m.visible = false; }
 }
 function gischtWeg(){ if(gisch.g){ scene.remove(gisch.g); gisch.g.traverse(o => { if(o.geometry) o.geometry.dispose(); }); gisch.g = null; } gisch.teile.length = 0; }
-// Waschgang: Kenji faellt ins Wasser, kurz unter (gedreht), taucht auf dem Brett auf, naechste Welle
+// Waschgang: Samu faellt ins Wasser, kurz unter (gedreht), taucht auf dem Brett auf, naechste Welle
 function waschgangStart(){
   welle.wasch = 1.8; ab.luft = false; ab.spin = 0; ab.flip = 0; ab.hh = 0; ab.qv = 0;
   zeige('🌊 Waschgang!', 1.5); if(typeof rumble === 'function') rumble(500, 0.9, 0.7);
@@ -1487,7 +1489,7 @@ function waschgang(dt){
   state.pos.set(ab.x, wy, ab.z); state.vel.set(WEL.V * 0.5, 0, 0);
   if(welle.wasch <= 0){ welle.wasch = 0; if(ab.waschZ !== undefined){ ab.z = ab.waschZ; ab.a = ab.waschA; ab.waschZ = undefined; }
     ab.y = wellenY(ab.x, ab.z); ab.vy = 0; ab.vb = 5; ab.drift = -WEL.V; figurZurueck();
-    const K = story.kenji; if(K && K.acts.swim){ K.acts.swim.stop(); K.cur = null; }   // hart zurueck auf die Stehhaltung
+    const K = story.samu; if(K && K.acts.swim){ K.acts.swim.stop(); K.cur = null; }   // hart zurueck auf die Stehhaltung
     haltung(); fin.kal = false; ab.kalT = 0; }
 }
 // Y: aussteigen -> im Ring am Strand; beim ersten Mal laeuft der Abspann
@@ -1672,7 +1674,7 @@ function hookFinale(){
     return r;
   };
   const yOrig = buttonY;
-  // Live-Befund 14.10.: Y auf der Welle stieg ins Schlauchboot der Engine (Kenji ist fuer sie "in der Luft"), B sprang nicht
+  // Live-Befund 14.10.: Y auf der Welle stieg ins Schlauchboot der Engine (Samu ist fuer sie "in der Luft"), B sprang nicht
   // (dropCrate nur mit dem Transall-Modell) – im Finale mit Figur fangen beide Tasten hier ab, vor der Engine
   buttonY = function(){ if(fin.aktiv && hier() && fin.k){ if(fin.schritt === 'welle') surfenAussteigen(); return; } return yOrig.apply(this, arguments); };
   const bOrig = buttonB;
@@ -1727,13 +1729,13 @@ function hookFinale(){
     if(fin.art === 'rundflug' && (fin.schritt === 'flug' || fin.schritt === 'fertig')) vulkanUpdate(dt);
     return r;
   };
-  // Absturz: kein Engine-Reset, das Finale bringt Kenji selbst zurueck
+  // Absturz: kein Engine-Reset, das Finale bringt Samu selbst zurueck
   const resetOrig = resetPlane;
   resetPlane = function(){ if(fin.aktiv && hier()) return; return resetOrig.apply(this, arguments); };
   // Der Fuji ist im Finale so hoch wie sein Modell (nicht nur wie die flachere Formel)
   const hitsOrig = hitsBuilding;
   hitsBuilding = function(x, y, z){ if(fin.aktiv && hier() && y < fujiMeshY(x, z)) return true; return hitsOrig.apply(this, arguments); };
-  // Kamera beim Sprung: hinter Kenji, im freien Fall etwas hoeher
+  // Kamera beim Sprung: hinter Samu, im freien Fall etwas hoeher
   const camOrig = updateCamera, _cp = new THREE.Vector3();
   let seitK = 0, seitS = 1;                                // Seitenblick-Blende 0..1 und zuletzt gewaehlte Seite
   let wolfT = 0;
@@ -1749,7 +1751,7 @@ function hookFinale(){
       const fahrt = fin.schritt === 'abfahrt' || fin.schritt === 'mega' || fin.schritt === 'surf';
       const k = fin.k, p = fahrt ? state.pos : k.g.position, fx = -Math.sin(k.yaw), fz = -Math.cos(k.yaw);
       const rx = -fz, rz = fx, schirm = fin.schritt === 'schirm', w = schirm ? 12 : 7;   // rechts quer zur Blickrichtung
-      const hy = schirm ? 2 : (fin.schritt === 'fall' ? 1 : 1.2);                         // am Schirm: Mitte zwischen Kenji und Schirm
+      const hy = schirm ? 2 : (fin.schritt === 'fall' ? 1 : 1.2);                         // am Schirm: Mitte zwischen Samu und Schirm
       _cp.set(p.x + rx * w * seitS + fx * 1.5, p.y + hy + 1.5, p.z + rz * w * seitS + fz * 1.5);
       // aus der normalen Ansicht heruebergleiten: Position schrittweise zur Seite
       camera.position.lerp(_cp, Math.min(1, 0.1 + seitK * 0.3));
@@ -1768,7 +1770,7 @@ function hookFinale(){
     fin.sprungK = (fin.sprungK || 0) + (Math.min(1, hoch2 / 8) - (fin.sprungK || 0)) * (hoch2 > 0 ? 0.12 : 0.08);   // 0..1 weich
     const zurueck = fin.sprungK * 6;                                                      // Zoom: weiter weg
     if(fin.schritt === 'welle' && sideView === 0){
-      // Live-Befund 14.10. (2): hinter Kenji in Brettrichtung (nach links und rechts gleich), erhoeht – laengs der Welle steht
+      // Live-Befund 14.10. (2): hinter Samu in Brettrichtung (nach links und rechts gleich), erhoeht – laengs der Welle steht
       // die Wand daneben im Bild, nach dem Sprung ueber den Kamm sieht man die naechste Welle anrollen
       let d = (ab.a || 0) - welle.camA; d = Math.atan2(Math.sin(d), Math.cos(d)); welle.camA += d * 0.06;
       const H = ab.wH || welle.H, cx = Math.cos(welle.camA), cz = Math.sin(welle.camA), hi = 9 + H * 0.4, ho = 3 + H * 0.35;
@@ -1795,7 +1797,7 @@ function hookFinale(){
     camera.position.y = Math.max(_cp.y, bodenY(camera.position.x, camera.position.z) + 3);
     const zit = fahrt && !ab.luft && fin.schritt === 'abfahrt' ? (ab.v / AB_VMAX) * 0.05 : 0;   // Pistenrauheit
     if(zit){ camera.position.x += (Math.random() - 0.5) * zit; camera.position.y += (Math.random() - 0.5) * zit; }
-    // Blick: am Boden voraus, im Sprung naeher an Kenji heran (er bleibt oben im Bild)
+    // Blick: am Boden voraus, im Sprung naeher an Samu heran (er bleibt oben im Bild)
     const vor = fahrt ? 14 - fin.sprungK * 8 : 6;
     camera.lookAt(p.x + fx * vor, p.y + (fahrt ? 0.3 - hoch2 * 0.25 : -(fall ? 8 : 1)), p.z + fz * vor);
   };

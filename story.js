@@ -1,5 +1,5 @@
 // Trip to Japan – Spiellogik. Haengt sich per Wrapper in die unveraenderte Flugspiel-Engine
-// (engine/engine.js) ein. Ladeordnung: kenji_glb.js -> story.js -> engine/engine.js.
+// (engine/engine.js) ein. Ladeordnung: samu_glb.js -> story.js -> engine/engine.js.
 // Die Engine ruft am Ende ihres Boot-Blocks zwei Hooks auf (eingefuegt von tools/build_engine.ps1):
 //   STORY_HOOK  – bevor Inseln und Startplatz berechnet werden: hier werden Funktionen ersetzt.
 //   STORY_START – vor dem ersten Bild: hier wird die Startszene aufgebaut.
@@ -109,7 +109,7 @@ function hookWelt(){
   harborBoatLocal = function(){ return null; };     // Loeschboot am Strand: weder Modell noch Einstieg
   evaStartJet = function(){};
   // Ohne Traeger braucht es auch das Traeger-Modell nicht. Sein Lade-Callback ruft ausserdem
-  // placeAtStart auf, das Kenji (EVA) wieder einsammeln wuerde.
+  // placeAtStart auf, das Samu (EVA) wieder einsammeln wuerde.
   preloadFord = function(){};
   _islandCache.clear(); _subBerthCache.clear(); _xwpCache.clear(); _parkCache.clear();
   hookWracks();
@@ -261,7 +261,7 @@ story.entsorgen = entsorgen;
 // (Schule, Wuestenfelsen). Jetzt gilt EINE Regel, zentral in weltenSichtbar():
 //   sichtbar ist nur die Welt der aktuellen Etappe, und nur auf der Erde.
 // Beim Etappenwechsel wird die alte Welt komplett entsorgt (weltEntsorgen).
-// Global (ohne Welt) bleibt nur, was ueber alle Etappen gilt: Kenji, Warp-Sterne, Ziel-Stein auf
+// Global (ohne Welt) bleibt nur, was ueber alle Etappen gilt: Samu, Warp-Sterne, Ziel-Stein auf
 // Mond/Mars (der gehoert zu deren Locale, siehe marsUpdate).
 const welten = new Map();
 function welt(n){
@@ -304,7 +304,7 @@ function updateRing(zeigen){
 }
 // Derselbe Einstieg fuer spaetere Etappen: ein pulsierender gelber Ring am Ufer, im Ring Y = an
 // Bord (Etappe 3: Feuerwehrboot). Gebaut in der Welt der aktuellen Etappe.
-//   const r = story.einstiegsRing(x, y, z);  r.zeigen(an);  r.drin()  -> Kenji steht im Ring
+//   const r = story.einstiegsRing(x, y, z);  r.zeigen(an);  r.drin()  -> Samu steht im Ring
 story.einstiegsRing = function(x, y, z){
   const m = new THREE.Mesh(new THREE.RingGeometry(RING_R - 0.7, RING_R, 48),
     new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.8,
@@ -312,24 +312,37 @@ story.einstiegsRing = function(x, y, z){
   m.rotation.x = -Math.PI / 2; m.renderOrder = 996;
   m.position.set(x, y + 0.06, z);
   welt(story.etappe).add(m);
-  return {
-    x, z, mesh: m,
+  const r = {
+    x, y, z, mesh: m, etappe: story.etappe,
     zeigen(an){ m.visible = an; if(an) m.material.opacity = 0.55 + 0.35 * Math.sin(performance.now() / 1000 * 3); },
     drin(){ return !!eva && Math.hypot(eva.group.position.x - x, eva.group.position.z - z) < RING_R; },
   };
+  for(let i = einstiegsRinge.length - 1; i >= 0; i--) if(!einstiegsRinge[i].mesh.parent) einstiegsRinge.splice(i, 1);   // entsorgte Welten
+  einstiegsRinge.push(r);
+  return r;
 };
+// Alle Ringe (yZeichenZeigen: steht Samu in einem, schwebt das Y ueber der Ringmitte statt ueber Samu)
+const einstiegsRinge = [];
+function ringUnterSamu(){
+  if(!eva) return null;
+  const p = eva.group.position;
+  for(const r of einstiegsRinge) if(r.etappe === story.etappe && r.mesh.parent && Math.hypot(p.x - r.x, p.z - r.z) < RING_R) return { x: r.x, y: r.y, z: r.z };
+  const u = typeof ubootRingPlatz === 'function' ? ubootRingPlatz() : null;      // Etappe 1: U-Boot-Ring am Strand
+  if(u && story.etappe === 1 && Math.hypot(p.x - u.x, p.z - u.z) < RING_R) return { x: u.x, y: ISLAND_Y, z: u.z };
+  return null;
+}
 
-// ---- Kenji statt Astronaut -------------------------------------------------------------------
-// Kenji ist ein Skinned Mesh mit Mixamo-Animationen. clone(true) taugt dafuer nicht (das Skelett
-// wuerde geteilt), und es gibt ohnehin nur einen Kenji: makeAstronaut gibt also immer dasselbe
+// ---- Samu statt Astronaut -------------------------------------------------------------------
+// Samu ist ein Skinned Mesh mit Mixamo-Animationen. clone(true) taugt dafuer nicht (das Skelett
+// wuerde geteilt), und es gibt ohnehin nur einen Samu: makeAstronaut gibt also immer dasselbe
 // Objekt zurueck, eingehaengt in eine neue Group (die Engine entfernt nur die Group).
-const KENJI_H = 1.55;            // Koerpergroesse in Metern (Schueler)
-const kenji = story.kenji = { obj: null, mixer: null, acts: {}, cur: null, last: null };
+const SAMU_H = 1.55;            // Koerpergroesse in Metern (Schueler)
+const samu = story.samu = { obj: null, mixer: null, acts: {}, cur: null, last: null };
 let evaJumpOrig = () => {};
 
-function preloadKenji(){
-  if(!window.KENJI_GLB || !THREE.GLTFLoader) return;
-  const b64 = window.KENJI_GLB.split(',')[1];
+function preloadSamu(){
+  if(!window.SAMU_GLB || !THREE.GLTFLoader) return;
+  const b64 = window.SAMU_GLB.split(',')[1];
   const bin = atob(b64); const bytes = new Uint8Array(bin.length);
   for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   new THREE.GLTFLoader().parse(bytes.buffer, '', (gltf) => {
@@ -337,18 +350,18 @@ function preloadKenji(){
     obj.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(obj);
     const size = new THREE.Vector3(); box.getSize(size);
-    obj.scale.multiplyScalar(KENJI_H / Math.max(0.001, size.y));
+    obj.scale.multiplyScalar(SAMU_H / Math.max(0.001, size.y));
     obj.updateMatrixWorld(true);
     const box2 = new THREE.Box3().setFromObject(obj);
     obj.position.y -= box2.min.y;              // Fuesse auf y = 0
     obj.rotation.y = Math.PI;                  // Modell schaut +Z, Engine erwartet -Z
     obj.traverse(o => { if(o.isMesh){ o.castShadow = true; o.frustumCulled = false; } });
     const wrap = new THREE.Group(); wrap.add(obj);
-    kenji.obj = wrap;
-    kenji.mixer = new THREE.AnimationMixer(obj);
-    // Root-Motion x/z der Tricks (merge_clips.py legt sie als Kurve in extras.weg ab): damit wird Kenji bei
+    samu.obj = wrap;
+    samu.mixer = new THREE.AnimationMixer(obj);
+    // Root-Motion x/z der Tricks (merge_clips.py legt sie als Kurve in extras.weg ab): damit wird Samu bei
     // Aerial Evade / Butterfly Twirl so weit bewegt, wie die Animation es tut (vorher rutschte er auf der Stelle)
-    kenji.weg = (gltf.parser && gltf.parser.json.extras && gltf.parser.json.extras.weg) || {};
+    samu.weg = (gltf.parser && gltf.parser.json.extras && gltf.parser.json.extras.weg) || {};
     for(const clip of gltf.animations){
       // Hueftspur: nur x/z festhalten (die Engine bewegt die Figur), die Hoehe bleibt – sonst schwebten die Fuesse
       // und Sprung/Salto blieben flach. Die Clips selbst sind seit 14.10.2026 mit 60 fps gebacken (vorher 24).
@@ -357,43 +370,43 @@ function preloadKenji(){
         const v = t.values, x0 = v[0], z0 = v[2];
         for(let i = 0; i < v.length; i += 3){ v[i] = x0; v[i + 2] = z0; }
       }
-      kenji.acts[clip.name] = kenji.mixer.clipAction(clip);
+      samu.acts[clip.name] = samu.mixer.clipAction(clip);
     }
-    if(kenji.acts[STAND_CLIP]) STAND = STAND_CLIP;
-    kenjiAnim(STAND);
-    // Steht schon der Platzhalter in der Welt, gegen Kenji tauschen
-    if(eva && eva.group){ eva.group.clear(); eva.group.add(kenji.obj); }
-  }, (err) => { console.warn('Kenji-GLB Ladefehler:', err); });
+    if(samu.acts[STAND_CLIP]) STAND = STAND_CLIP;
+    samuAnim(STAND);
+    // Steht schon der Platzhalter in der Welt, gegen Samu tauschen
+    if(eva && eva.group){ eva.group.clear(); eva.group.add(samu.obj); }
+  }, (err) => { console.warn('Samu-GLB Ladefehler:', err); });
 }
 
-function kenjiAnim(name, blend){
-  if(kenji.cur === name || !kenji.acts[name]) return;
-  const a = kenji.acts[name];
+function samuAnim(name, blend){
+  if(samu.cur === name || !samu.acts[name]) return;
+  const a = samu.acts[name];
   if(!Object.values(TRICK_CLIP).includes(name)){ a.setLoop(THREE.LoopRepeat); a.clampWhenFinished = false; }
-  // Nur der neue und der ausblendende Clip laufen. Vorher setzte trickStart kenji.cur = null: der alte Clip
+  // Nur der neue und der ausblendende Clip laufen. Vorher setzte trickStart samu.cur = null: der alte Clip
   // wurde nicht ausgeblendet, lief mit vollem Gewicht weiter und mischte sich in den Trick – das war das Abgehackte.
-  const alt = kenji.cur && kenji.acts[kenji.cur];
-  for(const n in kenji.acts){ const b = kenji.acts[n]; if(b !== a && b !== alt) b.stop(); }
+  const alt = samu.cur && samu.acts[samu.cur];
+  for(const n in samu.acts){ const b = samu.acts[n]; if(b !== a && b !== alt) b.stop(); }
   a.reset(); a.setEffectiveWeight(1); a.play();
   if(alt && alt !== a) alt.crossFadeTo(a, blend || 0.25, false);
-  kenji.cur = name;
+  samu.cur = name;
 }
 
-function hookKenji(){
-  preloadKenji();
+function hookSamu(){
+  preloadSamu();
   const makeOrig = makeAstronaut;
   makeAstronaut = function(){
-    if(!kenji.obj) return makeOrig();
-    if(kenji.obj.parent) kenji.obj.parent.remove(kenji.obj);
-    const g = new THREE.Group(); g.add(kenji.obj);
-    kenji.last = null;
+    if(!samu.obj) return makeOrig();
+    if(samu.obj.parent) samu.obj.parent.remove(samu.obj);
+    const g = new THREE.Group(); g.add(samu.obj);
+    samu.last = null;
     return g;
   };
 }
 
-// ---- Kenji zu Fuss: Tempo nach Stick-Ausschlag, Tasten fuer Tricks ---------------------------
+// ---- Samu zu Fuss: Tempo nach Stick-Ausschlag, Tasten fuer Tricks ---------------------------
 // Stick bis 50 % = gehen, darueber = rennen. Abseits der Fahrzeuge:
-//   A / Leertaste = springen · B = Aerial Evade · X = Hip Hop Dance · Y = Butterfly Twirl
+//   A / Leertaste = springen · B = knien (begleiter.js) · X = Hip Hop Dance · Y = Butterfly Twirl
 //   L3 (linken Stick druecken) / M halten = Moonwalk – gelaufen wird dabei mit dem linken Stick
 // Am Fahrzeug bleibt Y Einsteigen. Tanz/Twirl spielen einmal ab; Stick bewegen bricht sie ab.
 const GEH_MAX = 0.3;          // Anteil von EVA_SPEED bei 50 % Stick (≈ 1,8 m/s)
@@ -419,26 +432,26 @@ function trickTasten(){
 }
 
 function trickStart(name){
-  const a = kenji.acts[TRICK_CLIP[name]];
+  const a = samu.acts[TRICK_CLIP[name]];
   if(!a) return;
   tricks.aktiv = name; tricks.t = 0; tricks.w = null;
   a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true;
-  if(kenji.cur === TRICK_CLIP[name]) kenji.cur = 'neu';     // derselbe Trick nochmal: von vorn (ohne alten Clip zu verlieren)
-  kenjiAnim(TRICK_CLIP[name], 0.2);
+  if(samu.cur === TRICK_CLIP[name]) samu.cur = 'neu';     // derselbe Trick nochmal: von vorn (ohne alten Clip zu verlieren)
+  samuAnim(TRICK_CLIP[name], 0.2);
 }
-// Weg des Tricks bis Zeit t, aus der Hueftkurve des Clips: { vor, seit } in Metern relativ zu Kenji
+// Weg des Tricks bis Zeit t, aus der Hueftkurve des Clips: { vor, seit } in Metern relativ zu Samu
 // (Modell: +z = vorn, +x = links von ihm aus gesehen). Aerial Evade geht vor allem zur Seite, der Twirl nach vorn.
 function trickWeg(clip, t){
-  const k = kenji.weg && kenji.weg[clip]; if(!k) return { vor: 0, seit: 0 };
+  const k = samu.weg && samu.weg[clip]; if(!k) return { vor: 0, seit: 0 };
   let i = 0; while(i < k.t.length - 1 && k.t[i + 1] <= t) i++;
   const j = Math.min(k.t.length - 1, i + 1), f = k.t[j] > k.t[i] ? Math.min(1, (t - k.t[i]) / (k.t[j] - k.t[i])) : 0;
-  const s = kenji.obj && kenji.obj.children[0] ? kenji.obj.children[0].scale.x : 1;
+  const s = samu.obj && samu.obj.children[0] ? samu.obj.children[0].scale.x : 1;
   return { vor: (k.z[i] + (k.z[j] - k.z[i]) * f) * s, seit: (k.x[i] + (k.x[j] - k.x[i]) * f) * s };
 }
-// Waehrend eines Tricks Kenji um den Kurvenzuwachs verschieben (vor + zur Seite), auf festem Grund und ohne Wand
+// Waehrend eines Tricks Samu um den Kurvenzuwachs verschieben (vor + zur Seite), auf festem Grund und ohne Wand
 function trickSchieben(){
   if(!tricks.aktiv || !eva || !eva.group) return;
-  const clip = TRICK_CLIP[tricks.aktiv], a = kenji.acts[clip]; if(!a) return;
+  const clip = TRICK_CLIP[tricks.aktiv], a = samu.acts[clip]; if(!a) return;
   const w = trickWeg(clip, a.time), alt = tricks.w || { vor: 0, seit: 0 }; tricks.w = w;
   const dv = w.vor - alt.vor, ds = w.seit - alt.seit; if(!dv && !ds) return;
   const y = eva.yaw, g = eva.group.position;
@@ -449,7 +462,7 @@ function trickSchieben(){
 }
 
 // Vor updateEva: Eingabe umformen (Tempo-Kurve, Stillstand bei Tricks/Moonwalk)
-function kenjiEingabe(inp){
+function samuEingabe(inp){
   if(!eva || eva.rover || eva.boat || !steuerbar()) return inp;
   const roh = -(inp.pitch || 0);
   const a = Math.abs(roh);
@@ -460,7 +473,7 @@ function kenjiEingabe(inp){
   if(a <= 0.5) f = a / 0.5 * GEH_MAX;                         // gehen
   else f = GEH_MAX + (a - 0.5) / 0.5 * (1 - GEH_MAX);         // rennen
   if(tricks.moon) f = Math.min(f, GEH_MAX) * 0.6;             // Moonwalk: langsam
-  if(a <= 0.05 && (tricks.steht || 0) > MOON_NACH && !tricks.moon && eva.onGround)
+  if(a <= 0.05 && (tricks.steht || 0) > MOON_NACH && !tricks.moon && eva.onGround && moonwalkDarf())
     return Object.assign({}, inp, { pitch: MOON_V / EVA_SPEED, yaw: 0 });   // von selbst: langsam rueckwaerts
   return Object.assign({}, inp, { pitch: -Math.sign(roh) * f });
 }
@@ -472,8 +485,8 @@ const getippt = {};
 addEventListener('keydown', e => { if(!e.repeat && tippTaste[e.code]) getippt[tippTaste[e.code]] = true; });
 
 // Tasten auswerten (Flanken), einmal pro Bild
-function kenjiTasten(){
-  // Tricks ueberall, wo Kenji zu Fuss ist – auch auf Mond und Mars (dort springt er dank geringer
+function samuTasten(){
+  // Tricks ueberall, wo Samu zu Fuss ist – auch auf Mond und Mars (dort springt er dank geringer
   // Schwerkraft viel hoeher). Gesperrt nur hinter dem Platzhalter-Schild und waehrend des Globus.
   if(!eva || eva.rover || eva.boat || sw.aktiv || !steuerbar() || story.phase === 'platzhalter' || story.phase === 'reise'){
     for(const n in getippt) delete getippt[n];
@@ -484,7 +497,7 @@ function kenjiTasten(){
   const frei = !amFahrzeug();
   if(neu('a') && eva.onGround){ tricks.aktiv = null; evaJumpOrig(); }
   tricks.moon = frei && k.moon && !tricks.aktiv;
-  if(frei && neu('b')) trickStart('evade');
+  // B = knien (begleiter.js, Live-Wunsch 18.10.2026: der Hund kommt) – Aerial Evade liegt nicht mehr auf B
   if(frei && neu('x')) trickStart('tanz');
   if(frei && neu('y')) trickStart('twirl');
   tricks.prev = k;
@@ -492,36 +505,46 @@ function kenjiTasten(){
 }
 
 // Animation nach Zustand
-function updateKenji(dt){
-  if(!kenji.mixer) return;
-  kenji.mixer.update(dt);
-  if(!eva || !eva.group || kenji.obj.parent !== eva.group) return;
+function updateSamu(dt){
+  if(!samu.mixer) return;
+  samu.mixer.update(dt);
+  if(!eva || !eva.group || samu.obj.parent !== eva.group) return;
   tricks.dt = dt;
   if(tricks.aktiv){
-    const a = kenji.acts[TRICK_CLIP[tricks.aktiv]];
+    const a = samu.acts[TRICK_CLIP[tricks.aktiv]];
     tricks.t += dt;
     trickSchieben();
     if(a && tricks.t < a.getClip().duration - TRICK_AUSBLENDEN) return;   // kurz vor Schluss schon zurueckblenden
     tricks.aktiv = null;
-    kenjiAnim(tricks.ausschlag > 0.5 ? 'run' : tricks.ausschlag > 0.05 ? 'walk' : STAND, TRICK_AUSBLENDEN);
+    samuAnim(tricks.ausschlag > 0.5 ? 'run' : tricks.ausschlag > 0.05 ? 'walk' : STAND, TRICK_AUSBLENDEN);
   }
   const a = tricks.ausschlag;
-  if(sw.aktiv){ kenjiAnim('swim'); tricks.steht = 0; return; }
+  if(sw.aktiv){ samuAnim('swim'); tricks.steht = 0; return; }
   if(a > 0.05 || !eva.onGround || tricks.moon || !steuerbar() || story.phase === 'platzhalter' || story.phase === 'reise') tricks.steht = 0;
   else tricks.steht = (tricks.steht || 0) + dt;
-  if(!eva.onGround) kenjiAnim('jump');
-  else if(tricks.moon || tricks.steht > MOON_NACH) kenjiAnim('moonwalk');
-  else if(a > 0.5) kenjiAnim('run');
-  else if(a > 0.05) kenjiAnim('walk');
-  else kenjiAnim(STAND);
+  if(!eva.onGround) samuAnim('jump');
+  else if(tricks.moon || (tricks.steht > MOON_NACH && moonwalkDarf())) samuAnim('moonwalk');
+  else if(a > 0.5) samuAnim('run');
+  else if(a > 0.05) samuAnim('walk');
+  else samuAnim(STAND);
 }
-// Live-Wunsch 14.10.2026: steht Kenji lange, faengt er von selbst mit dem Moonwalk an und gleitet dabei langsam
-// rueckwaerts (kenjiEingabe); jede Eingabe beendet ihn. Tricks blenden TRICK_AUSBLENDEN s vor Clipende zurueck.
+// Live-Wunsch 14.10.2026: steht Samu lange, faengt er von selbst mit dem Moonwalk an und gleitet dabei langsam
+// rueckwaerts (samuEingabe); jede Eingabe beendet ihn. Tricks blenden TRICK_AUSBLENDEN s vor Clipende zurueck.
 const MOON_NACH = 25, MOON_V = 0.45, TRICK_AUSBLENDEN = 0.3;
+// Live-Befund 18.10.2026 ("nach dem Abspann Weiterspielen: Samu unsichtbar, nur der Schatten im Surfkreis"): waehrend des
+// Abspanns (1-2 min) glitt Samu im Moonwalk von selbst rueckwaerts ins Meer und war danach unter Wasser. Von selbst nur
+// noch, wenn niemand zuschaut (kein Abspann, keine Frage, keine Pause, kein Globus) und nie vom Land ins Wasser.
+function moonwalkDarf(){
+  if(story.abspannLaeuft || story.abspannFrage || (story.globusAktiv && story.globusAktiv()) || story.phase === 'reise') return false;
+  const h = document.getElementById('hint'); if(h && h.classList.contains('show')) return false;
+  const p = eva.group.position, rx = Math.sin(eva.yaw) * 1.5, rz = Math.cos(eva.yaw) * 1.5;   // 1,5 m hinter ihm (er gleitet rueckwaerts = +Blick)
+  if(locale === 'earth' && (!isOnLand(p.x + rx, p.z + rz) || (typeof seaYAt === 'function' && evaFootY(p.x + rx, p.z + rz) < seaYAt(p.x + rx, p.z + rz) - 0.1))) return false;
+  return evaSolid(p.x + rx, p.z + rz);
+}
 // Stillstehen zu Fuss: Mixamo 'Standing W/ Briefcase Idle' (Clip 'stand', Live-Wunsch 14.10.2026). Das alte 'idle'
 // (Mixamo 'Standing Idle', breitbeinig) bleibt die Haltung auf Surfbrett und Snowboard (finale.js haltung()).
 const STAND_CLIP = 'stand';
-let STAND = 'idle';                                   // bis das GLB geladen ist; preloadKenji setzt 'stand', wenn vorhanden
+let STAND = 'idle';                                   // bis das GLB geladen ist; preloadSamu setzt 'stand', wenn vorhanden
 
 // ---- Stimme + Untertitel ---------------------------------------------------------------------
 // Browser erlauben Sprachausgabe erst nach einer Nutzergeste – deshalb der Startbildschirm.
@@ -685,10 +708,16 @@ function startbildschirm(weiter){
   // Live-Wunsch 14.10.2026: senkrecht "Neues Spiel", "Ab zum Strand" (nach einem Pro-Run, bleibt), "Statistiken" (alle Spiele,
   // nur was es schon gibt). Die Testzugaenge liegen unter "Testzugang" – sichtbar erst, wenn man im Menue 3 s X haelt.
   // Hoch/runter (Stick, D-Pad, Pfeile) waehlen, A / Enter startet, B / Esc zurueck. In der Test-Leiste: links/rechts.
-  const el = document.createElement('div');
-  el.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;'
-    + 'justify-content:center;background:rgba(0,0,0,.55);color:#fff;font-family:system-ui,sans-serif;'
-    + 'z-index:30;text-align:center;user-select:none;';
+  // Live-Wunsch 16.10.2026 (wie "Das Geheimland"): schon beim Laden steht das Ladebild (index.html #ladebild, von
+  // tools/build_engine.ps1 eingesetzt) – kein blaues Engine-Bild mit HUD. Das Menue kommt erst, wenn das Spiel wirklich
+  // bereit ist; dann wird der Hintergrund halb durchsichtig und man sieht die Eingangsszene vor der Schule – ohne Samu
+  // (er kommt erst mit "Neues Spiel" aus der Tuer, introVorbereiten / weiter). Der erste Druck zaehlt.
+  let el = document.getElementById('ladebild');
+  if(!el){ el = document.createElement('div'); el.id = 'ladebild'; document.body.appendChild(el); }
+  el.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;'
+    + 'justify-content:center;background:radial-gradient(ellipse at center,#1d3a66,#050a18);color:#fff;font-family:system-ui,sans-serif;'
+    + 'z-index:50;text-align:center;user-select:none;transition:background .8s;';
+  let bereit = false;
   const TEST = [{ n: 2, t: 'E2' }, { n: 3, t: 'E3' }, { n: 4, t: 'E4' }, { n: 5, t: 'E5' }, { n: 6, t: 'E6' }, { n: 6, t: 'E6 Höhle', hoehle: true },
     { n: 6, t: 'E6 Zug', zug: true }, { n: 6, t: 'E6 Vulkan', vulkan: true }, { n: 6, t: 'Finale 1', finale: 1 }, { n: 6, t: 'Finale 2', finale: 2 }, { n: 6, t: 'Finale 3', finale: 3 }];
   const statDa = () => !!(story.statistikBloecke && story.statistikBloecke('gesamt').length);
@@ -703,6 +732,7 @@ function startbildschirm(weiter){
     + 'cursor:pointer;transition:all .12s">' + o.t + '</button>';
   const titel = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>';
   function zeichnen(){
+    if(!bereit){ el.innerHTML = titel + '<div style="font-size:16px;margin-top:34px;opacity:.75">wird geladen …</div>'; knoepfe = []; return; }
     if(seite === 'haupt'){ OPT = HAUPT();
       el.innerHTML = titel + '<div style="display:flex;flex-direction:column;gap:12px;align-items:center;margin-top:34px">'
         + OPT.map((o, i) => knopf(o, i, 230)).join('') + '</div>'
@@ -737,7 +767,6 @@ function startbildschirm(weiter){
     });
     wahl = Math.min(wahl, Math.max(0, OPT.length - 1)); zeige();
   }
-  document.body.appendChild(el);
   function zeige(){
     knoepfe.forEach((b, i) => {
       const an = i === wahl;
@@ -747,7 +776,18 @@ function startbildschirm(weiter){
       b.style.transform = an ? 'scale(1.08)' : 'none';
     });
   }
+  // Bereit? Samu geladen, die Flugzeug-Modelle der Engine fertig, ein paar Bilder gezeichnet (Shader fertig, kein
+  // Ruckeln beim ersten Schritt) – spaetestens nach START_MAX s trotzdem
   zeichnen();
+  const START_BILDER = 30, START_MAX = 25, t0 = performance.now(); let bilder = 0;
+  (function warte(){
+    bilder++;
+    const modelle = typeof GLB_CONFIG === 'undefined' || Object.keys(GLB_CONFIG).every(n => !GLB_CONFIG[n].data() || glbTemplates[n]);
+    if((samu.obj && modelle && bilder >= START_BILDER) || performance.now() - t0 > START_MAX * 1000){
+      bereit = true; el.style.background = 'rgba(0,0,0,.5)'; zeichnen(); return;
+    }
+    requestAnimationFrame(warte);
+  })();
   let los = false;
   let loeschArt = null;
   function zurueck(){ if(seite === 'sicher' || seite === 'loeschen'){ seite = 'stat'; wahl = 0; zeichnen(); return; } if(seite !== 'haupt'){ seite = 'haupt'; wahl = 0; zeichnen(); } }
@@ -759,6 +799,7 @@ function startbildschirm(weiter){
     seite = 'haupt'; wahl = 0; zeichnen();
   }
   function waehlen(){
+    if(!bereit) return;
     const o = OPT[wahl]; if(!o) return;
     if(o.stat){ seite = 'stat'; wahl = 0; zeichnen(); return; }
     if(o.test){ seite = 'test'; wahl = 0; zeichnen(); return; }
@@ -774,6 +815,10 @@ function startbildschirm(weiter){
     story.ton = true;
     story.gestartet = true;
     story.echtesSpiel = !!o.echt;                  // statistik.js: nur echte Spiele zaehlen
+    // Live-Befund 18.10.2026 (Samu unsichtbar, nur der Schatten): introVorbereiten versteckt Samu bis zum Start, wieder
+    // eingeblendet wurde er nur ueber 'Neues Spiel' (weiter). 'Ab zum Strand', Finale und alle Test-Einstiege liessen ihn
+    // versteckt – samuWache blendete ihn dann jedes Bild aus. Jetzt bei jedem Start sichtbar.
+    intro.versteckt = false; if(eva) eva.group.visible = true;
     if(!soundOn) toggleSound();      // die Geste erlaubt jetzt Audio: Ton an (D-Pad runter / N schaltet um)
     const n = o.n;
     if(o.hoehle){ story.hoehleDirekt = true; springeZu(n); return; }
@@ -798,7 +843,7 @@ function startbildschirm(weiter){
   }
   let xTaste = false;
   function taste(e){
-    if(los) return;
+    if(los || !bereit) return;
     const quer = seite === 'test';
     if(e.code === 'KeyX'){ e.preventDefault(); e.stopPropagation(); xTaste = true; return; }
     if(e.code === 'Escape' || e.code === 'Backspace' || e.code === 'KeyB'){ e.preventDefault(); e.stopPropagation(); zurueck(); return; }
@@ -809,10 +854,14 @@ function startbildschirm(weiter){
   }
   function tasteHoch(e){ if(e.code === 'KeyX') xTaste = false; }
   window.addEventListener('keydown', taste, true); window.addEventListener('keyup', tasteHoch, true);
-  // Gamepad: Stick/D-Pad waehlen, A startet, B zurueck, X 3 s halten = Testzugang (Flanken, damit nichts durchrutscht)
-  let prevA = true, prevB = true, prevV = true, prevR = true;       // erst nach dem Loslassen zaehlen
+  // Gamepad: Stick/D-Pad waehlen, A startet, B zurueck, X 3 s halten = Testzugang (Flanken, damit nichts durchrutscht).
+  // Erster Druck zaehlt (Live-Befund wie im Geheimland: Chrome meldet einen Controller oft erst mit dem ersten
+  // Tastendruck – dann ist A beim ersten Sehen schon unten): unbekannt = "war oben"; vor dem Menue gedrueckt zaehlt nicht.
+  let prevA = null, prevB = null, prevV = null, prevR = null;
+  addEventListener('gamepadconnected', (e) => { const gp = e.gamepad; if(!los && bereit && seite === 'haupt' && gp && gp.buttons[0] && gp.buttons[0].pressed){ prevA = true; waehlen(); } });
   (function pad(){
     if(los) return;
+    if(!bereit){ for(const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) if(gp){ prevA = !!(gp.buttons[0] && gp.buttons[0].pressed); break; } requestAnimationFrame(pad); return; }
     let xPad = false;
     for(const gp of (navigator.getGamepads ? navigator.getGamepads() : [])){
       if(!gp) continue;
@@ -823,9 +872,9 @@ function startbildschirm(weiter){
       const v = ax > 0.5 || !!(gp.buttons[vorK] && gp.buttons[vorK].pressed);
       const r = ax < -0.5 || !!(gp.buttons[rueckK] && gp.buttons[rueckK].pressed);
       if(seite === 'stat'){ if(v) blaettern(0.15); if(r) blaettern(-0.15); }
-      else { if(v && !prevV) schritt(1); if(r && !prevR) schritt(-1); }
-      if(bb && !prevB) zurueck();
-      if(a && !prevA){ waehlen(); if(los) return; }
+      else { if(v && prevV === false) schritt(1); if(r && prevR === false) schritt(-1); }
+      if(bb && prevB === false) zurueck();
+      if(a && prevA !== true){ waehlen(); if(los) return; }
       prevA = a; prevB = bb; prevV = v; prevR = r;
       break;
     }
@@ -925,24 +974,24 @@ function baueSchule(x, z, yaw){
 // Text vom User ueberarbeitet (09.10.2026, SPRECHTEXTE.md). "…" gibt in der Sprachausgabe eine kurze Pause.
 const INTRO_TEXT = [
   'Endlich… Ferien!',
-  'Kenji hat ein riesiges Ziel: Er ist eingeladen, den Sommer bei einem Freund in Japan zu verbringen!',
+  'Samu hat ein riesiges Ziel: Er ist eingeladen, den Sommer bei einem Freund in Japan zu verbringen!',
   'Das Problem? Er hat kein Geld für ein Flugticket… und seine Eltern helfen ihm nicht.',
-  'Also nimmt Kenji die Sache selbst in die Hand. Er macht sich auf eigene Faust auf den Weg!',
+  'Also nimmt Samu die Sache selbst in die Hand. Er macht sich auf eigene Faust auf den Weg!',
   'Sechs ganze Wochen hat er Zeit. Vor ihm liegen knifflige Rätsel, wilde Fahrzeuge… und das vielleicht größte Abenteuer seines Lebens!',
 ];
 const INTRO_GEH = 0.3;     // Stick-Ausschlag beim Gehen im Intro (EVA_SPEED * 0.3 ≈ 1,8 m/s)
 const INTRO_WEG = 7;       // m: so weit geht er von der Schultuer weg, dann bleibt er stehen
-const INTRO_FAHRT = 9;     // s: Kamera faehrt von vorne auf Kenji zu
+const INTRO_FAHRT = 9;     // s: Kamera faehrt von vorne auf Samu zu
 const INTRO_DREH  = 7;     // s: Kamera kreist 180° hinter ihn
 
 // Startpunkt vor der Schultuer. Nach dem Intro sollen X-Wing und U-Boot BEIDE im Bild sein, links
-// und rechts vor Kenji, keines direkt voraus. Das U-Boot liegt draussen am Liegeplatz (~375 m von
+// und rechts vor Samu, keines direkt voraus. Das U-Boot liegt draussen am Liegeplatz (~375 m von
 // der Inselmitte), der X-Wing auf dem Land (~235 m) – eine feste Formel passt deshalb nicht.
 // Gesucht wird im Raster ein freier Platz, von dem beide 60-260 m entfernt sind, zusammen unter
-// 70 Grad liegen (Bildbreite ~87 Grad) und moeglichst gleich weit weg sind. Hinter Kenji muss Platz
+// 70 Grad liegen (Bildbreite ~87 Grad) und moeglichst gleich weit weg sind. Hinter Samu muss Platz
 // fuer die Schule sein, und der Weg von der Tuer (INTRO_WEG) muss frei sein.
 function introPlatz(){
-  if(story.e1introPlatz) return story.e1introPlatz();      // Festland (etappe1.js): Kenji vor der Schultuer, Blick aufs Meer
+  if(story.e1introPlatz) return story.e1introPlatz();      // Festland (etappe1.js): Samu vor der Schultuer, Blick aufs Meer
   const info = islandInfo(0, 0);
   const bl = harborSubLocal(0, 0);
   const xp = story.xwingPlatz;
@@ -988,12 +1037,15 @@ function hudSichtbar(an){
   document.body.classList.toggle('filmszene', !an);
 }
 story.hudSichtbar = hudSichtbar;      // finale.js: Snowboard/Surfen ohne HUD
-// Zu Fuss (Kenji laeuft, kein Fahrzeug, kein Schlauchboot/Rover) kein HUD: links die Anzeige, Radar und Gyroskop
+// Zu Fuss (Samu laeuft, kein Fahrzeug, kein Schlauchboot/Rover) kein HUD: links die Anzeige, Radar und Gyroskop
 // aus (Live-Wunsch 14.10.2026) – in allen Etappen. In Fahrzeugen bleibt alles wie bisher. #big bleibt sichtbar.
 function hudZuFuss(){
   if(!document.getElementById('zufuss-css')){
     const st = document.createElement('style'); st.id = 'zufuss-css';
-    st.textContent = 'body.zufuss #hud, body.zufuss #radar, body.zufuss #gyro, body.zufuss #pad { visibility: hidden; }';
+    // Live-Wunsch 18.10.2026: im Fahrzeug links nur noch Hoehe, Speed, Schub – die Zeile 'Modell:' oben und die Statuszeile
+    // unten (Symbol, ggf. Pfeil) entfallen. Sie bleiben im DOM (die Engine schreibt weiter hinein), sind nur unsichtbar.
+    st.textContent = 'body.zufuss #hud, body.zufuss #radar, body.zufuss #gyro, body.zufuss #pad { visibility: hidden; }'
+      + ' #hud > div:first-child, #hud #status { display: none; }';
     document.head.appendChild(st);
   }
   const an = !!(eva && !eva.boat && !eva.rover);
@@ -1014,16 +1066,19 @@ function introVorbereiten(){
   g.position.set(ip.x, evaFootY(ip.x, ip.z), ip.z);
   eva.yaw = ip.yaw; g.rotation.y = ip.yaw;
   intro.start = { x: ip.x, z: ip.z };
-  kenji.last = null;
+  samu.last = null;
   intro.phase = 'warten'; intro.t = 0;
+  // Eingangsszene ohne Samu (Live-Wunsch 16.10.): er kommt erst aus der Schultuer, wenn das Spiel wirklich laeuft
+  intro.versteckt = true;
   startbildschirm(() => {
+    intro.versteckt = false; if(eva) eva.group.visible = true;
     intro.phase = 'laeuft'; intro.t = 0;
     intro.rede = sprich(INTRO_TEXT, () => { intro.fertigRede = true; });
   });
 }
 
-// Phasen: warten (Startbildschirm) -> laeuft (Kamerafahrt, Kenji geht allein) -> frei (Schwenk
-// fertig, Ansage laeuft noch: Kenji ist steuerbar, nur Einsteigen/Reset warten) -> aus.
+// Phasen: warten (Startbildschirm) -> laeuft (Kamerafahrt, Samu geht allein) -> frei (Schwenk
+// fertig, Ansage laeuft noch: Samu ist steuerbar, nur Einsteigen/Reset warten) -> aus.
 function introDt(dt){
   if(intro.phase !== 'laeuft' && intro.phase !== 'frei') return;
   intro.t += dt;
@@ -1046,7 +1101,7 @@ function introEnde(){
 function steuerbar(){ return intro.phase === 'aus' || intro.phase === 'frei'; }
 
 function hookIntro(){
-  // Im Intro geht Kenji von allein; die Spielereingaben werden ignoriert.
+  // Im Intro geht Samu von allein; die Spielereingaben werden ignoriert.
   const updateEvaOrig = updateEva;
   updateEva = function(dt, inp){
     if(intro.phase === 'warten'){ tricks.ausschlag = 0; return updateEvaOrig(dt, {}); }
@@ -1057,15 +1112,15 @@ function hookIntro(){
       return updateEvaOrig(dt, { pitch: geht ? -INTRO_GEH : 0 });
     }
     if(sw.aktiv){ schwimmUpdate(dt, inp); return; }
-    return updateEvaOrig(dt, kenjiEingabe(inp));
+    return updateEvaOrig(dt, samuEingabe(inp));
   };
-  // Einsteigen (Y) und Reset (R) erst nach der Ansage. Y abseits der Fahrzeuge = Twirl (kenjiTasten).
+  // Einsteigen (Y) und Reset (R) erst nach der Ansage. Y abseits der Fahrzeuge = Twirl (samuTasten).
   const introAktiv = () => intro.phase !== 'aus';     // Einsteigen erst, wenn die Ansage fertig ist
   const boardYOrig = evaBoardY;
   evaBoardY = function(){ if(introAktiv() || !amFahrzeug()) return; return boardYOrig.apply(this, arguments); };
   const resetO = resetPlane;
   resetPlane = function(){ if(introAktiv()) return; return resetO.apply(this, arguments); };
-  // B ist zu Fuss Moonwalk statt Huepfen; gesprungen wird mit A (kenjiTasten -> evaJumpOrig)
+  // B ist zu Fuss Moonwalk statt Huepfen; gesprungen wird mit A (samuTasten -> evaJumpOrig)
   evaJumpOrig = evaJump;
   evaActionB = function(){};
   // Modellwechsel (M / D-Pad rechts) gibt es im Spiel nicht – Fahrzeuge waehlt die Geschichte
@@ -1080,7 +1135,7 @@ function hookIntro(){
       const dist = 6 - 2 * k, hoch = 2.2 - 1.8 * k;
       const soll = new THREE.Vector3(p.x + Math.sin(yaw) * dist, p.y + hoch, p.z + Math.cos(yaw) * dist);
       if(sideView !== 0){
-        // von links / rechts: quer zur Blickrichtung, auf Hoehe von Kenji
+        // von links / rechts: quer zur Blickrichtung, auf Hoehe von Samu
         const qx = Math.cos(eva.yaw), qz = -Math.sin(eva.yaw);
         soll.set(p.x + qx * 6 * sideView, p.y + 0.6 + 0.6 * (1 - k), p.z + qz * 6 * sideView);
       }
@@ -1106,12 +1161,12 @@ function hookIntro(){
     const oz = fz * Math.cos(a) + fx * Math.sin(a);
     camera.up.set(0, 1, 0);
     camera.position.set(p.x + ox * dist, p.y + hoch, p.z + oz * dist);
-    camera.lookAt(p.x, p.y + KENJI_H * 0.65, p.z);
+    camera.lookAt(p.x, p.y + SAMU_H * 0.65, p.z);
   };
 }
 
 // ---- Schwimmen -------------------------------------------------------------------------------
-// Laeuft Kenji ins Meer, schwimmt er (statt im Schlauchboot zu sitzen): linker Stick bewegt und
+// Laeuft Samu ins Meer, schwimmt er (statt im Schlauchboot zu sitzen): linker Stick bewegt und
 // dreht ihn, RT taucht ab, LT taucht auf (Tastatur: E / Q). An Land steht er wieder auf.
 const SCHWIMM_V   = 1.8;     // m/s
 const TAUCH_V     = 1.4;     // m/s auf und ab
@@ -1168,8 +1223,8 @@ function schwimmUpdate(dt, inp){
 }
 
 // Waten (Live-Wunsch 09.10.2026, global): an Ufern mit Sandrand (Engine-Inseln, Festland mit isOnBeach) ist das Wasser auf
-// den ersten WAT_W m flach. Dort steht Kenji auf dem Grund; erst wo es tiefer als WAT_TIEF ist, schwimmt er (der Koerper
-// ist dann etwa zur Haelfte im Wasser, Kenji 1,55 m).
+// den ersten WAT_W m flach. Dort steht Samu auf dem Grund; erst wo es tiefer als WAT_TIEF ist, schwimmt er (der Koerper
+// ist dann etwa zur Haelfte im Wasser, Samu 1,55 m).
 const WAT_W = 14, WAT_TIEF = 0.8;
 // Abstand zur naechsten Sandkante, nur nahe am Ufer gesucht (0 = an der Kante, > WAT_W = tiefes Wasser)
 function watAbstand(x, z){
@@ -1189,7 +1244,7 @@ function hookSchwimmen(){
   const solidOrig = evaSolid, fussOrig = evaFootY, bedOrig = seabedY;
   evaSolid = function(x, z){ if(solidOrig.apply(this, arguments)) return true; return locale === 'earth' && !eigeneWelt() && watGrund(x, z) !== null; };
   evaFootY = function(x, z){ if(locale === 'earth' && !eigeneWelt()){ const g = watGrund(x, z); if(g !== null) return g; } return fussOrig.apply(this, arguments); };
-  // Meeresboden: in der Watzone flach (sonst haengt der Engine-Grund dort bei -1,2 m ueber dem Watgrund und Kenji
+  // Meeresboden: in der Watzone flach (sonst haengt der Engine-Grund dort bei -1,2 m ueber dem Watgrund und Samu
   // sieht unter Wasser einen Sockel)
   seabedY = function(x, z, islands){ const r = bedOrig.apply(this, arguments);
     if(islands || locale !== 'earth' || eigeneWelt()) return r;      // Raster des Meeresbodens: unveraendert (Leistung)
@@ -1273,18 +1328,16 @@ function hookWarp(){
 // ---- Schatten -------------------------------------------------------------------------------
 // Die Engine legt den Schatten an Land fest auf ISLAND_Y. Auf unebenem Boden (Duenen in Etappe 2)
 // liegt er dann unter der Figur und wirkt von schraeg oben versetzt. Hier: auf die echte Bodenhoehe
-// unter Kenji setzen (Flugzeugschatten bleiben, wie sie sind). Kenji: 35 % kleiner (0,9 -> 0,59 m).
-const KENJI_SCHATTEN = 0.65;
+// unter Samu setzen (Flugzeugschatten bleiben, wie sie sind). Groesse und Deckkraft: spuren.js (wie Joshi im Geheimland).
 function hookSchatten(){
   const ovalOrig = updateOvalShadow;
   updateOvalShadow = function(){
     const r = ovalOrig.apply(this, arguments);
     if(!ovalShadow.visible) return r;
-    if(story.kenjiVersteckt){ ovalShadow.visible = false; return r; }
+    if(story.samuVersteckt || intro.versteckt){ ovalShadow.visible = false; return r; }   // nie ein Schatten ohne Samu
     if(eva && !eva.boat){
       const px = eva.group.position.x, pz = eva.group.position.z;
-      ovalShadow.scale.x *= KENJI_SCHATTEN; ovalShadow.scale.y *= KENJI_SCHATTEN;
-      // Boden unter Kenji (auf Wasser/Strand bleibt die Engine-Hoehe)
+      // Boden unter Samu (auf Wasser/Strand bleibt die Engine-Hoehe)
       if(locale === 'earth' && isOnLand(px, pz)) ovalShadow.position.y = evaFootY(px, pz) + 0.08;
     }
     return r;
@@ -1332,7 +1385,7 @@ const ORTE = [
   { name: 'Etappe 4: Südostasien',       lat:  3.0, lon: 101.0 },
   { name: 'Etappe 5: Chinesisches Meer', lat: 22.3, lon: 114.2 },
   { name: 'Etappe 6: Japan – Tokio',     lat: 35.68, lon: 139.69 },  // Fuji, Hoehle, Shinkansen (Live-Wunsch 09.10.2026)
-  { name: 'Ziel: Fukuoka',               lat: 33.59, lon: 130.40 },  // Ziel: dort wohnt Kenjis Freund (Strand, lila Punkt)
+  { name: 'Ziel: Fukuoka',               lat: 33.59, lon: 130.40 },  // Ziel: dort wohnt Samus Freund (Strand, lila Punkt)
 ];
 story.reise = [0];                 // besuchte Orte (Index in ORTE), Start ist immer dabei
 const GLOBUS_R = 1;
@@ -1354,7 +1407,10 @@ function bogen(a, b, n){
     const t = i / n;
     const v = new THREE.Vector3().copy(va).multiplyScalar(Math.sin((1 - t) * w) / Math.sin(w))
       .addScaledVector(vb, Math.sin(t * w) / Math.sin(w));
-    v.normalize().multiplyScalar(GLOBUS_R * (1.01 + 0.09 * Math.sin(Math.PI * t)));
+    // Live-Befund 18.10.2026: der Faden lag an den Enden nur 1 % ueber der Kugel – die Kugel (64 x 48 Flaechen, zwischen
+    // den Ecken flach) schnitt ihn stellenweise an, er tauchte ein und wieder auf. Jetzt 2 % an den Enden und ein Bogen, der
+    // mit der Strecke waechst (kurze Wege bleiben flach, lange heben sich wie bisher)
+    v.normalize().multiplyScalar(GLOBUS_R * (1.02 + Math.min(0.09, 0.03 + w * 0.06) * Math.sin(Math.PI * t)));
     out.push(v);
   }
   return out;
@@ -1394,6 +1450,16 @@ function globusBauen(){
   }
   gl.punkte = new THREE.Group(); gl.erde.add(gl.punkte);
   gl.faden = new THREE.Group(); gl.erde.add(gl.faden);
+  // Samus Gesicht an der Spitze des Fadens (Live-Wunsch 18.10.2026, wie Joshi im Geheimland): rundes Abzeichen
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.beginPath(); g.arc(64, 64, 62, 0, 7); g.fill();
+  g.fillStyle = '#e02020'; g.beginPath(); g.arc(64, 64, 56, 0, 7); g.fill();          // roter Rand wie der Faden
+  const tex = new THREE.CanvasTexture(c);
+  if(window.SAMU_KOPF_PNG){ const im = new Image();
+    im.onload = () => { g.save(); g.beginPath(); g.arc(64, 64, 53, 0, 7); g.clip(); g.fillStyle = '#fbfaf7'; g.fill(); g.drawImage(im, 11, 11, 106, 106); g.restore(); tex.needsUpdate = true; };
+    im.src = window.SAMU_KOPF_PNG; }
+  gl.gesicht = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  gl.gesicht.scale.setScalar(0.15); gl.gesicht.renderOrder = 6; gl.gesicht.visible = false; gl.erde.add(gl.gesicht);
 }
 
 function punkt(ort, farbe, gross){
@@ -1406,8 +1472,10 @@ function fadenStueck(a, b, anteil){
   const pts = bogen(a, b, 48);
   const n = Math.max(2, Math.round(pts.length * anteil));
   const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.slice(0, n)), Math.max(4, n * 2), 0.009, 8, false);
-  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xe02020 }));
+  // polygonOffset: der Faden gewinnt den Tiefentest knapp gegen die Erdkugel, auch wo sie zwischen ihren Ecken hoeher liegt
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xe02020, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
   gl.faden.add(m);
+  gl.spitze = pts[n - 1];                                            // Samus Gesicht sitzt dort (globusZeichnen)
   return m;
 }
 // Zustand zeichnen: alle bisherigen Fadenstuecke + Punkte, das letzte Stueck bis "anteil"
@@ -1415,6 +1483,7 @@ function globusZeichnen(anteil){
   // jedes Bild neu gebaut: die alten Stuecke freigeben, nicht nur aus der Gruppe nehmen (R15)
   for(const o of [...gl.punkte.children, ...gl.faden.children]) entsorgen(o);
   const r = story.reise;
+  gl.spitze = null;
   for(let i = 1; i < r.length; i++){
     const letztes = i === r.length - 1;
     // beim Morph endet der letzte Faden kurz vor Japan, sonst schaut er unter der Welle hervor
@@ -1428,6 +1497,9 @@ function globusZeichnen(anteil){
   }
   if(!gl.morph) punkt(ORTE[ORTE.length - 1], 0xb04cff, true);       // Ziel Japan lila
   else morphZeichnen();
+  // Samus Gesicht wandert an der Spitze des Fadens mit (das letzte Stueck ist das zuletzt gezeichnete), am Ziel bleibt es
+  if(gl.gesicht){ gl.gesicht.visible = !!gl.spitze;
+    if(gl.spitze) gl.gesicht.position.copy(gl.spitze).normalize().multiplyScalar(GLOBUS_R * (gl.morph && anteil >= 1 ? 1.16 : 1.09)); }   // ueber der Welle
 }
 // Ende Etappe 6 (Live-Wunsch 09.10.2026): auf dem Globus wird der lila Punkt Japan zum 🌊 (der Strand am Fuji).
 // Punkt schrumpft, die Welle (Sprite mit Emoji, bleibt bestehen) waechst – zwischen 0,8 und 2,4 s.
@@ -1529,7 +1601,7 @@ function globusUpdate(dt){
   }
 }
 story.globusReise = globusReise;
-// Ende Etappe 6: gleicher Ablauf wie globusReise, aber ohne neuen Faden (Kenji bleibt in Japan) – Kamera auf Japan,
+// Ende Etappe 6: gleicher Ablauf wie globusReise, aber ohne neuen Faden (Samu bleibt in Japan) – Kamera auf Japan,
 // der lila Punkt wird zum 🌊. Text = Ort + Tage.
 function globusAnkunft(ortText, tageText, fertig){
   etappenHudsAus();
@@ -1590,7 +1662,7 @@ function etappenMusik(n, url, dt, pegel){
       const g = audioCtx.createGain(); g.gain.value = 0;
       s.connect(g).connect(audioCtx.destination); s.start();
       s.onended = () => { m.aus = true; };
-      m.quelle = s; m.gain = g;
+      m.quelle = s; m.gain = g; m.start = audioCtx.currentTime;
     }).catch((e) => console.warn('Musik Etappe ' + n + ':', e));
   }
   if(!m.gain) return;
@@ -1600,6 +1672,15 @@ function etappenMusik(n, url, dt, pegel){
   if(m.aus && m.gain.gain.value < 0.001) stop();
 }
 story.etappenMusik = etappenMusik;
+// Musik der Etappe n noch einmal von vorn (Live-Befund 18.10.2026: am Fukuoka-Beach blieb es still – die Musik von
+// Etappe 6 war beim Einsteigen in den Alpha Jet / Shinkansen schon "aus" und startete nach der Ankunft nicht wieder)
+story.musikNeu = function(n){
+  const m = musiken[n]; if(!m) return;
+  if(m.quelle){ try { m.quelle.onended = null; m.quelle.stop(); } catch(e){} }
+  m.quelle = m.gain = null; m.laedt = false; m.aus = false;
+};
+story.musikZeit = (n) => { const m = musiken[n]; return m && m.quelle ? audioCtx.currentTime - m.start : 0; };   // s seit Beginn des Stuecks
+story.musikZustand = (n) => { const m = musiken[n]; return m ? { laeuft: !!m.quelle, aus: m.aus, laedt: m.laedt, pegel: m.gain ? +m.gain.gain.value.toFixed(3) : null } : null; };   // fuer Tests
 // Etappe 1: 'Summer Vacation' (musik_snd.js). Live-Wunsch: unter der Intro-Ansage so leise, dass man die Stimme gut
 // versteht (MUSIK_INTRO), danach wie in den anderen Etappen (MUSIK_VOL). Startet erst nach dem Startbildschirm.
 const MUSIK_INTRO = 0.035;
@@ -1770,11 +1851,11 @@ function hookLoop(){
     }
     timerTick(dt);                            // nach Pause und Globus: dort stehen die Timer
     skipTick(dt);
-    updateKenji(dt);
-    kenjiWache(dt);
+    updateSamu(dt);
+    samuWache(dt);
     hudZuFuss();
     weltenSichtbar();                         // nur die Welt der aktuellen Etappe, nur auf der Erde
-    kenjiTasten();
+    samuTasten();
     updateAufgabe();
     if(eva && story.phase === 'mars') marsUpdate(dt);
     if(story.updateE1) story.updateE1(dt);
@@ -1850,11 +1931,15 @@ function hookRadarAnzeige(){
       g.beginPath(); g.arc(cx, cy, R - 1, 0, Math.PI*2); g.fill();
       g.restore();
     }
-    // altes, mittiges Dreieck abdecken und neues mit der Spitze auf der Mitte malen
+    // altes, mittiges Dreieck abdecken und das U-Boot malen wie in der Schlucht (etappe5b.js, Live-Wunsch 18.10.2026):
+    // gleiche Rumpfform, die Spitze (Bug) sitzt genau auf der Mitte = eigener Standort. Fest 22 px lang (massstaeblich
+    // waere es bei 1.400 m Reichweite nur 2 px).
     g.fillStyle = 'rgb(20,70,90)';
     g.beginPath(); g.moveTo(cx, cy - 8); g.lineTo(cx - 6.5, cy + 7); g.lineTo(cx + 6.5, cy + 7); g.closePath(); g.fill();
-    g.fillStyle = '#ffffff';
-    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx - 5, cy + 13); g.lineTo(cx + 5, cy + 13); g.closePath(); g.fill();
+    const L = 22, hb = 5;
+    g.fillStyle = '#ffffff'; g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + hb, cy + L * 0.225); g.lineTo(cx + hb, cy + L * 0.925);
+    g.lineTo(cx, cy + L); g.lineTo(cx - hb, cy + L * 0.925); g.lineTo(cx - hb, cy + L * 0.225); g.closePath(); g.fill(); g.stroke();
     // ohne Bild: kleiner Hinweis auf den Ping – nur in Etappe 1 (spaeter ist die Scheibe ohne Ping einfach dunkel, Live-Wunsch)
     if(sicht <= 0 && story.etappe === 1){
       g.fillStyle = 'rgba(255,255,255,0.55)';
@@ -2130,7 +2215,7 @@ story.e1aufraeumen = function(){
   mars.stein = null; mars.ort = null; mars.hinweisWeg = false; mars.rede = null;
   pf.gruen = false; pf.schritt = 0; pf.t = 0;
   // Etappe-1-Kulissen ENTFERNEN, nicht nur ausblenden – sonst sammeln sie sich ueber sechs Etappen an
-  weltEntsorgen(1);
+  story.weltEntsorgen(1);                    // ueber story.: objekte.js nimmt dabei auch die Grenzen der Welt mit
   marken.length = 0; ringMesh = null; story.schule = null;
   entsorgen(mars.steinObj); mars.steinObj = null;
   if(ub.padEl) ub.padEl.style.display = 'none';
@@ -2186,13 +2271,13 @@ const MOND_KURZ = [
 function mondLang(){
   return [
     // Etappe 3, zum ersten Mal im All: wie Etappe 2 Fall B, nur ohne Kurzschluss (den gibt es dort nicht)
-    story.etappe >= 3 ? 'Hallo Kenji! Du bist wohl etwas nervös gewesen…'
-      : 'Hallo Kenji! Da hatte der Flieger wohl einen Kurzschluss, deshalb war die Startsequenz anders als gewohnt.',
+    story.etappe >= 3 ? 'Hallo Samu! Du bist wohl etwas nervös gewesen…'
+      : 'Hallo Samu! Da hatte der Flieger wohl einen Kurzschluss, deshalb war die Startsequenz anders als gewohnt.',
     'Aber keine Sorge! Wir haben die Startsequenz und den Start automatisch durchgeführt.',
     'Zur Erinnerung: Du hast dich freiwillig gemeldet, zum Mond zu fliegen… und als Beweis einen Stein mitzubringen!',
   ].concat(MARS_TEXT.slice(3, 10).map(zumMond));             // Flugerklaerung + Schluss wie beim Mars, "Mars" -> "Mond"
 }
-// Etappe 3 (kein Kurzschluss) – vier Faelle, je nachdem, wo Kenji schon war:
+// Etappe 3 (kein Kurzschluss) – vier Faelle, je nachdem, wo Samu schon war:
 //   Mars und Mond  -> MOND_PROFI      Mond, nicht Mars -> MOND_ZWEITER (Konzept: "zweiter Mond-Trip")
 //   Mars, nicht Mond -> MOND_NACH_MARS   zum ersten Mal -> mondLang() mit voller Flugerklaerung
 const MOND_PROFI = [
@@ -2228,7 +2313,7 @@ function tripOrt(){ return story.etappe >= 2 ? 'moon' : 'mars'; }
 // Text vom User ueberarbeitet (09.10.2026, SPRECHTEXTE.md). Index 3-9 nutzt auch der Mond-Trip (mondLang) – dort wird
 // "Mars" zu "Mond" (zumMond).
 const MARS_TEXT = [
-  'Hallo Kenji! Du bist wohl etwas nervös gewesen…',
+  'Hallo Samu! Du bist wohl etwas nervös gewesen…',
   'Aber keine Sorge! Wir haben die Startsequenz und den Start einfach automatisch durchgeführt.',
   'Zur Erinnerung: Du hast dich freiwillig gemeldet, als erster Mensch zum Mars zu fliegen… und als Beweis einen Stein mitzubringen!',
   'Falls du vergessen hast, wie man fliegt, hier noch einmal die Steuerung:',
@@ -2240,7 +2325,7 @@ const MARS_TEXT = [
   'Du schaffst das schon! Wir hören uns in einer Woche wieder… Viel Spaß auf dem Mars!',
 ];
 const zumMond = (t) => t.replace(/zum Mars/g, 'zum Mond').replace(/dem Mars/g, 'dem Mond');
-const STEIN_R = 4;           // m: so nah muss Kenji fuer Y heran
+const STEIN_R = 4;           // m: so nah muss Samu fuer Y heran
 const mars = story.mars = { phase: null, stein: null, steinObj: null, steinSaeule: null, rede: null };
 
 function marsStart(){
@@ -2294,10 +2379,11 @@ function marsStein(){
     new THREE.MeshLambertMaterial({ color: TRIP[mars.ort || 'mars'].farbe, emissive: TRIP[mars.ort || 'mars'].glanz, emissiveIntensity: 0.9 }));
   stein.position.y = 0.28; stein.rotation.set(0.4, 0.7, 0.2);
   g.add(stein);
-  const saeule = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, SAEULE_H, 10, 1, true),
+  // Lichtsaeule am Stein auf Mond/Mars: halb so hoch und schmaler (Live-Wunsch 18.10.2026)
+  const saeule = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, SAEULE_H / 2, 10, 1, true),
     new THREE.MeshBasicMaterial({ color: 0xff8844, transparent: true, opacity: 0.2,
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  saeule.position.y = SAEULE_H / 2; saeule.renderOrder = 995;
+  saeule.position.y = SAEULE_H / 4; saeule.renderOrder = 995;
   g.add(saeule);
   g.position.set(x, y, z);
   scene.add(g);                               // global-ok: steht auf Mond/Mars, nicht in einer Erd-Welt
@@ -2423,7 +2509,7 @@ function freiflugUpdate(){
 // UNTERSCHIEDLICHE Wracks fotografieren (Controller Y / Tastatur F) -> 4 Tage. Scheitern kann man hier nicht.
 const UBOOT_TEXT = [
   // Text vom User ueberarbeitet (09.10.2026): der Code wird jetzt gesprochen (vorher nur im Ziffernfeld)
-  'Hallo Kenji! Danke für deine Hilfe.',
+  'Hallo Samu! Danke für deine Hilfe.',
   'Du siehst noch recht jung aus… und als würdest du zum ersten Mal ein U-Boot steuern! Keine Sorge, wir helfen dir.',
   'Den Universal-Code für U-Boote haben wir bereits für dich eingegeben: eins… vier… null… zwei!',
   'Hier ist die kurze Erklärung für die Steuerung:',
@@ -2522,7 +2608,7 @@ function fotoMachen(){
   if(n < 2){
     sprich(['Klasse, ein ' + NAME[w.key] + '! Jetzt fehlt nur noch ein zweites, anderes Schiff.']);
   } else {
-    sprich(['Toll gemacht! Mit deinen beiden Fotos können wir die Riffe bauen. Vielen Dank, Kenji!']);
+    sprich(['Toll gemacht! Mit deinen beiden Fotos können wir die Riffe bauen. Vielen Dank, Samu!']);
     ub.aktiv = false; story.phase = 'uboot-fertig';
     ub.nah = null; fotoAnzeige();
     spaeter(3.5, () => {
@@ -2691,7 +2777,7 @@ function stelleMarke(m, x, y, z, fzg){
     m.schild.position.set(x, y + SCHILD_UNTEN + SCHILD_H / 2, z);   // Schild sitzt im Pfeilschaft, Unterkante fest ueber dem Boden
   }
 }
-// Kenji taucht: keine Pfeile/Schilder (sie haben depthTest aus und waeren durchs Wasser zu sehen)
+// Samu taucht: keine Pfeile/Schilder (sie haben depthTest aus und waeren durchs Wasser zu sehen)
 function taucht(){ return !!eva && eva.group.position.y < (typeof seaYAt === 'function' ? seaYAt(eva.group.position.x, eva.group.position.z) : 0) - 0.4; }
 story.setzeMarke = function(m, x, y, z, fzg, zeigen){
   if(taucht()) zeigen = false;
@@ -2724,7 +2810,7 @@ function updateMarken(){
   }
 }
 
-// ---- HUD: zu Fuss "Kenji" statt Fahrzeugname, kein Astronauten-Symbol ------------------------
+// ---- HUD: zu Fuss "Samu" statt Fahrzeugname, kein Astronauten-Symbol ------------------------
 // ---- Schubbalken und Y im Flug: kommen aus der Engine (Flugspiel) ----------------------------------------
 // Beides wurde hier gebaut und dann ins Flugspiel uebernommen (07.10.2026). Hier nur noch die Story-Sperren:
 // kein Balken im Kran, im Platzhalter und auf der Globusreise; kein Geraderichten waehrend Startsequenz/Autostart.
@@ -2736,6 +2822,55 @@ function updateMarken(){
 // Live-Wunsch: 'es reicht, wenn man auch mit maximal 30 % Schub noch landen kann' -> Grenze = 30 % vMax + 10 %
 const JET_LANDE_ANTEIL = 0.33;
 function jetLandung(){ const m = MODEL_NAMES[currentModel]; return m === 'AlphaJet' || m === 'Airbus'; }
+// ---- Flugzeuge: rollen um die Rumpfachse, beim Lenken leicht neigen (Live-Wunsch 18.10.2026) ---------------------------
+// Die Engine dreht den Flieger um state.pos = Unterkante des Fahrwerks (die Modelle stehen mit y = 0 auf dem Boden). Die
+// Rumpfmitte liegt 1,5 (Mustang) bis 4 m (Airbus) darueber – beim Rollen schwang sie wie ein Pendel zur Seite, es sah aus,
+// als rolle er ueber die Fluegelspitze. In der Luft wird state.pos nach jedem Physikschritt um den Anteil zurueckgeschoben,
+// den nur die Drehung (nicht die Fahrt) der Rumpfmitte gegeben hat: h * (Oben nachher - Oben vorher). Am Boden bleibt alles.
+// Lenken (L-Stick / Pfeile = Gieren): dazu eine leichte Querlage in Kurvenrichtung (bis NEIG_MAX); beim Loslassen richtet
+// die Auto-Rueckstellung der Engine sie wieder auf.
+const NEIG_MAX = 0.35, NEIG_RATE = 0.9;      // rad (~20 Grad) Querlage, Rollrate-Anteil beim Hineinlegen
+const _obenV = new THREE.Vector3(), _obenN = new THREE.Vector3();
+let rumpfH = 0, rumpfMesh = null;
+function rumpfHoehe(){
+  const m = modelHolder.children[0] || null;
+  if(m !== rumpfMesh){
+    rumpfMesh = m; rumpfH = 0;
+    if(m){
+      // einmal je Modell: Box in den Koordinaten des Fliegers (Lage kurz auf null, gleich wieder zurueck)
+      const q = planeGroup.quaternion.clone(), p = planeGroup.position.clone();
+      planeGroup.quaternion.identity(); planeGroup.position.set(0, 0, 0); planeGroup.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(m); if(!bb.isEmpty()) rumpfH = (bb.min.y + bb.max.y) / 2;
+      planeGroup.quaternion.copy(q); planeGroup.position.copy(p); planeGroup.updateMatrixWorld(true);
+    }
+  }
+  return rumpfH;
+}
+story.rumpfHoehe = rumpfHoehe;                // fuer Tests
+function hookRumpfachse(){
+  const physOrig = stepPhysics;
+  stepPhysics = function(dt, inp){
+    const fliegt = !eva && !state.onGround && !state.crashed && locale !== 'space' && !spec.boat && !spec.sub;
+    if(!fliegt) return physOrig.apply(this, arguments);
+    // leicht in die Kurve legen: Lenken ohne eigenes Rollen gibt etwas Rollrate, bis NEIG_MAX
+    let ein = inp;
+    if(inp && inp.yaw && !inp.roll){
+      const bank = new THREE.Euler().setFromQuaternion(state.quat, 'YXZ').z;   // > 0 = links haengend
+      const soll = -Math.sign(inp.yaw) * NEIG_MAX * Math.min(1, Math.abs(inp.yaw));   // rechts lenken -> rechts neigen (bank < 0)
+      const r = Math.max(-1, Math.min(1, (bank - soll) * 3)) * NEIG_RATE;      // roll > 0 rollt nach rechts (bank sinkt)
+      if(Math.abs(r) > 0.02) ein = Object.assign({}, inp, { roll: r });
+    }
+    const h = rumpfHoehe();
+    _obenV.set(0, 1, 0).applyQuaternion(state.quat);
+    const r = physOrig.call(this, dt, ein);
+    if(h && !state.onGround && !state.crashed && !eva){
+      _obenN.set(0, 1, 0).applyQuaternion(state.quat);
+      state.pos.addScaledVector(_obenN.sub(_obenV), -h);                      // Rumpfmitte statt Fahrwerk als Drehpunkt
+      planeGroup.position.copy(state.pos);
+    }
+    return r;
+  };
+}
 function hookJetLandung(){
   const physOrig = stepPhysics;
   stepPhysics = function(dt, inp){
@@ -2766,7 +2901,31 @@ function schubWieJFG(){
   if(schubEl.style.width !== w){ schubEl.style.width = w; schubEl.style.height = SCHUB_H + 'px'; schubEl.style.right = '12px';
     schubEl.style.borderRadius = '9px'; schubEl.style.gap = '3px'; }
 }
+// Wie im Geheimland (JFG segeln.js, Live-Wunsch 18.10.2026): SCHUB_SICHT s nach der letzten Schub-EINGABE blendet der
+// Balken ueber SCHUB_AUS s aus. Jede Betaetigung der Schubtasten holt ihn sofort zurueck – auch wenn sich nichts mehr
+// aendert (Vollschub und weiter hoch gedrueckt). Schubtasten: W/S, rechter Stick hoch/runter (thrHold), Leertaste
+// (voll), C/A (Umkehrschub), X/Shift (Boost). Wird er eingeblendet (vorher aus), ist er ebenfalls ganz da.
+const SCHUB_SICHT = 5, SCHUB_AUS = 1.5;
+let schubZeit = 0, schubOp = '', schubUhr = 0, schubWarAus = true;
+function schubBetaetigt(){ schubZeit = 0; }
+story.schubBetaetigt = schubBetaetigt;
+function schubAusblenden(){
+  if(!schubEl) return;
+  const jetzt = performance.now() / 1000, dt = schubUhr ? Math.min(0.1, jetzt - schubUhr) : 0; schubUhr = jetzt;
+  if(schubEl.style.display === 'none'){ schubWarAus = true; return; }
+  if(schubWarAus){ schubWarAus = false; schubZeit = 0; } else schubZeit += dt;
+  const op = Math.max(0, Math.min(1, 1 - (schubZeit - SCHUB_SICHT) / SCHUB_AUS)).toFixed(2);
+  if(op !== schubOp){ schubOp = op; schubEl.style.opacity = op; }
+}
 function hookSchubGerade(){
+  const holdOrig = thrHold;
+  thrHold = function(dir){ if(dir) schubBetaetigt(); return holdOrig.apply(this, arguments); };
+  const leseOrig = readInput;
+  readInput = function(){
+    const r = leseOrig.apply(this, arguments);
+    if(keys['Space'] || keys['KeyC'] || keys['KeyX'] || keys['ShiftLeft'] || keys['ShiftRight'] || aPrev || boosting) schubBetaetigt();
+    return r;
+  };
   const schubOrig = schubBalken;
   schubBalken = function(){
     if((story.kran4 && story.kran4.aktiv) || story.phase === 'platzhalter' || story.phase === 'reise'){
@@ -2775,6 +2934,7 @@ function hookSchubGerade(){
     }
     const r = schubOrig.apply(this, arguments);
     schubWieJFG();
+    schubAusblenden();
     return r;
   };
   const geradeOrig = geradeMoeglich;
@@ -2783,12 +2943,48 @@ function hookSchubGerade(){
       && !pf.aktiv && !auto.aktiv && story.phase !== 'platzhalter' && story.phase !== 'reise';
   };
 }
+// ---- Y-Zeichen (wie "Das Geheimland"): gelber Controller-Knopf mit weissem Rand, schwebt ueber Samu und wippt -----
+// Live-Wunsch 16.10.2026: statt "Y: einsteigen" im HUD. Ohne Tiefentest, damit es nie im Fahrzeug verschwindet.
+let yTex = null, ySprite = null, yT = 0;
+function yZeichenZeigen(an){
+  if(!an && !ySprite) return;
+  if(!ySprite){
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.arc(64, 68, 56, 0, 7); g.fill();
+    g.fillStyle = '#f5c518'; g.beginPath(); g.arc(64, 62, 54, 0, 7); g.fill(); g.lineWidth = 6; g.strokeStyle = '#ffffff'; g.stroke();
+    g.fillStyle = '#1a1a1a'; g.font = 'bold 76px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('Y', 64, 66);
+    yTex = new THREE.CanvasTexture(c);
+    ySprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: yTex, depthTest: false, transparent: true }));
+    ySprite.scale.setScalar(0.6); ySprite.renderOrder = 999; scene.add(ySprite);   // global-ok: folgt Samu in jede Welt
+  }
+  ySprite.visible = !!(an && eva && locale !== 'space');            // auch auf Mond und Mars (Stein, Flieger)
+  if(!ySprite.visible) return;
+  yT += 1 / 60;
+  // Einstieg ueber einen Kreis am Boden (Live-Wunsch 16.10.): dann ueber der Kreismitte, sonst ueber Samu
+  // am Stein auf Mond/Mars: ueber dem Stein (wie ueber der Ringmitte)
+  const st = marsSteinNah() && mars.steinObj ? mars.steinObj.position : null;
+  const r = st ? null : ringUnterSamu(), p = st || r || eva.group.position, hoch = st ? 1.4 : r ? 2.2 : SAMU_H + 0.35;
+  ySprite.position.set(p.x, p.y + hoch + Math.sin(yT * 3) * 0.07, p.z);
+}
+story.yZeichenZeigen = yZeichenZeigen;
+story.trickStart = (n) => trickStart(n);          // aliens.js: Samu tanzt in der Gruppe mit
+story.marsSteinPlatz = () => (mars.stein && mars.stein !== 'geholt' && locale === (mars.ort || 'mars')) ? mars.stein : null;   // aliens.js
 function hookHud(){
   // Das grosse Bestaetigungssymbol in der Bildmitte zeigt beim Aussteigen einen Astronauten –
-  // Kenji ist keiner. Andere Symbole (z. B. U-Boot beim Einsteigen) bleiben.
+  // Samu ist keiner. Andere Symbole (z. B. U-Boot beim Einsteigen) bleiben.
   const showBigOrig = showBig;
+  // Live-Wunsch 18.10.2026: die grossen Symbole in der Bildmitte entfallen ganz – beim Ein-/Aussteigen (showBig) und beim
+  // Anflug auf einen Planeten / Warp-Stopp (showSpaceHint). Texte und Zahlen (z. B. Asteroidenzaehler) bleiben: unterdrueckt
+  // wird nur, was keinen Buchstaben und keine Ziffer enthaelt (reine Emoji).
+  const nurSymbol = (t) => !!t && !/[\p{L}\p{N}]/u.test(t);
+  const spaceOrig = showSpaceHint;
+  showSpaceHint = function(t){ if(nurSymbol(t)) return; return spaceOrig.apply(this, arguments); };
+  // Leuchtsaeule der Engine ueber Mondbasis/Rover: entfaellt (Live-Wunsch 18.10.2026)
+  const beaconOrig = showBeacon;
+  showBeacon = function(){ const r = beaconOrig.apply(this, arguments); if(beaconObj) beaconObj.visible = false; return r; };
   showBig = function(t){
     if(t && /\u{1F9D1}\u200D\u{1F680}/u.test(t)) t = '';
+    if(nurSymbol(t)) t = '';
     return showBigOrig.call(this, t);
   };
   const mdlEl = document.getElementById('mdl');
@@ -2797,7 +2993,7 @@ function hookHud(){
   updateHUD = function(){
     const r = hudOrig.apply(this, arguments);
     if(eva){
-      if(mdlEl && mdlEl.textContent !== 'Kenji') mdlEl.textContent = 'Kenji';
+      if(mdlEl && mdlEl.textContent !== 'Samu') mdlEl.textContent = 'Samu';
       if(sw.aktiv){
         const gp = eva.group.position;
         const t = Math.max(0, Math.round(seaYAt(gp.x, gp.z) - gp.y - SCHWIMM_TIEF));
@@ -2808,32 +3004,40 @@ function hookHud(){
       if(statEl){
         const ein = evaCanBoard() || harborSubNear() || (story.transallNah && story.transallNah()) || (story.bootNah && story.bootNah()) || (story.kranNah && story.kranNah()) || (story.bootNah4 && story.bootNah4())
           || (story.ringNah6 && story.ringNah6()) || (story.c400Nah && story.c400Nah());
-        const s = marsSteinNah() ? 'Y: ' + TRIP[mars.ort || 'mars'].stein + ' aufheben' : (ein ? 'Y: einsteigen' : '');
+        // Einsteigen: kein Text im HUD mehr, sondern das gelbe Y ueber Samu (wie im Geheimland, yZeichenZeigen)
+        const s = marsSteinNah() ? 'Y: ' + TRIP[mars.ort || 'mars'].stein + ' aufheben' : '';
         if(statEl.textContent !== s) statEl.textContent = s;
+        // Am Fukuoka-Beach (Phase 'ankunft', Live-Befund 18.10.2026): auch am Surfbrett und an der C-400 – die Phase war
+        // dort nie leer, das Y blieb also aus
+        const amStrand = story.phase === 'ankunft' && ((story.surfNah6 && story.surfNah6()) || (story.c400Nah && story.c400Nah()));
+        // Mond und Mars (Phase 'mars'): am Stein (Y hebt ihn auf, die Statuszeile ist seit 18.10. ausgeblendet) und am Flieger
+        const imAll = story.phase === 'mars' && locale !== 'earth' && (marsSteinNah() || evaCanBoard());
+        yZeichenZeigen((!!ein && !story.phase || amStrand || imAll) && steuerbar());
       }
-    } else if(mdlEl && mdlEl.textContent !== MODEL_NAMES[currentModel]){
-      mdlEl.textContent = MODEL_NAMES[currentModel];
+    } else {
+      yZeichenZeigen(false);                                       // im Fahrzeug kein Y
+      if(mdlEl && mdlEl.textContent !== MODEL_NAMES[currentModel]) mdlEl.textContent = MODEL_NAMES[currentModel];
     }
     return r;
   };
 }
 
-// ---- Kenji-Absicherung + Diagnose (?debug) ---------------------------------------------------
-// Gemeldet: Kenji kurz sichtbar, dann unsichtbar (Schatten bleibt). Lokal nicht nachstellbar.
-// Deshalb: jedes Bild pruefen, dass Kenji in eva.group haengt und sichtbar ist; mit ?debug in der
+// ---- Samu-Absicherung + Diagnose (?debug) ---------------------------------------------------
+// Gemeldet: Samu kurz sichtbar, dann unsichtbar (Schatten bleibt). Lokal nicht nachstellbar.
+// Deshalb: jedes Bild pruefen, dass Samu in eva.group haengt und sichtbar ist; mit ?debug in der
 // URL steht unten links eine Zeile mit dem Zustand.
 const DEBUG = /[?&]debug\b/.test(location.search);
 let dbgEl = null, dbgT = 0;
-function kenjiWache(dt){
-  if(!kenji.obj || !eva || !eva.group || eva.rover || eva.boat) return;
-  // Bewusst versteckt (Etappe 4: Kenji sitzt im Kran) – nicht wieder einblenden
-  if(story.kenjiVersteckt){ eva.group.visible = false; return; }
-  if(kenji.obj.parent !== eva.group){
-    eva.group.clear(); eva.group.add(kenji.obj); kenji.last = null;
-    story.kenjiRepariert = (story.kenjiRepariert || 0) + 1;
+function samuWache(dt){
+  if(!samu.obj || !eva || !eva.group || eva.rover || eva.boat) return;
+  // Bewusst versteckt (Etappe 4: Samu sitzt im Kran) – nicht wieder einblenden
+  if(story.samuVersteckt || intro.versteckt){ eva.group.visible = false; if(typeof ovalShadow !== 'undefined' && ovalShadow) ovalShadow.visible = false; return; }
+  if(samu.obj.parent !== eva.group){
+    eva.group.clear(); eva.group.add(samu.obj); samu.last = null;
+    story.samuRepariert = (story.samuRepariert || 0) + 1;
   }
   eva.group.visible = true;
-  kenji.obj.traverse(o => { o.visible = true; if(o.isMesh) o.frustumCulled = false; });
+  samu.obj.traverse(o => { o.visible = true; if(o.isMesh) o.frustumCulled = false; });
   if(!DEBUG) return;
   dbgT -= dt; if(dbgT > 0) return; dbgT = 0.5;
   if(!dbgEl){
@@ -2843,12 +3047,12 @@ function kenjiWache(dt){
     document.body.appendChild(dbgEl);
   }
   const p = eva.group.position, w = new THREE.Vector3(), s = new THREE.Vector3();
-  let mesh = null; kenji.obj.traverse(o => { if(o.isMesh) mesh = o; });
+  let mesh = null; samu.obj.traverse(o => { if(o.isMesh) mesh = o; });
   if(mesh){ mesh.getWorldPosition(w); mesh.getWorldScale(s); }
   const gl = renderer.getContext(), di = gl.getExtension('WEBGL_debug_renderer_info');
-  dbgEl.textContent = 'Kenji ' + kenji.cur + ' eva=' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ',' + p.z.toFixed(1)
+  dbgEl.textContent = 'Samu ' + samu.cur + ' eva=' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ',' + p.z.toFixed(1)
     + ' mesh=' + w.x.toFixed(1) + ',' + w.y.toFixed(1) + ',' + w.z.toFixed(1) + ' skal=' + s.x.toFixed(2)
-    + ' repariert=' + (story.kenjiRepariert || 0) + '\n'
+    + ' repariert=' + (story.samuRepariert || 0) + '\n'
     + (di ? gl.getParameter(di.UNMASKED_RENDERER_WEBGL) : '') + ' | ' + navigator.userAgent.slice(0, 90);
 }
 
@@ -2861,7 +3065,7 @@ const ANLEITUNG = [
     ['L-Stick', 'laufen · bis zur Hälfte gehen, weiter rennen'],
     ['R-Stick', 'umsehen'],
     ['A', 'springen'],
-    ['B', 'Aerial Evade'],
+    ['B', 'knien – der Hund kommt (noch mal B: aufstehen)'],
     ['L3 (halten) + L-Stick', 'Moonwalk'],
     ['X', 'Hip Hop Dance (Stick bricht ab)'],
     ['Y', 'Butterfly Twirl · am Fahrzeug: einsteigen'],
@@ -2874,7 +3078,7 @@ const ANLEITUNG = [
     ['↑ ↓ ← →', 'laufen und drehen'],
     ['J L I K', 'umsehen'],
     ['Leertaste', 'springen'],
-    ['B', 'Aerial Evade'],
+    ['B', 'knien – der Hund kommt (noch mal B: aufstehen)'],
     ['M (halten) + Pfeile', 'Moonwalk'],
     ['X / Y', 'Hip Hop Dance / Butterfly Twirl'],
     ['Y am Fahrzeug', 'einsteigen (U-Boot: im gelben Ring am Strand)'],
@@ -2991,7 +3195,7 @@ function hookHilfe(){
 function startStrand(){
   placeAtStart('XWing');           // -> findStart-Wrapper: am Strand
   fadeHold = 0; flashFade(1.0);    // den Hangar-Vorhang der Engine nicht abwarten
-  evaExit();                       // Kenji steht neben dem X-Wing ...
+  evaExit();                       // Samu steht neben dem X-Wing ...
   introVorbereiten();              // ... und wird vor die Schultuer gestellt
   setzeMarken();
 }
@@ -3000,7 +3204,7 @@ window.STORY_HOOK = function(){
   // Live-Wunsch (08.10.2026): Alpha Jet bis 3000 m (Engine: 2200) – der Fuji ist 2 km hoch, der Lavaschacht endet darueber
   if(PLANE_SPECS.AlphaJet) PLANE_SPECS.AlphaJet.maxAlt = 3000;
   hookWelt();
-  hookKenji();
+  hookSamu();
   hookIntro();
   hookRadar();
   hookRadarAnzeige();
@@ -3018,6 +3222,7 @@ window.STORY_HOOK = function(){
   hookModellHalter();
   hookSchubGerade();
   hookJetLandung();
+  hookRumpfachse();
   hookLoop();
 };
 window.STORY_START = function(){

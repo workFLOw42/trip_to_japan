@@ -91,6 +91,7 @@ function baueKulisse(){
   tw.position.set(130, 7, 120); g.add(tw);
   const kanzel = new THREE.Mesh(new THREE.BoxGeometry(10, 4, 10), new THREE.MeshLambertMaterial({ color: 0x4a6a80 }));
   kanzel.position.set(130, 16, 120); g.add(kanzel);
+  const grenze = [tw, kanzel];                       // Grenzen (objekte.js, Live-Wunsch 16.10.2026): Tower, Felsen, Kakteen, Palmen
   // Felsen und Kakteen verstreut (fester Zufall)
   const fels = new THREE.MeshLambertMaterial({ color: 0xa47b52 });
   const kaktus = new THREE.MeshLambertMaterial({ color: 0x4f7a3a });
@@ -102,13 +103,13 @@ function baueKulisse(){
     if(Math.hypot(x - OASE.x, z - OASE.z) < OASE_RAND + 30) continue;
     if(rnd() < 0.6){
       const m = new THREE.Mesh(new THREE.DodecahedronGeometry(2 + rnd() * 6, 0), fels);
-      m.position.set(x, duene(x, z) + 1, z); m.rotation.set(rnd(), rnd(), rnd()); g.add(m);
+      m.position.set(x, duene(x, z) + 1, z); m.rotation.set(rnd(), rnd(), rnd()); g.add(m); grenze.push(m);
     } else {
       const k = new THREE.Group();
       const st = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 5, 8), kaktus); st.position.y = 2.5; k.add(st);
       const ar = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 2, 8), kaktus);
       ar.position.set(0.9, 3, 0); ar.rotation.z = -0.3; k.add(ar);
-      k.position.set(x, duene(x, z), z); g.add(k);
+      k.position.set(x, duene(x, z), z); g.add(k); grenze.push(k);
     }
   }
   // Oase: Wasserstelle, Gras, Palmen, Zelte
@@ -129,16 +130,20 @@ function baueKulisse(){
       bl.position.y = h; bl.rotation.set(1.9, b / 7 * Math.PI * 2, 0); bl.translateY(2.6); p.add(bl);
     }
     p.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); o.add(p);
-  }
-  const zeltM = new THREE.MeshLambertMaterial({ color: 0xf2e6c8 });
-  for(let i = 0; i < 4; i++){
-    const z = new THREE.Mesh(new THREE.ConeGeometry(5, 5, 4), zeltM);
-    const a = 0.6 + i * 0.5;
-    z.position.set(Math.cos(a) * (OASE.r + 22), 2.5, Math.sin(a) * (OASE.r + 22)); z.rotation.y = Math.PI / 4; o.add(z);
+    p.children.forEach((c, ci) => { if(ci) c.userData.keinKoerper = true; }); grenze.push(p);   // nur der Stamm sperrt
   }
   o.position.set(OASE.x, 0, OASE.z);
   g.add(o);
   story.welt(2).add(g);
+  if(story.ding) for(const m of grenze) story.ding(m, { welt: 2, typ: 'wueste' });
+  // Beduinenzelte (Live-Wunsch 16.10.2026, haeuser.js 'zelt', mit Grenze): in der Oase im Halbkreis am Gras, Eingang
+  // zum Wasser – und ein paar rund um den Startplatz, abseits von Bahn, X-Wing, Transall und Samus Ankunft
+  for(let i = 0; i < 6; i++){
+    const a = 0.4 + i * 0.42, r = OASE.r + 20, x = OASE.x + Math.cos(a) * r, z = OASE.z + Math.sin(a) * r;
+    story.setze('zelt', 2, { x, z, y: 0, dreh: Math.atan2(OASE.x - x, OASE.z - z), seed: 20 + i, fest: true });
+  }
+  for(const [x, z, i] of [[-75, 430, 0], [-95, 395, 1], [70, 455, 2], [95, 418, 3], [-40, 470, 4]])
+    story.setze('zelt', 2, { x, z, y: 0, dreh: Math.atan2(ANKUNFT.x - x, ANKUNFT.z - z) + (i - 2) * 0.15, seed: 40 + i, fest: true });
   kulisse.gruppe = g;
   ladeKamele(g);
 }
@@ -146,7 +151,7 @@ function baueKulisse(){
 // ---- Kamele: kleine Herden in der Wueste und rund ums Rollfeld --------------------------------
 // Modell: Bactrian Camel (Low Poly) by Nyilonelycompany, CC-BY-NC-SA-4.0 (kamel_glb.js; nur die Grundfarbe als
 // 512er JPEG, Normal-/Rauheits-Map entfernt -> 1,7 statt 3,8 MB). Im Modell 2,1 m hoch, Animation "Idle" 8,9 s.
-// Live-Wunsch: neben Kenji (1,55 m) groesser -> KAMEL_GROESSE 1,3 (Hoecker ~2,7 m).
+// Live-Wunsch: neben Samu (1,55 m) groesser -> KAMEL_GROESSE 1,3 (Hoecker ~2,7 m).
 // Jedes Tier ist ein eigener Klon mit eigenem Skelett (cloneSkinned der Engine) und eigenem Mixer mit
 // Zeitversatz, sonst kauen alle im Gleichschritt. Auf der Bahn (x -2..38, z -300..300) und am Abstellplatz
 // (X-Wing/Transall um z 320, Ankunft z 380) steht keins.
@@ -154,7 +159,7 @@ const KAMEL_HERDEN = [
   { x: -75, z: -180, n: 3 }, { x: 105, z: -40, n: 4 }, { x: -80, z: 120, n: 3 }, { x: 95, z: 250, n: 3 },   // ums Rollfeld
   { x: -900, z: -600, n: 5 }, { x: 1200, z: 400, n: 4 }, { x: 300, z: -1700, n: 5 }, { x: -1400, z: -2200, n: 4 },
   { x: 820, z: -3050, n: 4 },   // am Rand der Oase, ausserhalb des Abwurfziels
-  // Live-Wunsch: eine Herde direkt vor Kenji zwischen X-Wing (Fluegel bis x -13) und Transall (Fluegel ab x 9).
+  // Live-Wunsch: eine Herde direkt vor Samu zwischen X-Wing (Fluegel bis x -13) und Transall (Fluegel ab x 9).
   // Am Ende der Liste, damit der feste Zufall die anderen Herden nicht verschiebt.
   { x: -2, z: 342, n: 3, r: 6, platz: true },
 ];
@@ -194,6 +199,11 @@ function ladeKamele(g){
     }
   }, (e) => console.warn('Kamel-GLB', e));
 }
+// Grenze (objekte.js, Live-Wunsch 18.10.2026): Samu laeuft nicht durch die Kamele
+if(story.tierQuelle) story.tierQuelle(() => story.etappe !== 2 ? null
+  : kamele.filter(o => o.k.visible).map(o => { const r = 0.75 * o.k.scale.x / KAMEL_GROESSE;
+    if(!o.k.userData.schatten && story.tierSchatten) story.tierSchatten(o.k, 2.4 * o.k.scale.x / KAMEL_GROESSE, 0.9 * o.k.scale.x / KAMEL_GROESSE);   // Schatten (18.10.2026)
+    return { x: o.k.position.x, z: o.k.position.z, y: o.k.position.y, r, h: 2.5 }; }));
 function updateKamele(dt){
   const auf = locale === 'earth', cp = camera.position;
   for(const o of kamele){
@@ -205,7 +215,7 @@ function updateKamele(dt){
 // ---- Geparkte Fahrzeuge (Kulisse, bis man einsteigt) -----------------------------------------
 // Der X-Wing ist das "eigene" Fahrzeug (state/planeGroup) und braucht keine Kulisse. Nur die
 // Transall steht als Kulisse am Bahnende, bis man einsteigt.
-// Ankunft wie in Etappe 1: Kenji schaut nach Norden (-Z), der X-Wing steht ~30 Grad links, die
+// Ankunft wie in Etappe 1: Samu schaut nach Norden (-Z), der X-Wing steht ~30 Grad links, die
 // Transall ~30 Grad rechts vor ihm, je gut 100 m entfernt – keiner direkt voraus.
 const ANKUNFT    = { x: 0, z: 380 };
 const XWING_PARK = { x: -18, z: 320, yaw: Math.PI * 0.15 };   // 75 % naeher an der Transall als vorher (60 -> 18 m)
@@ -240,6 +250,7 @@ function stelleFahrzeuge(){
       w.position.set(p.x, 0, p.z); w.rotation.y = p.yaw;
       w.userData.fremd = true;                // Engine-Modell: Materialien geteilt, nicht freigeben
       story.welt(2).add(w); p.obj = w;
+      if(story.ding) story.ding(w, { welt: 2, typ: 'transall' });   // Grenze (18.10.2026); unsichtbar = eingestiegen, sperrt nicht
     });
   }
 }
@@ -372,7 +383,7 @@ function wuesteStart(){
   if(typeof clearCargoTarget === 'function') clearCargoTarget();
   if(typeof clearFire === 'function') clearFire();
   baueKulisse();
-  // Ankunft: X-Wing (bzw. das Fahrzeug, mit dem man kam) steht am Flugfeld, Kenji steigt aus
+  // Ankunft: X-Wing (bzw. das Fahrzeug, mit dem man kam) steht am Flugfeld, Samu steigt aus
   if(locale !== 'earth') enterEarth();
   const idx = MODEL_NAMES.indexOf('XWing');
   clearEva();
@@ -422,7 +433,7 @@ function updateE2Marken(){
 //   frage      – am Boden: "Du kannst doch fliegen?" [JA] / [NEIN] (Auswahl wie im Startmenue)
 //                NEIN -> "Fuer Anfaenger ist das nichts, steig aus" -> 7 Tage -> Etappe 3
 //   sequenz    – JA: Startsequenz OHNE Zeitlimit und ohne Kurzschluss (sicherer Weg, kein Scheitern)
-//   flug       – Kenji fliegt selbst zur Oase (Radar), Hoehenband 270-330 m, B = Kiste abwerfen
+//   flug       – Samu fliegt selbst zur Oase (Radar), Hoehenband 270-330 m, B = Kiste abwerfen
 //   abwurf     – Kiste faellt (voller Schwung, kurz frei, dann Schirm); Treffer +-50 m -> 4 Tage, sonst 7
 // Landen muss man nicht – der Pilot erklaert es nur.
 const FS_SATZ_KURZSCHLUSS = 2;  // Index in FS_TEXT: 'Leuchtet dabei dieses rote Symbol …'

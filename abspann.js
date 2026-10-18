@@ -50,7 +50,7 @@ function abspannText(){
   const tage = story.tage, stufe = story.finaleStufe ? story.finaleStufe() : 5;
   const stufenName = { 1: 'Pro-Run', 2: 'Fast perfekt', 3: 'Solide', 4: 'Lern-Run', 5: 'Das Versprechen' }[stufe];
   let h = '<div style="font-size:44px;font-weight:800;margin-bottom:6px">Reise nach Japan</div>'
-    + '<div style="font-size:20px;opacity:.85;margin-bottom:40px">Kenji hat es nach Fukuoka geschafft!</div>'
+    + '<div style="font-size:20px;opacity:.85;margin-bottom:40px">Samu hat es nach Fukuoka geschafft!</div>'
     + '<div style="font-size:24px;font-weight:700;margin-bottom:10px">Die Reise</div><div style="min-width:440px;text-align:left">';
   for(const e of L) h += zeile('Etappe ' + e.etappe + ' · ' + e.ort, e.wie === '?' ? '–' : (e.tage === 1 ? '1 Tag' : e.tage + ' Tage') + (e.wie ? ' <span style="font-weight:400;opacity:.75">(' + e.wie + ')</span>' : ''));
   h += zeile('Zusammen', tage + ' von 42 Tagen', true) + zeile('Finale', 'Stufe ' + stufe + ' – ' + stufenName, true) + '</div>';
@@ -151,7 +151,7 @@ function abspannKamera(){
 }
 
 // ---- Stufe 5: am Strand (kein Surfen), dann Abspann ------------------------------------------------------------------
-const TEXT5 = ['Puh, das war knapp – nur noch ein Nachmittag!', 'Kenji und sein Freund halten die Füße ins Meer und umarmen sich.', 'Nächstes Jahr machen wir den Pro-Run!'];
+const TEXT5 = ['Puh, das war knapp – nur noch ein Nachmittag!', 'Samu und sein Freund halten die Füße ins Meer und umarmen sich.', 'Nächstes Jahr machen wir den Pro-Run!'];
 function stufe5(){
   if(story.stufe5Gezeigt) return; story.stufe5Gezeigt = true;
   story.spaeter(3, () => story.sprich(TEXT5, () => story.spaeter(1.5, () => story.abspann()), 'pilot'));

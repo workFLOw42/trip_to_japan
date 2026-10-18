@@ -1,4 +1,4 @@
-# 🎮 KONZEPT: Kenjis Ferien-Abenteuer — „Ohne Geld nach Japan 🇯🇵“
+# 🎮 KONZEPT: Samus Ferien-Abenteuer — „Ohne Geld nach Japan 🇯🇵“
 
 Ein 3D-Abenteuerspiel im Browser auf Basis der WebGL/Three.js-Engine des „Flugspiel“ ([workFLOw42/flightsimulator](https://github.com/workFLOw42/flightsimulator)).
 
@@ -6,11 +6,44 @@ Ein 3D-Abenteuerspiel im Browser auf Basis der WebGL/Three.js-Engine des „Flug
 
 ## 📌 Arbeitsstand (08.10.2026)
 
-**Neu (16.10.2026, aus „Das Geheimland“ übernommen):** Objekt-Katalog mit echten Grenzen (`objekte.js`), Häuser im Stil
-ihrer Region im Anime-Look (`haeuser.js`, zuerst das chinesische Fischerdorf in Etappe 5), sitzende Möwen, die auffliegen
-und wieder landen (Etappe 4). Schubbalken in der Größe wie im Geheimland (so breit wie das Radar), weiter rechts.
-**Als Nächstes dafür:** Etappe für Etappe Gebäude, Bäume, Tiere und Fahrzeuge in den Katalog (zuerst Etappe 2–4, dort
-läuft man heute durch alles), weitere Hausstile (Japan, Hafen, Wüste), sitzende Möwen auch an anderen Stränden.
+### 🆕 Umbau 16.10.2026 (vieles aus „Das Geheimland“ übernommen)
+
+- **Die Spielfigur heißt Samu** (vorher Kenji) – überall: Sprechtexte, Hinweise, Anzeigen, Doku, Code (`story.samu`,
+  `SAMU_H`, `SAMU_GLB`) und Dateien (`models/samu.glb`, `samu_glb.js`). Nur der Modellautor des Fuji heißt weiter
+  „Rafael Kenji Horota“ (Lizenzangabe).
+- **Startbildschirm:** Schon beim Laden steht ein Ladebild (Titel auf dunklem Grund, `tools/ladebild.html`, von
+  `tools/build_engine.ps1` direkt nach `<body>` eingesetzt) – das blaue Flugspiel-Bild mit dem HUD links ist weg. Das
+  Menü kommt erst, wenn das Spiel wirklich bereit ist (Samu und die Flugzeug-Modelle geladen, 30 Bilder gezeichnet,
+  spätestens nach 25 s); dann wird der Hintergrund halb durchsichtig und man sieht die Eingangsszene vor der Schule –
+  **ohne Samu**. Der **erste Druck zählt** (auch ein A, mit dem sich der Controller erst meldet). Mit „Neues Spiel“
+  kommt Samu aus der Schultür, die Kamerafahrt beginnt.
+- **Objekt-Katalog mit Grenzen** (`objekte.js`): jedes Objekt einmal global als Typ (`story.typ`), gesetzt mit
+  `story.setze(typ, etappe, { … })`; schon gebaute Modelle mit `story.ding(obj, { welt })`, Instanzen (Bäume, Container)
+  mit `story.instanzen(inst, { welt, form })`. Jedes Bauteil ist eine Grenze in seiner echten Form; Samu läuft nicht
+  hinein oder hindurch, wer drinsteckt, kommt immer hinaus. Bewegliches (Kran, gehobene Container) nimmt die Grenze mit;
+  unsichtbare Dinge sperren nicht (die geparkte Kulisse eines Fliegers, während man darin sitzt). Sehr viele Grenzen
+  (5000 Palmen) liegen in einem Raster. Die eigenen Kollisionslisten der Etappen sind dafür weg (Etappe 1, 5).
+- **Häuser im Stil ihrer Region, im Anime-Look** (`haeuser.js`): global der Typ `haus` (Grundfläche, Höhe, Tür vorn,
+  Grenze), je Region nur das Aussehen – `deutsch` (Etappe 1: Putz, rotes Satteldach, Sprossenfenster, Schornstein),
+  `hafen` und `halle` (Etappe 4: Backstein mit Flachdach, Wellblech-Lagerhalle mit Tor), `china` (Etappe 5: weiße Wände,
+  rote Säulen und Laternen, geschwungenes Ziegeldach), `japan` (Etappe 6: Fachwerk, Shoji, dunkles geschwungenes Dach,
+  Noren), `turm` (Hochhaus mit Fensterbändern). Toon-Shading mit drei harten Lichtstufen und dunklem Umriss. Alle
+  Häuser einer Welt werden je Material zu einem Mesh zusammengefasst (die Grenzen bleiben an den Einzelteilen).
+- **Beduinenzelte** (Typ `zelt`): dunkles Ziegenhaar mit hellen Streifen, auf Stangen, vorn offen mit Teppich – sechs in
+  der Oase, fünf rund um den Startplatz in der Wüste.
+- **Grenzen je Etappe:** E1 Schule, Stadt, Ariane, Nadelbäume (Stamm) · E2 Zelte, Tower, Felsen, Kakteen, Oasen-Palmen
+  (Stamm) · E3 Palmen am Fluss (unterer Stamm) · E4 Häuser am Kanal, Kran (Fuß als geschlossener Block), Containerlager,
+  Container am Kai · E5 Uferdorf, geparkte Mustang · E6 Städte Tokio und Fukuoka, Torii, C-400, Alpha Jet.
+- **Möwen** (`tiere.js`, `story.sitzMoewen`): kommt Samu zu nahe, wird aus der sitzenden die fliegende Möwe – sie steigt
+  weg, zieht einen Bogen, fliegt zurück und landet wieder auf ihrem Platz (bisher am Kai in Etappe 4).
+- **Y zum Einsteigen** wie im Geheimland: kein Text „Y: einsteigen“ mehr im HUD, sondern ein gelber Y-Knopf, der schwebt –
+  über Samu, und wo man über einen **Kreis am Boden** einsteigt, über der Kreismitte.
+- **Schatten, Laufspuren, Bootsgischt** (`spuren.js`, 17.10.2026, wie im Geheimland): Samus Bodenschatten so klein und
+  blass wie Joshis (0,48 m, 60 % Deckkraft); beim Gehen und Laufen wirbelt an jedem Fuß, der sich hebt, ein Staubwölkchen
+  auf (Farbe je Etappe, nicht auf Beton, Bahn, im Wasser); in jedem Boot (Feuerwehrboot, Schnellboot, Schlauchboot,
+  U-Boot an der Oberfläche) Spritzer am Bug und eine Heckwelle, je schneller desto mehr.
+- **HUD:** Radar und Gyroskop 130 px (wie im Geheimland), Schubbalken so breit wie das Radar und 293 px hoch, rechts unter
+  Gyroskop bzw. Radar. Zu Fuß sind Radar, Gyroskop, die Anzeige links und der Balken aus.
 
 **Gebaut und spielbar:** Etappe 1 (alle Wege inkl. Mars-Trip) und Etappe 2 (X-Wing-Falle mit Kurzschluss,
 Mond-Trip, Transall-Flugschule) und Etappe 3 (Fluss mit Feuerwehrboot, X-Wing ohne Kurzschluss), Etappe 4 (Kran, Schnellboot-Flucht), Etappe 5 (Air Race,
@@ -73,7 +106,7 @@ Ariane, X-Wing-Parkplatz, U-Boot-Ring, Sonar mit Küste – gebaut 09.10.2026), 
 - **„Startsequenz“ statt „Preflight-Check“** – die Sprachausgabe kann das englische Wort nicht aussprechen.
   Im X-Wing gibt es **keine Anleitung** (nur Leuchte + Zeit): wer sie nicht kennt, soll scheitern.
   Die Transall-Flugschule erklärt sie; dort läuft sie **ohne Zeitlimit und ohne Kurzschluss**.
-- **Ziel ist Fukuoka** (dort wohnt Kenjis Freund), nicht der Fuji. Start auf dem Globus: München.
+- **Ziel ist Fukuoka** (dort wohnt Samus Freund), nicht der Fuji. Start auf dem Globus: München.
   Etappenorte auf dem Globus: Saudi-Arabien (Wüste), Malediven, Malaysia, Hongkong, Fukuoka.
 - **Absturz** auf einem Flugweg (Freiflug, Mars/Mond, Erde, All, Transall) = **7 Tage**.
 - **Etappe 1:** X-Wing und U-Boot stehen am Strand, das U-Boot wird über einen **Ring am Strand** bestiegen
@@ -86,10 +119,10 @@ Ariane, X-Wing-Parkplatz, U-Boot-Ring, Sonar mit Küste – gebaut 09.10.2026), 
   Der Mondstein liegt auf der Plattform der Mondbasis. Man ist **nicht der erste Mensch** auf dem Mond.
 - **Transall-Flugschule ohne Autopilot:** Erklärung am Boden (Startsequenz, Kurzschluss, Start, Abwurf, Landung),
   dann *„Du kannst doch fliegen?“* – **NEIN** → „Für Anfänger ist das leider nichts. Bitte steige wieder aus.“
-  → 7 Tage. **JA** → Kenji fliegt selbst von Anfang an (kein „Pilot wird schlecht“). Nach dem Abwurf ist die
+  → 7 Tage. **JA** → Samu fliegt selbst von Anfang an (kein „Pilot wird schlecht“). Nach dem Abwurf ist die
   Mission vorbei; **landen muss man nicht** (erst später mit dem Alpha Jet), aber es wird erklärt:
   30 % Schub, langsam runter, grüner Gyro-Ring.
-- **Kenji zu Fuß:** A Sprung, B Aerial Evade, X Silly Dance, Y Butterfly Twirl, L3 + Stick Moonwalk;
+- **Samu zu Fuß:** A Sprung, B Aerial Evade, X Silly Dance, Y Butterfly Twirl, L3 + Stick Moonwalk;
   schwimmen (RT tauchen, LT auf). Auf Mond und Mars springt er dank geringer Schwerkraft höher.
 - **Ton:** an = Stimme ohne Untertitel, aus = Untertitel; Umschalten setzt am aktuellen Wort fort.
   Alles blendet mit der Schwarzblende zum Globus aus.
@@ -106,7 +139,7 @@ Ariane, X-Wing-Parkplatz, U-Boot-Ring, Sonar mit Küste – gebaut 09.10.2026), 
 
 **Danach offen:** Finale-Szenen (was ist spielbar, was Zwischensequenz?) · Rahmen (Hauptmenü, Spielstand, Bestenliste, freigeschaltetes Minispiel) · Stimmen/Erzähler (Text, Sprachausgabe oder Aufnahme?) · genaue Position des verdeckten Containers.
 
-**Spielfigur:** Kenji ist fertig geriggt → **`models/kenji.glb`** (Skelett + 16 Animationen, alle in place, fertig für Three.js).
+**Spielfigur:** Samu ist fertig geriggt → **`models/samu.glb`** (Skelett + 16 Animationen, alle in place, fertig für Three.js).
 
 **Modelle:** alle Downloads liegen in `_quellen/` – **vollständig** (Surfbrett + Snowboard am 02.10.2026 ergänzt).
 
@@ -148,7 +181,7 @@ Das Spiel übernimmt die **Mechanik** (Flugphysik, Steuerung, Kamera, Wasser/Sch
 | Mt. Fuji (Etappe 6, Finale Stufen 1 + 2) | `mount_fuji_-_honshu_japan_by_Rafael Kenji Horota.glb` | 12,5 MB, 374 k Dreiecke, 1 Foto-Textur (0,7 MB) – Gelände-Mesh, gut verkleinerbar. Root-Node ist **gekippt und skaliert** → beim Einbau neutralisieren und auf echte Höhe (3776 m) bringen. Nur Außenhülle: **Höhlensystem, Felsspalte und Krater-Schlot** für den Alpha-Jet-Run müssen selbst gebaut werden. |
 | Shinkansen (Etappe 6) | `n700-3000_series_shinkansen_by_Avatar of bciarfello.glb` | 27,4 MB, 514 k Dreiecke (reine Geometrie, keine Texturen) – stark verkleinern |
 | Surfbrett (Finale, alle Stufen) | `prancha_de_surf_surfboard_by_Leandro Cruz.glb` | 0,7 MB, 13 k Dreiecke, orange Textur + 3 Finnen. Original schief und 4,8 m lang → **`models/surfboard.glb`**: ausgerichtet (Nase +Z, Deck oben, Finnen unten auf y = 0), auf **1,90 m** skaliert. |
-| Snowboard (Finale Stufe 1) | `intermediate_advanced_snowboard_by_Final Render Animation Studio.glb` | 1,9 MB, 1,7 k Dreiecke, rot/weiß, Normal-Map. Material von Spec-Gloss auf Standard-PBR umgestellt (Three.js kann Spec-Gloss nicht mehr) → **`models/snowboard.glb`**: auf **1,45 m** (Kindergröße) skaliert, Länge entlang Z, Unterseite auf y = 0. Vorschau beider Bretter neben Kenji: `_quellen/Bretter_vorschau.png`. |
+| Snowboard (Finale Stufe 1) | `intermediate_advanced_snowboard_by_Final Render Animation Studio.glb` | 1,9 MB, 1,7 k Dreiecke, rot/weiß, Normal-Map. Material von Spec-Gloss auf Standard-PBR umgestellt (Three.js kann Spec-Gloss nicht mehr) → **`models/snowboard.glb`**: auf **1,45 m** (Kindergröße) skaliert, Länge entlang Z, Unterseite auf y = 0. Vorschau beider Bretter neben Samu: `_quellen/Bretter_vorschau.png`. |
 
 **Selbst gebaut (aus Code, keine Modelle nötig) – „Schlucht-Baukasten“:**
 
@@ -163,13 +196,13 @@ Das Fuji-Modell liefert nur die Außenhülle. Höhle, Spalte und Ausbruch für E
 | Schlot & Krater | Senkrechte Röhre nach oben zum Gipfel; den Krater hat das Fuji-Modell schon | klein |
 | Ausbruch | Partikel (Funken, Rauch, Lava-Brocken) + rotes Leuchten am Gipfel; baut auf `flameMat`/`smokeMat` des Waldbrands im Flugspiel auf | mittel |
 
-**Spielfigur Kenji:** eigene Anime-Figur (Image-to-3D, ~40 k Dreiecke, 1,50 m, Blick +Z), per Mixamo geriggt (28 Bones `mixamorig:*`) → **`models/kenji.glb`** (5,4 MB, Figur + 16 Animationen). Rohdaten und Entstehung liegen lokal in `_mixamo/` und `_intern/` (nicht im Repo). Clip-Namen für `THREE.AnimationMixer`: `idle` 1,8 s · `walk` 1,0 s · `run` 0,6 s · `jump` 1,9 s · `jump_down` 2,5 s · `land` 1,1 s · `crouch_to_stand` 1,0 s · `swim` 4,5 s · `fly` 2,6 s · `hang` 2,3 s · `dance_hiphop` 18,5 s · `dance_silly` 3,8 s · `moonwalk` 1,0 s (Fußbewegung nach hinten) · **Specials:** `jump_special` 2,1 s (Salto, eigentlich 5 m Weg) · `aerial_evade` 3,7 s (Ausweich-Salto, eigentlich 2,1 m seitlich) · `butterfly_twirl` 3,0 s (Butterfly-Kick, eigentlich 2,1 m Weg). Alle **in place**: wo Mixamo die Figur vorwärts bewegt (`jump_down` 1,95 m, `land` 1,04 m und die drei Specials), wurde die Hüftbewegung in x/z per Skript entfernt, die Höhe (y) bleibt. Soll ein Sprung Strecke machen, verschiebt der Code die Figur. `hang`/`swim`/`fly` haben die Hüfte nicht auf Stehhöhe → Figur im Spiel passend positionieren.
+**Spielfigur Samu:** eigene Anime-Figur (Image-to-3D, ~40 k Dreiecke, 1,50 m, Blick +Z), per Mixamo geriggt (28 Bones `mixamorig:*`) → **`models/samu.glb`** (5,4 MB, Figur + 16 Animationen). Rohdaten und Entstehung liegen lokal in `_mixamo/` und `_intern/` (nicht im Repo). Clip-Namen für `THREE.AnimationMixer`: `idle` 1,8 s · `walk` 1,0 s · `run` 0,6 s · `jump` 1,9 s · `jump_down` 2,5 s · `land` 1,1 s · `crouch_to_stand` 1,0 s · `swim` 4,5 s · `fly` 2,6 s · `hang` 2,3 s · `dance_hiphop` 18,5 s · `dance_silly` 3,8 s · `moonwalk` 1,0 s (Fußbewegung nach hinten) · **Specials:** `jump_special` 2,1 s (Salto, eigentlich 5 m Weg) · `aerial_evade` 3,7 s (Ausweich-Salto, eigentlich 2,1 m seitlich) · `butterfly_twirl` 3,0 s (Butterfly-Kick, eigentlich 2,1 m Weg). Alle **in place**: wo Mixamo die Figur vorwärts bewegt (`jump_down` 1,95 m, `land` 1,04 m und die drei Specials), wurde die Hüftbewegung in x/z per Skript entfernt, die Höhe (y) bleibt. Soll ein Sprung Strecke machen, verschiebt der Code die Figur. `hang`/`swim`/`fly` haben die Hüfte nicht auf Stehhöhe → Figur im Spiel passend positionieren.
 
 **Animations-Zuordnung (Stand 02.10.2026):**
 
 | Situation | Clips | Einbau |
 |---|---|---|
-| **Surfen / Snowboarden** | `idle` (Fahren), `crouch_to_stand` (aufstehen, z. B. nach dem Anpaddeln), `land` (nach Sprung/Welle), `jump` (Sprung über Kante) | Kenji steht seitlich auf dem Brett (Füße 0,52 m auseinander, Knie gebeugt – Mixamo „Standing Idle“ ist eine Kampf-/Surf-Haltung). Brett unter die Fußmitte, um **−156°** gedreht (Brettachse = Linie zwischen den Füßen), Kenji um die Deckhöhe anheben (Surfbrett 0,17 m, Snowboard 0,04 m). Brett als Kind der Figur oder umgekehrt; Kurven = Brett + Figur zusammen neigen (Rollwinkel per Code). Kontrollbild `_quellen/Bretter_mit_Kenji.png`. |
+| **Surfen / Snowboarden** | `idle` (Fahren), `crouch_to_stand` (aufstehen, z. B. nach dem Anpaddeln), `land` (nach Sprung/Welle), `jump` (Sprung über Kante) | Samu steht seitlich auf dem Brett (Füße 0,52 m auseinander, Knie gebeugt – Mixamo „Standing Idle“ ist eine Kampf-/Surf-Haltung). Brett unter die Fußmitte, um **−156°** gedreht (Brettachse = Linie zwischen den Füßen), Samu um die Deckhöhe anheben (Surfbrett 0,17 m, Snowboard 0,04 m). Brett als Kind der Figur oder umgekehrt; Kurven = Brett + Figur zusammen neigen (Rollwinkel per Code). Kontrollbild `_quellen/Bretter_mit_Samu.png`. |
 | **Fallschirmsprung** | `fly` (freier Fall, Bauchlage), `hang` (am geöffneten Schirm), danach `land` → `idle` | Freier Fall: `fly` liegt flach, Kopf in Blickrichtung → Figur passend zur Fallrichtung drehen. Am Schirm: `hang` – Hände 0,8 m über der Hüfte → dort die Gurte/Leinen des Schirms ansetzen. Landung: auf `land` überblenden (Hüfte startet hoch und federt ab). |
 | **Wasser** | `swim` | Hüfte auf Wasserhöhe legen. |
 | **An Land** | `walk`, `run`, `jump`, `jump_down`, `moonwalk` | Bewegung kommt aus dem Code. |
@@ -183,19 +216,19 @@ Das Fuji-Modell liefert nur die Außenhülle. Höhle, Spalte und Ausbruch für E
 
 ### 💡 Grundidee & Rahmen-Mechanik
 
-Die Sommerferien haben begonnen! Kenji will es in 6 Wochen von zu Hause bis nach Japan schaffen, um seinen besten Freund bei dessen Großeltern zu besuchen – komplett ohne Geld!
+Die Sommerferien haben begonnen! Samu will es in 6 Wochen von zu Hause bis nach Japan schaffen, um seinen besten Freund bei dessen Großeltern zu besuchen – komplett ohne Geld!
 
 - **6 Etappen / Aufgaben:** Auf der Route gen Osten Richtung Japan.
 - **Tage-Regel:** Jede Etappe hat einen Risiko-Weg und einen sicheren Weg.
   - Risiko-Weg geschafft → **1 Tag**
   - Sicherer Weg geschafft → **4 Tage**
   - Gescheitert (egal auf welchem Weg) → **7 Tage**
-  - Es gibt kein vorzeitiges Ende: Kenji kommt immer in Japan an, die verbrauchten Tage (6–42) bestimmen die Finale-Stufe.
-- **Der Strategie-Loop:** Kenji nutzt den ersten Versuch oft als „Erkundungs-Run“ (Analysieren, Physik verstehen), um in Folgeruns die optimalen Abkürzungen zu fliegen.
+  - Es gibt kein vorzeitiges Ende: Samu kommt immer in Japan an, die verbrauchten Tage (6–42) bestimmen die Finale-Stufe.
+- **Der Strategie-Loop:** Samu nutzt den ersten Versuch oft als „Erkundungs-Run“ (Analysieren, Physik verstehen), um in Folgeruns die optimalen Abkürzungen zu fliegen.
 
 ### 🚶 Die Wahl am Start jeder Etappe
 
-- Kenji steht mit seiner **Spielfigur** zu Beginn jeder Etappe **hinter den beiden Möglichkeiten** (z. B. X-Wing links, U-Boot rechts).
+- Samu steht mit seiner **Spielfigur** zu Beginn jeder Etappe **hinter den beiden Möglichkeiten** (z. B. X-Wing links, U-Boot rechts).
 - Er **läuft zu Fuß** auf das gewünschte Fahrzeug zu und **steigt ein** – genau wie der Astronaut im Flugspiel (hinlaufen, **Y** = einsteigen).
 - Über jeder Wahlmöglichkeit schwebt im **Super-Mario-Stil** groß die Zeit: **„1 Tag“** über dem Risiko-Weg, **„4 Tage“** über dem sicheren Weg.
 - *Flugspiel-Basis:* Laufen, Hüpfen, Radar und Einsteigen per **Y** gibt es dort schon – auch für U-Boot am Strand und Feuerwehrboot am Kai.
@@ -204,7 +237,7 @@ Die Sommerferien haben begonnen! Kenji will es in 6 Wochen von zu Hause bis nach
 
 Der Preflight-Check ist das zentrale Sicherheits- & Kontroll-Ritual vor jedem Flug. Er stellt sicher, dass alle Achsen ordnungsgemäß funktionieren – besonders wichtig, wenn das Schiff einen Steuerungs-Kurzschluss (Inverted Controls) aufweist!
 
-Kenji muss diesen Check in den Risiko-Szenarien innerhalb des **10-Sekunden-Countdowns** fehlerfrei durchführen, um die manuelle Kontrolle zu übernehmen. Auf dem sicheren Weg (Mustang, Etappe 5) gibt es keinen Timer – dort führt ein Ansager durch.
+Samu muss diesen Check in den Risiko-Szenarien innerhalb des **10-Sekunden-Countdowns** fehlerfrei durchführen, um die manuelle Kontrolle zu übernehmen. Auf dem sicheren Weg (Mustang, Etappe 5) gibt es keinen Timer – dort führt ein Ansager durch.
 
 1. **Bremse halten** – verhindert ungewolltes Rollen beim Start.
    - Aktion: Bremse gedrückt halten.
@@ -223,14 +256,14 @@ Kenji muss diesen Check in den Risiko-Szenarien innerhalb des **10-Sekunden-Coun
 
 **Regeln:**
 - Die Leuchte wird **nur grün**, wenn die Reihenfolge exakt stimmt: **Bremse halten → links / rechts / hoch / runter → Bremse loslassen → Gas geben**.
-- Innerhalb der 10 s darf Kenji **beliebig oft von vorne beginnen**.
-- **Grün ist grün:** Sobald die Leuchte einmal grün ist, ist der Check bestanden – der Timer **stoppt sofort**, und Kenji kann danach z. B. auch wieder vom Gas gehen. Erreicht der Timer null, ohne dass die Leuchte grün war, übernimmt der Autopilot.
+- Innerhalb der 10 s darf Samu **beliebig oft von vorne beginnen**.
+- **Grün ist grün:** Sobald die Leuchte einmal grün ist, ist der Check bestanden – der Timer **stoppt sofort**, und Samu kann danach z. B. auch wieder vom Gas gehen. Erreicht der Timer null, ohne dass die Leuchte grün war, übernimmt der Autopilot.
 - **Nettes Nebenprodukt – Bestenliste:** Die gestoppte Zeit ergibt zwei Highscores: **Preflight** (normal) und **Preflight Inverted** (mit Kurzschluss).
-- **Bei Kurzschluss** sind **alle** Eingaben vertauscht: Bremse ↔ Gas, links ↔ rechts, hoch ↔ runter. Gewertet wird, was das **Flugzeug** tut, nicht welche Taste gedrückt wurde – Kenji muss also umdenken. Der **einzige Hinweis** ist die rote Inverted-Controls-Kontrollleuchte im HUD.
+- **Bei Kurzschluss** sind **alle** Eingaben vertauscht: Bremse ↔ Gas, links ↔ rechts, hoch ↔ runter. Gewertet wird, was das **Flugzeug** tut, nicht welche Taste gedrückt wurde – Samu muss also umdenken. Der **einzige Hinweis** ist die rote Inverted-Controls-Kontrollleuchte im HUD.
 
 **⚠️ Was passiert bei einem Fehler oder Zeitablauf?**
-- **Timer auf null, Leuchte nicht grün:** Der Notfall-Autopilot schaltet sich ein und übernimmt das Steuer – Kenji wird automatisch auf die Sonder-Mission (z. B. Mars- oder Mond-Trip) geschickt.
-- **Kurzschluss-Erkennung:** Wenn Kenji beim Preflight-Check genau hinsieht, merkt er bereits im Stand, ob die Steuerung vertauscht ist, und kann im Kopf die Tasten vor dem Start umpolen!
+- **Timer auf null, Leuchte nicht grün:** Der Notfall-Autopilot schaltet sich ein und übernimmt das Steuer – Samu wird automatisch auf die Sonder-Mission (z. B. Mars- oder Mond-Trip) geschickt.
+- **Kurzschluss-Erkennung:** Wenn Samu beim Preflight-Check genau hinsieht, merkt er bereits im Stand, ob die Steuerung vertauscht ist, und kann im Kopf die Tasten vor dem Start umpolen!
 
 ### 🗺️ Die 6 Etappen nach Japan im Detail
 
@@ -260,7 +293,7 @@ Kenji muss diesen Check in den Risiko-Szenarien innerhalb des **10-Sekunden-Coun
 - Gemeistert: In 10s trotz Kurzschluss den Check knacken → **1 Tag** vergangen.
 
 **Sicher (Co-Pilot auf Transall) – DIE FLUGSCHULE:**
-- **Mut-Test:** Pilot fragt: „Du kannst doch fliegen?“ → Kenji MUSS mit **[JA]** antworten und Zuversicht beweisen!
+- **Mut-Test:** Pilot fragt: „Du kannst doch fliegen?“ → Samu MUSS mit **[JA]** antworten und Zuversicht beweisen!
 - **Erklär-Phase:** Pilot erklärt Preflight-Check, Kurzschluss-Symbole & Abwurf-Physik:
   - „Wir fliegen auf **300 m** – halte die Höhe zwischen **270 und 330 m**!“
   - Die Abwurf-Entfernung wächst **linear** mit dem Schub – zwischen 60 % (sicher fliegen) und 100 % (v max):
@@ -268,7 +301,7 @@ Kenji muss diesen Check in den Risiko-Szenarien innerhalb des **10-Sekunden-Coun
     - 80 % Schub (~205 km/h) → 400 m vor dem Ziel abwerfen
     - 100 % Schub (~256 km/h) → 500 m vor dem Ziel abwerfen
   - **Merksatz:** „Schub in Prozent mal 5 = Meter vor dem Ziel.“ Schneller → früher abwerfen.
-- **Aktion:** Pilot wird schlecht, Kenji übernimmt das Steuer! (Toleranz ± 50 m)
+- **Aktion:** Pilot wird schlecht, Samu übernimmt das Steuer! (Toleranz ± 50 m)
 - **Abwurf-Mechanik (neu, nicht aus dem Flugspiel):** Im Flugspiel fällt die Kiste hinten raus, behält nur 30 % der Fluggeschwindigkeit und sinkt sofort am Schirm – sie landet fast senkrecht unter dem Abwurfpunkt. Für diese Aufgabe behält sie ihren **vollen Schwung**, fällt **kurz frei** und sinkt dann am Schirm; von 300 m braucht sie etwa **7 s** bis zum Boden. Daraus folgt die 5-m-pro-%-Regel. Die Fallzeit wächst mit der Höhe: Am Rand des Höhenbands (270/330 m) liegt die Kiste bei Vollgas knapp an der Toleranzgrenze (~50 m daneben), bei 60 % Schub bei ~30 m – Höhe halten zählt also. Feinabstimmung bei der Umsetzung.
 - *Transall im Flugspiel: Abheben bei 40 m/s (= 56 % v max), v max 71 m/s (~256 km/h), max. Höhe 600 m. Unter ~56 % Schub sinkt sie – daher der Bereich 60–100 %, die Flugphysik bleibt unverändert.*
 - **Ergebnis:** Treffer → **4 Tage** vergangen („Perfekt!“ / „Gut gemacht!“). Daneben → **7 Tage** vergangen.
@@ -283,7 +316,7 @@ Kenji muss diesen Check in den Risiko-Szenarien innerhalb des **10-Sekunden-Coun
 #### 🚤 Etappe 3: Der Indische Ozean (Neues Lernen vs. Sichere Routine)
 
 **Risiko (X-Wing – Das Scheingefühl):**
-- Kenji fühlt sich beim X-Wing erstmals sicher. Schlägt er den 10s-Check → **1 Tag** vergangen.
+- Samu fühlt sich beim X-Wing erstmals sicher. Schlägt er den 10s-Check → **1 Tag** vergangen.
 - Fehlschlag: Autopilot fliegt zum Mond (Mondgestein holen, analog zum Mars-Trip in Etappe 1) → **7 Tage** vergangen.
   - **Zweiter Mond-Trip** (schon in Etappe 2 gescheitert): Funkspruch der Kommandozentrale: „Du schon wieder … Das trifft sich ja gut – wir haben es nämlich auch verbockt und den Stein vom Mond verloren. Hol mal bitte noch einen. Du weißt ja, wie es geht. Bis nächste Woche dann!“
 - **Haken:** Er überspringt das Bootstraining und hat in Etappe 4 Nachteile! Ihm fehlt das Wissen über die Trägheit in Kurven (früh bremsen) – bei der Schnellboot-Flucht wird er daher vermutlich scheitern.
@@ -302,40 +335,40 @@ Kenji muss diesen Check in den Risiko-Szenarien innerhalb des **10-Sekunden-Coun
 #### 🌴 Etappe 4: Südostasien / Dschungel (Fokus unter Stress vs. Geduld im Wind)
 
 **Risiko (Schnellboot-Flucht vor der Polizei):**
-- **Szenario:** Kenji kapert das Schnellboot, die Polizei nimmt mit Sirenen die Verfolgung auf!
+- **Szenario:** Samu kapert das Schnellboot, die Polizei nimmt mit Sirenen die Verfolgung auf!
 - **Gameplay:** Zu langsam → Polizei holt ihn ein. Blindes Vollgas → Boot zerschellt an den Felsen. Kurve 1 zeigt haarscharf, dass Vollgas nicht reicht.
-- **Ergebnis:** Geschafft → **1 Tag** vergangen. Eingeholt / zerschellt → eine kurze Geschichte wird erzählt (7 Tage Gefängnis), danach ist Kenji wieder frei → **7 Tage** vergangen.
+- **Ergebnis:** Geschafft → **1 Tag** vergangen. Eingeholt / zerschellt → eine kurze Geschichte wird erzählt (7 Tage Gefängnis), danach ist Samu wieder frei → **7 Tage** vergangen.
 
 **Sicher (Container-Kran bei Wind):**
 - **Szenario:** 4 Container müssen auf ein Frachtschiff verladen werden, während Wind weht.
-- **Gameplay:** Wind driftet den Container seitlich ab. Kenji muss das Pendeln des Kranarms mit Feingefühl ausgleichen.
+- **Gameplay:** Wind driftet den Container seitlich ab. Samu muss das Pendeln des Kranarms mit Feingefühl ausgleichen.
 - **Großzügige Zeit – Geduld ist die Aufgabe:** **6 Minuten für 4 Container.** Das reicht, um sich Zeit zu lassen und in Ruhe zu arbeiten. Die Zeit ist dafür da, möglichst **fehlerfrei** zu bleiben – nicht, um sie zu unterbieten.
   - **Wer hetzt, verliert Zeit:** Ruckartiges Drehen oder Anhalten bringt den Container ins Pendeln. Dann bleiben nur zwei Auswege: **ewig warten**, bis das Pendeln ausschwingt – oder den Container **ganz nach oben ziehen**, damit das Seil kurz wird und das Pendeln schnell abklingt (danach wieder langsam absenken).
   - **Rahmenbedingungen (Vorgabe):** Seil ganz **einziehen ~10 s**, ganz **ausfahren ~10 s**. Ein Container am **langen Seil** pendelt nach einem Anstoß **~1 min**, bis er ruhig hängt.
   - **Feinabstimmung der Physik** (Wind-Zyklen, Seillängen, Kranbewegung, Dämpfung) erfolgt bei der Umsetzung so, dass diese Rahmenbedingungen stimmen und alle 4 Container in 6 min mit höchstens 2 Fehlern schaffbar sind.
-- **Wind in Zyklen:** Der Wind kommt abwechselnd **von links, von rechts, von links, von rechts …** Jede Phase baut sich von **0 langsam bis stark** auf und fällt dann **ruckartig auf 0** zurück. Wer den Moment verpasst, erlebt, wie der ausgelenkte Container **zurückpendelt**. Er wird **nicht angesagt** – Kenji soll das Muster selbst entdecken. Sichtbar ist er nur über Windsack/Flaggen und den Windpfeil im HUD.
+- **Wind in Zyklen:** Der Wind kommt abwechselnd **von links, von rechts, von links, von rechts …** Jede Phase baut sich von **0 langsam bis stark** auf und fällt dann **ruckartig auf 0** zurück. Wer den Moment verpasst, erlebt, wie der ausgelenkte Container **zurückpendelt**. Er wird **nicht angesagt** – Samu soll das Muster selbst entdecken. Sichtbar ist er nur über Windsack/Flaggen und den Windpfeil im HUD.
 - **Nicht jeder Container bei jedem Wind:** Jeder Stellplatz bzw. Container lässt sich nur in bestimmten Phasen des Zyklus sicher verladen (z. B. wenn der Wind längs der Lücke weht oder in der Flaute). Zur falschen Zeit treibt der Wind den Container gegen die Nachbarn.
-- **Der Sonder-Container (Knobel-Aufgabe):** Ein Stellplatz liegt **außerhalb der Reichweite** des Krans – der Ausleger dreht bzw. reicht nicht weit genug hinüber. Er ist nur erreichbar, wenn Kenji bei **voller Windstärke** das Seil **fast ganz lang** lässt: Der Wind drückt den hängenden Container seitlich hinaus (je länger das Seil, desto weiter der Versatz), bis er **knapp über** seiner Position steht – dann **fallen lassen**. Bricht der Wind vorher ruckartig ab, pendelt der Container zurück, und Kenji muss auf die nächste Phase **aus derselben Richtung** warten.
+- **Der Sonder-Container (Knobel-Aufgabe):** Ein Stellplatz liegt **außerhalb der Reichweite** des Krans – der Ausleger dreht bzw. reicht nicht weit genug hinüber. Er ist nur erreichbar, wenn Samu bei **voller Windstärke** das Seil **fast ganz lang** lässt: Der Wind drückt den hängenden Container seitlich hinaus (je länger das Seil, desto weiter der Versatz), bis er **knapp über** seiner Position steht – dann **fallen lassen**. Bricht der Wind vorher ruckartig ab, pendelt der Container zurück, und Samu muss auf die nächste Phase **aus derselben Richtung** warten.
   - Erst wer den Wind-Zyklus kennt, weiß, **wann** der Maximalwind kommt – und dass man ihn hier nicht als Störung, sondern als **Werkzeug** nutzt.
   - Der Container kommt dabei **schräg** an und wird in die Lücke **fallen gelassen** statt sanft abgesetzt – das zählt als **ein Fehler** (siehe Fehlergrenze).
 - **Der Präzisions-Container (Gegenstück):** Eine Lücke ist **minimal** – kaum breiter als der Container. Er passt nur bei **Flaute (0 Wind)** und **null horizontaler Bewegung**: Ausleger und Laufkatze stehen still, das Pendeln ist komplett ausgeschwungen, erst dann senkrecht absenken.
   - Die beiden Sonder-Container bilden die Extreme des Zyklus: einer braucht den **stärksten** Wind, der andere **gar keinen**.
 - **Die Lektion:** Abwarten, beobachten, die richtige Gelegenheit erkennen – und dann ruhig zugreifen.
 - **Steuerung (gebaut, in Stufen):** L-Stick ←→ / ← → = Ausleger drehen (5° je Druck) · **LT/RT** bzw. Q/E = Laufkatze einen Marker nach innen/außen · R-Stick ↕ / W S = Haken heben/senken · **B** = greifen/lösen · **P** = Ladeplan.
-- **Marker am Ausleger:** Am Ausleger sind **Markierungen** (Skala) angebracht, an denen Kenji sieht, wo die Laufkatze steht – und damit, wo der Container abgelassen wird. Zusammen mit dem Drehwinkel des Auslegers lässt sich so jede Position **auch blind** anfahren.
+- **Marker am Ausleger:** Am Ausleger sind **Markierungen** (Skala) angebracht, an denen Samu sieht, wo die Laufkatze steht – und damit, wo der Container abgelassen wird. Zusammen mit dem Drehwinkel des Auslegers lässt sich so jede Position **auch blind** anfahren.
 - **Aufbau:** Das Frachtschiff liegt **längsseits am Kai**, der Kran steht auf dem Kai. Das Deck ist voll beladen bis auf **4 Lücken**:
   1. **Doppel-Lücke, erster Container:** Zwei Lücken liegen **recht mittig** direkt nebeneinander. Der erste muss **präzise** sitzen – steht er schief oder versetzt, passt der zweite nicht mehr.
   2. **Doppel-Lücke, zweiter Container = Präzisions-Container:** Quasi **null Toleranz**, nur bei **0 Wind und 0 horizontaler Bewegung**.
   3. **Reichweiten-Container (Windtrick):** **Außerhalb der Reichweite** des Krans – volle Windstärke, fast volles Seil, knapp über die Position bringen und fallen lassen.
-  4. **Verdeckter Container:** **Hinten, diagonal entfernt** vom ersten Container (aber nicht auf maximaler Reichweite). Aus der Kamera ist die Position **nicht richtig zu sehen** – Kenji muss sich an den vorderen Reihen, den **Markern am Ausleger** und am Wind orientieren und ihn **blind setzen**. *(Exakte Position noch festzulegen.)*
+  4. **Verdeckter Container:** **Hinten, diagonal entfernt** vom ersten Container (aber nicht auf maximaler Reichweite). Aus der Kamera ist die Position **nicht richtig zu sehen** – Samu muss sich an den vorderen Reihen, den **Markern am Ausleger** und am Wind orientieren und ihn **blind setzen**. *(Exakte Position noch festzulegen.)*
      - **Versteckte Toleranz:** Diese Lücke hat **mehr Spiel**, als es aussieht – für den Spieler nicht offensichtlich. Wer sich sauber an Markern und Raster orientiert, schafft es, auch ohne die Lücke zu sehen.
 - **Physik:** Der Container hängt am Seil wie ein Pendel; Wind und eigene ruckartige Bewegungen bringen ihn zum Schwingen (Trägheit wie beim Boot in Etappe 3). Seil + Haken werden selbst gebaut, das Kran-Modell bewegt nur Ausleger und Laufkatze.
-- **Gegen den Wind drehen:** Dreht Kenji den Ausleger **gegen** den Wind, bremst der Wind das Nachschwingen des Containers – er kann **schneller** drehen, ohne dass es pendelt; je stärker der Wind, desto schneller. **Mit** dem Wind ist es umgekehrt: Der Wind schiebt den Container zusätzlich an, hier muss er langsamer drehen.
+- **Gegen den Wind drehen:** Dreht Samu den Ausleger **gegen** den Wind, bremst der Wind das Nachschwingen des Containers – er kann **schneller** drehen, ohne dass es pendelt; je stärker der Wind, desto schneller. **Mit** dem Wind ist es umgekehrt: Der Wind schiebt den Container zusätzlich an, hier muss er langsamer drehen.
 - **Ansicht & HUD:** Die Kamera bleibt **außen** am Kran wie beim Flieger (keine Kabinen-Ansicht). Das HUD zeigt:
   - **Pendel-Anzeige:** Punkt in einem Kreis – schwingt mit dem Container und wird **grün**, wenn er ruhig hängt (Pflicht für den Präzisions-Container).
   - **Drehwinkel des Auslegers** in Grad (z. B. „47°“).
-  - **Ladeplan (ein-/ausblendbar):** Zu Beginn der Aufgabe bekommt Kenji einen **Plan** des Decks von oben, auf dem alle 4 Ziel-Lücken eingezeichnet sind – jeweils mit **ca. Drehwinkel (°)** und **Marker-Nummer** am Ausleger. Per Taste ein- und ausblendbar (Vorschlag: **D-Pad ←** / Tastatur **P**). Wer den Plan nutzt, kann mit Drehwinkel + Markern **jede** Lücke – auch die verdeckte – sicher treffen.
-  - **Wind-Anzeige:** Pfeil für **Richtung** (links/rechts) + **Stärke** (Balken 0 → max), damit Kenji den Zyklus beobachten und den Maximalwind bzw. die Flaute kommen sehen kann.
+  - **Ladeplan (ein-/ausblendbar):** Zu Beginn der Aufgabe bekommt Samu einen **Plan** des Decks von oben, auf dem alle 4 Ziel-Lücken eingezeichnet sind – jeweils mit **ca. Drehwinkel (°)** und **Marker-Nummer** am Ausleger. Per Taste ein- und ausblendbar (Vorschlag: **D-Pad ←** / Tastatur **P**). Wer den Plan nutzt, kann mit Drehwinkel + Markern **jede** Lücke – auch die verdeckte – sicher treffen.
+  - **Wind-Anzeige:** Pfeil für **Richtung** (links/rechts) + **Stärke** (Balken 0 → max), damit Samu den Zyklus beobachten und den Maximalwind bzw. die Flaute kommen sehen kann.
   - **Seillänge / Höhe** des Hakens.
   - **Fehlerzähler** (●●○) und **Restzeit** (6:00).
   - **Container-Zähler** (z. B. 2/4).
@@ -358,14 +391,14 @@ Kenji muss diesen Check in den Risiko-Szenarien innerhalb des **10-Sekunden-Coun
 #### 🏙️ Etappe 5: Chinesisches Meer / Küste (Code-Erinnerung vs. Air-Race)
 
 **Risiko (Highspeed-U-Boot durch die Felsenschlucht):**
-- **Das Code-Rätsel:** Ein Ziffernfeld mit NUR 1 Versuch! Kenji muss sich an das Detail aus Etappe 1 erinnern (1402).
+- **Das Code-Rätsel:** Ein Ziffernfeld mit NUR 1 Versuch! Samu muss sich an das Detail aus Etappe 1 erinnern (1402).
 - **Gameplay:** Nach richtiger Eingabe folgt eine rasante Slalom-Fahrt durch eine enge Unterwasser-Schlucht.
 - **Ergebnis:** Geschafft → **1 Tag** vergangen. Falscher Code / Crash → **7 Tage** vergangen.
 
 **Sicher (Kunstflug-Show im Mustang – Red Bull Air Race):**
-- **Szenario:** Kenji nimmt an einer Flugshow teil, um sich das Ticket zu verdienen.
+- **Szenario:** Samu nimmt an einer Flugshow teil, um sich das Ticket zu verdienen.
 - **Gameplay:** Preflight-Check absolvieren, dann mit der P-51 Mustang einen Slalom-Parcours durch Pylone/Zielringe über dem Meer fliegen!
-  - Preflight-Check hier **ohne Timer und ohne Kurzschluss**: Ein Ansager führt Schritt für Schritt durch – an ihm kann Kenji nicht scheitern. Gescheitert werden kann erst im Parcours.
+  - Preflight-Check hier **ohne Timer und ohne Kurzschluss**: Ein Ansager führt Schritt für Schritt durch – an ihm kann Samu nicht scheitern. Gescheitert werden kann erst im Parcours.
 - **Ergebnis:** Sauber absolviert → **4 Tage** vergangen. Crashes/Pylonen gerammt → **7 Tage** vergangen.
 
 **🎓 Lerneffekt Etappe 5**
@@ -387,11 +420,11 @@ Kenji muss diesen Check in den Risiko-Szenarien innerhalb des **10-Sekunden-Coun
 - **Ergebnis:** Geschafft → **1 Tag** vergangen. Gescheitert → eine kurze Geschichte wird erzählt (7 Tage Krankenhaus) → **7 Tage** vergangen.
 
 **Sicher (Shinkansen Express – Das Stellwerk-Labyrinth):**
-- **Szenario:** Damit der japanische Zug auf die Sekunde pünktlich bleibt, hilft Kenji im Stellwerk aus.
+- **Szenario:** Damit der japanische Zug auf die Sekunde pünktlich bleibt, hilft Samu im Stellwerk aus.
 - **Gameplay:** Weichen-Stellen auf Zeit in einem komplexen Gleis-Labyrinth.
 - **Ergebnis:** Null Fehler & pünktlich → **4 Tage** vergangen. Verheddert / Falsche Weiche → **7 Tage** vergangen.
 - **Entwurf (01.10.2026, noch nicht bestätigt):**
-  - **Ansicht:** Kenji läuft zum Stellwerk-Häuschen, **Y** = einsteigen. Kamera schräg von oben auf den Bahnhof, Shinkansen fahren in 3D; im **HUD** der Gleisplan als Stellwerkspult (Gleise, Weichen, Signale rot/grün).
+  - **Ansicht:** Samu läuft zum Stellwerk-Häuschen, **Y** = einsteigen. Kamera schräg von oben auf den Bahnhof, Shinkansen fahren in 3D; im **HUD** der Gleisplan als Stellwerkspult (Gleise, Weichen, Signale rot/grün).
   - **Steuerung:** L-Stick / Pfeiltasten = Markierung von Weiche zu Weiche, **B** = Weiche umstellen.
   - **Ablauf:** Züge kommen nacheinander, jeder mit **Zielgleis** + **Abfahrtszeit** (Fahrplantafel im HUD). Richtige Fahrstraße → Signal grün. Weiche unter einem fahrenden Zug ist **gesperrt** → vorausdenken. Zu spät gestellt → Zug wartet vor Rot, verliert Zeit.
   - **Steigerung:** erst ein Zug nach dem anderen, später zwei gleichzeitig mit kreuzenden Wegen; der **letzte Zug ist der kniffligste**.
@@ -409,7 +442,7 @@ Kenji muss diesen Check in den Risiko-Szenarien innerhalb des **10-Sekunden-Coun
 | Stufe | Verbrauchte Zeit | Restzeit | Freigeschaltetes Event & Gameplay |
 |---|---|---|---|
 | **Stufe 1 (Pro)** | 6 Tage (Nur 1-Tag-Wege) | 5 volle Wochen | **Der Ultimative Run:** Flugzeug kapern → Mt. Fuji Anflug → Not-Absprung → Punktlandung am Gipfel → Snowboard-Abfahrt → Sprung ins Meer → 5m Monsterwellen-Surfen! (Schaltet das Minispiel dauerhaft im Hauptmenü frei) |
-| **Stufe 2 (Fast Perfekt)** | 9–12 Tage (1–2× sicherer Weg ODER 1× Fehlschlag, Rest Risiko geschafft) | ~4 Wochen | **Rundflug & Hohe Wellen:** Kenji und sein Freund buchen einen Rundflug im Kunstflugzeug (P-51 Mustang – nutzt dieselben Kunstflug-Manöver wie der Jet, nur etwas langsamer) direkt um den Mt. Fuji herum, genießen die Aussicht und surfen danach auf hohen, schnellen Wellen. |
+| **Stufe 2 (Fast Perfekt)** | 9–12 Tage (1–2× sicherer Weg ODER 1× Fehlschlag, Rest Risiko geschafft) | ~4 Wochen | **Rundflug & Hohe Wellen:** Samu und sein Freund buchen einen Rundflug im Kunstflugzeug (P-51 Mustang – nutzt dieselben Kunstflug-Manöver wie der Jet, nur etwas langsamer) direkt um den Mt. Fuji herum, genießen die Aussicht und surfen danach auf hohen, schnellen Wellen. |
 | **Stufe 3 (Solide)** | 15–21 Tage | 3–4 Wochen | **Mittlere Wellen:** „Schade, dass wir keine Zeit für den Fuji-Gipfel haben...“ → Gemeinsame Strandtage und Surfen auf schönen mittleren Wellen. |
 | **Stufe 4 (Lern-Run)** | 24–39 Tage | 1–2 Wochen | **Kleine Wellen:** „Lass uns zusammen surfen lernen!“ → Gemütliches Üben auf kleinen Anfänger-Wellen. |
 | **Stufe 5 (Notfall)** | 42 Tage (Alle Versuche gerissen) | 1 Nachmittag | **Das Versprechen:** Kurze Umarmung am Strand, Füße kurz ins Wasser halten: „Nächstes Jahr machen wir den Pro-Run!“ |

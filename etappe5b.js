@@ -1,5 +1,5 @@
 // Trip to Japan – Etappe 5b: U-Boot durch die Felsenschlucht (Risiko, "1 Tag").
-// Laedt nach etappe5.js. Gleiche Welt (story.welt(5)), gleiche Startinsel wie Etappe 1: Kenji steigt im Ring am
+// Laedt nach etappe5.js. Gleiche Welt (story.welt(5)), gleiche Startinsel wie Etappe 1: Samu steigt im Ring am
 // Strand ins grosse U-Boot (Engine-Einstieg ueber harborSubNear/imRing, Liegeplatz harborSubLocal(0,0)).
 //   1. Ziffernfeld im HUD, nur EIN Versuch: Stick/Pfeile waehlen (senfgelber Rahmen), B drueckt, * loescht die letzte
 //      Ziffer, # bestaetigt. Der Code 14 02 stand nur in Etappe 1 auf dem U-Boot-Weg (nicht gesprochen).
@@ -204,7 +204,7 @@ function padFertig(){
     story.sprich(['Code richtig! Das U-Boot ist frei. Abtauchen und durch die Felsenschlucht – vorsichtig, die Wände sind nah.'], () => schluchtStart(), 'pilot');
   } else {
     story.sprich(['Falscher Code. Das U-Boot bleibt gesperrt.',
-      'Ein Fischer nimmt Kenji mit – sein Kutter ist langsam, die Fahrt dauert eine Woche.'], () => {
+      'Ein Fischer nimmt Samu mit – sein Kutter ist langsam, die Fahrt dauert eine Woche.'], () => {
       story.spaeter(1, () => { sb.aktiv = false; story.etappeEnde(7, 'falscher Code'); });
     }, 'pilot');
   }

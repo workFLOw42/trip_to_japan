@@ -1,6 +1,6 @@
 // Trip to Japan – Geist an der Schultuer (Live-Wunsch 14.10.2026). Laedt nach etappe1.js und geist_glb.js, vor der Engine.
-// Laeuft Kenji in Etappe 1 zurueck an die Schultuer: Schwarzblende, der Geist erscheint bildfuellend (eigene kleine
-// Szene in einem Vollbild-Canvas – Engine-Kamera, Nebel und Licht stoeren so nicht), Schwarzblende zurueck, Kenji steht
+// Laeuft Samu in Etappe 1 zurueck an die Schultuer: Schwarzblende, der Geist erscheint bildfuellend (eigene kleine
+// Szene in einem Vollbild-Canvas – Engine-Kamera, Nebel und Licht stoeren so nicht), Schwarzblende zurueck, Samu steht
 // wieder vor der Tuer mit Blick auf den Strand.
 // Modell: "Ghost classic" von skalson (CC-BY-4.0), Sketchfab. Zwei Animationen: CameraAction (10 s, schwebt) und
 // EvilEyes (0,67 s, Augen). Im Modell liegt er gekippt: das Gesicht zeigt nach GESICHT (Modellkoordinaten, ausgemessen
@@ -80,7 +80,7 @@ function geistTon(){
   const g = audioCtx.createGain(); g.gain.value = 0.8;
   q.connect(g).connect(audioCtx.destination); q.start();
 }
-// Schwarz (0,5 s) -> Geist -> schwarz -> Kenji vor der Tuer, Blick zum Strand -> hell
+// Schwarz (0,5 s) -> Geist -> schwarz -> Samu vor der Tuer, Blick zum Strand -> hell
 let blende = null;
 function schwarz(an, dauer){
   if(!blende){ blende = document.createElement('div'); blende.style.cssText = 'position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:27;'; document.body.appendChild(blende); }
@@ -106,7 +106,7 @@ function spuk(){
   }, 450);
 }
 
-// Ausloeser: Kenji zu Fuss in Etappe 1 an der Schultuer (Wand zum Meer, -x), Blick etwa zur Tuer
+// Ausloeser: Samu zu Fuss in Etappe 1 an der Schultuer (Wand zum Meer, -x), Blick etwa zur Tuer
 let tPrev = performance.now();
 story.geistUpdate = function(){
   const now = performance.now(), dt = Math.min(0.1, (now - tPrev) / 1000); tPrev = now;

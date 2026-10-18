@@ -1,5 +1,5 @@
 // Trip to Japan – Etappe 6c: Shinkansen (sicherer Weg, "4 Tage"). Laedt nach etappe6b.js.
-// Geschichte: Das Stellwerk ist ausgefallen und einige Weichen sind defekt. Der Lokfuehrer bittet Kenji, die Gleise zu waehlen.
+// Geschichte: Das Stellwerk ist ausgefallen und einige Weichen sind defekt. Der Lokfuehrer bittet Samu, die Gleise zu waehlen.
 // Ablauf (Live-Wunsch 09.10.2026):
 //   - Einstieg im gelben Ring am Bahnsteig in Tokio -> Blende -> eigene Szene (gerade Strecke weit ab der Welt, wie die
 //     Hoehle): der Zug beschleunigt langsam von 0 auf 300 km/h und bremst wieder auf 0 (~40 s).
@@ -13,7 +13,7 @@
 //   - Signale und defekte Weichen im Gleis erst nach der Wahl sichtbar (vorher konnte man sie von weitem sehen).
 //   - Gleise: zwei; drei erst, wenn der Zug beim Bremsen wieder bei 200 km/h ist ("man denkt, man hat es geschafft").
 //   - Streng: falsches Gleis -> Notbremsung -> 7 Tage. Alles richtig -> Einfahrt Bahnhof Fukuoka-Beach -> 4 Tage.
-// Danach (beides) steht Kenji am Strand neben dem Flugfeld (etappe6.js: story.e6ankunft).
+// Danach (beides) steht Samu am Strand neben dem Flugfeld (etappe6.js: story.e6ankunft).
 (function(){
 'use strict';
 const story = window.STORY;
@@ -196,7 +196,7 @@ function baue(runden){
 // ---- Ablauf -----------------------------------------------------------------------------------------------
 const zf = story.zugfahrt = { aktiv: false, t: 0, gleis: 1, n: 2, x: 0, runden: [], ri: 0, zeigt: false, fertig: false, halt: false, hudEl: null, _st: 0, rede: null, start: false };
 const ANSAGE = [
-  'Hallo Kenji! Das Stellwerk ist ausgefallen und einige Weichen sind defekt!',
+  'Hallo Samu! Das Stellwerk ist ausgefallen und einige Weichen sind defekt!',
   'Wähl mit dem linken Stick das Gleis, auf dem beide Weichen grün leuchten. Los geht\'s!',
 ];
 function einsteigen(){
@@ -273,7 +273,7 @@ function notbremse(){
 function geschafft(){
   if(zf.fertig) return; zf.fertig = true; zf.zeigt = false;
   // Live-Wunsch: steht der Zug, gleich der Globus (die Ansage laeuft hinein)
-  story.sprich(['Perfekt, Kenji! Auf die Sekunde pünktlich.', 'Willkommen in Fukuoka-Beach!'], null, 'pilot');
+  story.sprich(['Perfekt, Samu! Auf die Sekunde pünktlich.', 'Willkommen in Fukuoka-Beach!'], null, 'pilot');
   story.spaeter(1.2, () => ende(true));
 }
 function ende(ok){

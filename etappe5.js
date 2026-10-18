@@ -18,20 +18,20 @@ function hier(){ return e5() && locale === 'earth'; }
 const RW_HALB = 130;
 const MUSTANG = { x: 0, z: RW_HALB - 20, yaw: 0 };   // +z-Ende der Bahn, Nase nach -z (die ganze Bahn voraus)
 // U-Boot-Ring = der Strandring aus Etappe 1 (dieselbe Startinsel): Engine-Einstieg ueber harborSubNear/imRing.
-// Kenji kommt zwischen Mustang und Ring an, damit beide gleich weit weg sind (der Ring liegt am anderen Ufer).
+// Samu kommt zwischen Mustang und Ring an, damit beide gleich weit weg sind (der Ring liegt am anderen Ufer).
 // Einstieg U-Boot in Etappe 5: Ring am Nordwest-Ufer (lila Punkt, Screenshot 08.10.2026 11:26), story.js fragt ihn
 // ueber story.ringPlatzE5 ab (imRing, Marke, Radar). Das echte Boot (Engine-Liegeplatz) und die Schlucht bleiben, wo sie
 // waren: nach dem Einsteigen kommt eine Schwarzblende (etappe5b.js), die neue Szene darf woanders liegen.
-// Live-Feedback (08.10.2026): der lila Punkt lag zu weit weg (250 m). Jetzt 45 Grad links von Kenjis Blick: Sandkante
+// Live-Feedback (08.10.2026): der lila Punkt lag zu weit weg (250 m). Jetzt 45 Grad links von Samus Blick: Sandkante
 // nach 208 m, offenes Wasser nach 246 m (C:\tmp\sfg\e5p\links.js); im Startbild am linken Rand.
 const RING5 = { x: -188, z: 171 };                 // Wiese, 8 m vor der Sandkante
 const UBOOT5 = { x: -284, z: 178, rot: 1.649 };    // Kulissen-U-Boot im Wasser, Bug aufs Meer (frei geprueft mit subBerthFree)
 const DORF5 = { x: -222, z: 122 };                 // Dorf bleibt am ersten Ringplatz (Live-Feedback: "lass das Dorf da stehen")
 function ubootRing(){ return RING5; }
 story.ringPlatzE5 = () => e5() ? RING5 : null;
-// Live-Wunsch (Screenshot 08.10.2026 11:26): Kenji steht seitlich der Bahn, die Mustang rechts vorn, das U-Boot links
+// Live-Wunsch (Screenshot 08.10.2026 11:26): Samu steht seitlich der Bahn, die Mustang rechts vorn, das U-Boot links
 // hinten am Nordwest-Ufer (lila Punkt). Aus dem Screenshot zurueckgerechnet (C:\tmp\sfg\e5p\suche2.js, 11 px Rest):
-// Kenji (11, 155), Blick 49,5 Grad; der lila Punkt liegt bei Winkel ~110 Grad von der Inselmitte.
+// Samu (11, 155), Blick 49,5 Grad; der lila Punkt liegt bei Winkel ~110 Grad von der Inselmitte.
 const START5 = { x: 11, z: 155, yaw: 49.5 * Math.PI / 180 };
 function ankunft(){ return { x: START5.x, z: START5.z }; }
 // Kulissen-U-Boot am lila Punkt: Engine-Modell (shipTemplates.sub), Bug aufs Meer. Das Inselboot der Engine (am
@@ -43,6 +43,7 @@ function stelleUboot5(){
   o.position.set(UBOOT5.x, 0, UBOOT5.z); o.rotation.y = UBOOT5.rot;
   o.userData.fremd = true;                                          // Engine-Modell: Materialien geteilt
   story.welt(5).add(o); kulisseUboot.obj = o;
+  if(story.ding) story.ding(o, { welt: 5, typ: 'uboot', nurZuFuss: true });          // Grenze (18.10.2026)
 }
 
 // ---- Parcours ---------------------------------------------------------------------------------
@@ -457,6 +458,9 @@ function ladeParkMustang(){
   g.position.set(MUSTANG.x, ISLAND_Y, MUSTANG.z); g.rotation.y = MUSTANG.yaw;
   g.userData.fremd = true;                        // Modell geteilt (Engine-Vorlage): nur abhaengen
   story.welt(5).add(g); park.obj = g;
+  // Grenze (objekte.js, Live-Wunsch 16.10.2026): Samu laeuft nicht durch die geparkte Mustang; eingestiegen wird wie
+  // bisher aus 12 m (mustangNah). Steigt er ein, ist die Kulisse unsichtbar und ihre Grenze aus (park.ding.aus).
+  if(story.ding) park.ding = story.ding(g, { welt: 5, typ: 'mustang' });
 }
 const marken = [];
 function updateMarken(){
@@ -520,7 +524,7 @@ function etappe5Start(){
 story.etappe5Start = etappe5Start;
 
 // ---- Uferdorf beim U-Boot: chinesisches Fischerdorf im Anime-Look (haeuser.js, Stil 'china') ---------------------
-// Steht landeinwaerts hinter dem Einstiegsring, laesst den Weg Ring <-> Kenji frei. Die Grenzen kommen aus dem
+// Steht landeinwaerts hinter dem Einstiegsring, laesst den Weg Ring <-> Samu frei. Die Grenzen kommen aus dem
 // Objekt-Katalog (objekte.js: jedes Bauteil in seiner echten Form) – Live-Wunsch 16.10.: global gebaut, Stil je Region.
 const dorf = { haeuser: [], gebaut: false };
 function baueUferdorf(rg){
@@ -529,7 +533,7 @@ function baueUferdorf(rg){
   const ix = (rg.x - info.wx), iz = (rg.z - info.wz), il = Math.hypot(ix, iz) || 1;
   const rx = ix / il, rz = iz / il, tx = -rz, tz = rx;                  // radial nach aussen / tangential
   let s = 307; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  // zwei Reihen: 28 und 50 m hinter dem Ring, seitlich -55..55 m, Luecke in der Mitte (Weg zu Kenji)
+  // zwei Reihen: 28 und 50 m hinter dem Ring, seitlich -55..55 m, Luecke in der Mitte (Weg zu Samu)
   for(const [ab, n] of [[28, 6], [52, 5]]){
     for(let i = 0; i < n; i++){
       const q = -55 + 110 * (i + 0.5) / n + (rnd() - 0.5) * 6;
@@ -544,7 +548,7 @@ function baueUferdorf(rg){
   }
 }
 story.e5dorf = dorf;
-story.e5ankunft = ankunft;                          // tiere.js: Pandas und Moewen bei Kenjis Ankunft
+story.e5ankunft = ankunft;                          // tiere.js: Pandas und Moewen bei Samus Ankunft
 
 // ---- Hooks ------------------------------------------------------------------------------------
 function hookE5(){

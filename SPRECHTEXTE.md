@@ -32,11 +32,11 @@ Stand: 09.10.2026 – vom User überarbeitet und in den Code übernommen (`story
 
 Endlich... Ferien!
 
-Kenji hat ein riesiges Ziel: Er ist eingeladen, den Sommer bei einem Freund in Japan zu verbringen!
+Samu hat ein riesiges Ziel: Er ist eingeladen, den Sommer bei einem Freund in Japan zu verbringen!
 
 Das Problem? Er hat kein Geld für ein Flugticket... und seine Eltern helfen ihm nicht.
 
-Also nimmt Kenji die Sache selbst in die Hand. Er macht sich auf eigene Faust auf den Weg!
+Also nimmt Samu die Sache selbst in die Hand. Er macht sich auf eigene Faust auf den Weg!
 
 Sechs ganze Wochen hat er Zeit. Vor ihm liegen knifflige Rätsel, wilde Fahrzeuge... und das vielleicht größte Abenteuer seines Lebens!
 
@@ -54,7 +54,7 @@ Sechs ganze Wochen hat er Zeit. Vor ihm liegen knifflige Rätsel, wilde Fahrzeug
 
 **Startsequenz verpasst – Autostart ins All (Bodenstation):**
 
-1. Hallo Kenji! Du bist wohl etwas nervös gewesen...
+1. Hallo Samu! Du bist wohl etwas nervös gewesen...
 2. Aber keine Sorge! Wir haben die Startsequenz und den Start einfach automatisch durchgeführt.
 3. Zur Erinnerung: Du hast dich freiwillig gemeldet, als erster Mensch zum Mars zu fliegen... und als Beweis einen Stein mitzubringen!
 4. Falls du vergessen hast, wie man fliegt, hier noch einmal die Steuerung:
@@ -71,7 +71,7 @@ Sechs ganze Wochen hat er Zeit. Vor ihm liegen knifflige Rätsel, wilde Fahrzeug
 
 **Nach dem Einsteigen (U-Boot-Crew):**
 
-1. Hallo Kenji! Danke für deine Hilfe.
+1. Hallo Samu! Danke für deine Hilfe.
 2. Du siehst noch recht jung aus... und als würdest du zum ersten Mal ein U-Boot steuern! Keine Sorge, wir helfen dir.
 3. Den Universal-Code für U-Boote haben wir bereits für dich eingegeben: eins... vier... null... zwei!
 4. Hier ist die kurze Erklärung für die Steuerung:
@@ -86,7 +86,7 @@ Sechs ganze Wochen hat er Zeit. Vor ihm liegen knifflige Rätsel, wilde Fahrzeug
 |---|---|---|
 | Schiffstyp schon vorhanden | weiblich | Diesen Schiffstyp haben wir schon! Such bitte ein anderes Wrack. |
 | Erstes Foto | weiblich | Klasse, ein {Frachter / Segelschiff}! Jetzt fehlt nur noch ein zweites, anderes Schiff. |
-| Zweites Foto geschafft | weiblich | Toll gemacht! Mit deinen beiden Fotos können wir die Riffe bauen. Vielen Dank, Kenji! |
+| Zweites Foto geschafft | weiblich | Toll gemacht! Mit deinen beiden Fotos können wir die Riffe bauen. Vielen Dank, Samu! |
 
 ---
 
@@ -109,7 +109,7 @@ Sechs ganze Wochen hat er Zeit. Vor ihm liegen knifflige Rätsel, wilde Fahrzeug
 
 **Startsequenz verpasst – Fall B (zum ersten Mal im All):**
 
-1. Hallo Kenji! Da hatte der Flieger wohl einen Kurzschluss, deshalb war die Startsequenz anders als gewohnt.
+1. Hallo Samu! Da hatte der Flieger wohl einen Kurzschluss, deshalb war die Startsequenz anders als gewohnt.
 2. Aber keine Sorge! Wir haben die Startsequenz und den Start automatisch durchgeführt.
 3. Zur Erinnerung: Du hast dich freiwillig gemeldet, zum Mond zu fliegen... und als Beweis einen Stein mitzubringen!
 4. Falls du vergessen hast, wie man fliegt, hier noch einmal die Steuerung:
@@ -174,7 +174,7 @@ Sechs ganze Wochen hat er Zeit. Vor ihm liegen knifflige Rätsel, wilde Fahrzeug
 
 Wie Etappe 2 Fall B, nur Satz 1 ohne Kurzschluss (den gibt es in Etappe 3 nicht):
 
-1. Hallo Kenji! Du bist wohl etwas nervös gewesen...
+1. Hallo Samu! Du bist wohl etwas nervös gewesen...
 
 ---
 
@@ -216,7 +216,7 @@ Wie Etappe 2 Fall B, nur Satz 1 ohne Kurzschluss (den gibt es in Etappe 3 nicht)
 **Eingeholt / Zerschellt (7 Tage):**
 
 1. Halt, Polizei! Das war's mit der Flucht. *(zerschellt: „Krach! Das Boot ist am Felsen zerschellt, und schon ist die Polizei da.“ – ergänzt)*
-2. Kenji muss mit auf die Wache. Ein geklautes Boot ist kein Spaß!
+2. Samu muss mit auf die Wache. Ein geklautes Boot ist kein Spaß!
 
 ---
 
@@ -265,7 +265,7 @@ Wie Etappe 2 Fall B, nur Satz 1 ohne Kurzschluss (den gibt es in Etappe 3 nicht)
 | 1. Kontakt Felsrippe | männlich | Krach! Über die Felsrippe musst du höher! |
 | 2. Kontakt | männlich | Noch ein Treffer! Beim nächsten ist der Rumpf leck. |
 | Geschafft (1 Tag) | männlich | Geschafft! Durch die ganze Schlucht – das war Maßarbeit! |
-| Code falsch (7 Tage) | männlich | Falscher Code. Das U-Boot bleibt gesperrt. Ein Fischer nimmt Kenji mit – sein Kutter ist langsam, die Fahrt dauert eine Woche. |
+| Code falsch (7 Tage) | männlich | Falscher Code. Das U-Boot bleibt gesperrt. Ein Fischer nimmt Samu mit – sein Kutter ist langsam, die Fahrt dauert eine Woche. |
 | Boot leck (7 Tage) | männlich | Krach! Der Rumpf ist leck, das U-Boot muss auftauchen. Bis es repariert ist, vergeht eine Woche. |
 | Zeit abgelaufen, 250 s (7 Tage) **(ergänzt)** | männlich | Die Zeit ist um – der Sauerstoff wird knapp, das U-Boot muss auftauchen. Die Fahrt dauert jetzt viel länger: eine ganze Woche. |
 
@@ -330,7 +330,7 @@ Wie Etappe 2 Fall B, nur Satz 1 ohne Kurzschluss (den gibt es in Etappe 3 nicht)
 | Startsequenz beginnt (Alpha-Jet) | weiblich | Bitte Startsequenz durchführen! |
 | Startsequenz geschafft (Alpha-Jet) | weiblich | Startsequenz abgeschlossen. Guten Flug! |
 | Fels berührt / zu langsam / abgestürzt (7 Tage) | – | *keine Ansage* – der Globus nennt die Tage und den Grund |
-| Startsequenz verpasst (Alpha-Jet)| weiblich | Die Startsequenz hat nicht geklappt – ohne Startsequenz darf hier keiner fliegen. Die Flughafenpolizei nimmt Kenji fest. Eine Woche Gefängnis. |
+| Startsequenz verpasst (Alpha-Jet)| weiblich | Die Startsequenz hat nicht geklappt – ohne Startsequenz darf hier keiner fliegen. Die Flughafenpolizei nimmt Samu fest. Eine Woche Gefängnis. |
 
 ---
 
@@ -338,17 +338,17 @@ Wie Etappe 2 Fall B, nur Satz 1 ohne Kurzschluss (den gibt es in Etappe 3 nicht)
 
 **Nach dem Einsteigen (Lokführer):**
 
-1. Hallo Kenji! Das Stellwerk ist ausgefallen und einige Weichen sind defekt!
+1. Hallo Samu! Das Stellwerk ist ausgefallen und einige Weichen sind defekt!
 2. Wähl mit dem linken Stick das Gleis, auf dem beide Weichen grün leuchten. Los geht's!
 
 | Situation | Rolle | Text |
 |---|---|---|
-| Ziel erreicht (4 Tage) | männlich | Perfekt, Kenji! Auf die Sekunde pünktlich. Willkommen in Fukuoka-Beach! |
+| Ziel erreicht (4 Tage) | männlich | Perfekt, Samu! Auf die Sekunde pünktlich. Willkommen in Fukuoka-Beach! |
 | Defekte Weiche, Notbremsung (7 Tage) | – | *keine Ansage* – man sieht den Zug bremsen, dann der Globus |
 
 ### Ende von Etappe 6 (beide Wege)
 
-Globus (still): der Faden wächst von Tokio nach Fukuoka, der lila Punkt wird zur 🌊. Text: **Ziel: Fukuoka** · {Ein Tag / n Tage} vergangen ({Grund}) · noch {Tage} von 42 Tagen. Danach steht Kenji am Strand, Hinweis (Text): *Angekommen am Strand neben dem Fuji – die Reise geht bald weiter …*
+Globus (still): der Faden wächst von Tokio nach Fukuoka, der lila Punkt wird zur 🌊. Text: **Ziel: Fukuoka** · {Ein Tag / n Tage} vergangen ({Grund}) · noch {Tage} von 42 Tagen. Danach steht Samu am Strand, Hinweis (Text): *Angekommen am Strand neben dem Fuji – die Reise geht bald weiter …*
 
 ---
 
@@ -370,7 +370,7 @@ Globus (still): der Faden wächst von Tokio nach Fukuoka, der lila Punkt wird zu
 | Startsequenz geschafft | männlich | Sehr gut! Vollgas und ab in die Luft. |
 | Über der Piste, hoch genug | männlich | Ich übernehme! Wir kreisen über der Piste. Spring mit B, wenn du bereit bist! |
 | Absprung (B) | männlich | Viel Spaß! |
-| Auf der Piste gelandet | – | *keine Ansage* – Kenji steht gleich auf dem Snowboard, die Abfahrt beginnt |
+| Auf der Piste gelandet | – | *keine Ansage* – Samu steht gleich auf dem Snowboard, die Abfahrt beginnt |
 | Daneben (Hang) → noch einmal | männlich | Knapp daneben – das war nicht die Piste. Noch einmal! |
 | Daneben (Meer) → noch einmal | männlich | Platsch! Das war das Meer, nicht die Piste. Noch einmal! |
 | Absturz → noch einmal | männlich | Oh nein! Das ging schief. Keine Sorge – wir versuchen es gleich noch einmal. |

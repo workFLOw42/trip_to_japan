@@ -47,16 +47,21 @@ foreach($ln in $lines[0..($start-1)]){
 }
 foreach($a in $assets){ Copy-Item -Force (Join-Path $src $a) (Join-Path $dst $a) }
 
-# Kenji als eingebettetes GLB (wie die Flugspiel-Modelle)
-$kb = [IO.File]::ReadAllBytes((Join-Path $root 'models\kenji.glb'))
-[IO.File]::WriteAllText((Join-Path $root 'kenji_glb.js'),
-  'window.KENJI_GLB = "data:model/gltf-binary;base64,' + [Convert]::ToBase64String($kb) + '";' + "`n", $utf8)
+# Samu als eingebettetes GLB (wie die Flugspiel-Modelle)
+$kb = [IO.File]::ReadAllBytes((Join-Path $root 'models\samu.glb'))
+[IO.File]::WriteAllText((Join-Path $root 'samu_glb.js'),
+  'window.SAMU_GLB = "data:model/gltf-binary;base64,' + [Convert]::ToBase64String($kb) + '";' + "`n", $utf8)
 
+# Startbild schon waehrend des Laden (statt des blauen Engine-HUDs) – direkt nach <body>; story.js zeigt spaeter das Menue
+$ladebild = [IO.File]::ReadAllText((Join-Path $root 'tools/ladebild.html'), $utf8).Trim()
+$head = $head | ForEach-Object { if($_ -eq '<body>'){ $_; $ladebild } else { $_ } }
 $out = ($head -join "`n") + "`n" +
-  '<script src="kenji_glb.js"></script>' + "`n" +
+  '<script src="samu_glb.js"></script>' + "`n" +
+  '<script src="samu_kopf.js"></script>' + "`n" +
   '<script src="story.js"></script>' + "`n" +
   '<script src="objekte.js"></script>' + "`n" +
   '<script src="haeuser.js"></script>' + "`n" +
+  '<script src="spuren.js"></script>' + "`n" +
   '<script src="wueste_snd.js"></script>' + "`n" +
   '<script src="kamel_glb.js"></script>' + "`n" +
   '<script src="etappe2.js"></script>' + "`n" +
@@ -71,6 +76,11 @@ $out = ($head -join "`n") + "`n" +
   '<script src="panda_glb.js"></script>' + "`n" +
   '<script src="fuji_glb.js"></script>' + "`n" +
   '<script src="tiere.js"></script>' + "`n" +
+  '<script src="shiba_glb.js"></script>' + "`n" +
+  '<script src="bellen_snd.js"></script>' + "`n" +
+  '<script src="begleiter.js"></script>' + "`n" +
+  '<script src="alien_glb.js"></script>' + "`n" +
+  '<script src="aliens.js"></script>' + "`n" +
   '<script src="etappe4.js"></script>' + "`n" +
   '<script src="flucht_glb.js"></script>' + "`n" +
   '<script src="etappe4b.js"></script>' + "`n" +

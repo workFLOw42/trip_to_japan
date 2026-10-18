@@ -10,10 +10,10 @@
 //     sie mit.
 //   - Ausnahmen werden am Bauteil markiert: userData.begehbar (Boden, Planken – man steht darauf), userData.keinKoerper
 //     (Deko ohne eigene Masse), userData.deko (Effekte, Tiere ohne Grenze: Schatten, Moewen).
-//   - Beim Setzen wird geprueft, ob dort schon etwas steht (oder Kenji): dann am naechsten freien Platz daneben.
+//   - Beim Setzen wird geprueft, ob dort schon etwas steht (oder Samu): dann am naechsten freien Platz daneben.
 //   - Verhaken gibt es nicht: wer schon in einer Grenze steckt, darf jeden Schritt machen, der ihn nicht tiefer
 //     hineinbringt.
-// Kenji ist eine Saeule: Kugeln uebereinander von Fuss + STUFE bis zum Kopf.
+// Samu ist eine Saeule: Kugeln uebereinander von Fuss + STUFE bis zum Kopf.
 //
 // Neues Objekt:   story.typ('name', { bau(opt) { ...; return obj (Unterkante y = 0) oder Promise }, form?, untergrund?, beweglich? })
 // Einbauen:       story.setze('name', etappe, { x, z, y?, dreh?, auf?: Object3D, fest?: true })
@@ -31,7 +31,7 @@ const wd = (a, b) => { const d = b - a; return Math.atan2(Math.sin(d), Math.cos(
 
 const STUFE = 0.2;                                   // m: so niedrige Dinge steigt man einfach drueber (Stegkante 0,14 m)
 const SPRUNG = 0.25;                                 // m: im Sprung zaehlen die Fuesse so viel hoeher
-const FIGUR = { r: 0.28, h: 1.55, stufe: STUFE };    // Kenji (KENJI_H, story.js)
+const FIGUR = { r: 0.28, h: 1.55, stufe: STUFE };    // Samu (SAMU_H, story.js)
 story.masse = { figur: FIGUR };
 
 // ---- Katalog ---------------------------------------------------------------------------------
@@ -74,11 +74,52 @@ story.setze = setze;
 function ding(obj, opt){
   opt = opt || {};
   const d = { typ: opt.typ || obj.name || '?', welt: opt.welt !== undefined ? opt.welt : story.etappe, obj, koerper: koerperAus(obj, opt.form),
-    bb: new THREE.Box3(), beweglich: !!opt.beweglich, aus: false };
+    bb: new THREE.Box3(), beweglich: !!opt.beweglich, aus: false, nurZuFuss: !!opt.nurZuFuss };
   obj.userData.ding = d; dinge.push(d); aktualisiere(d, true);
   return d;
 }
 story.ding = ding;
+// Instanzen (InstancedMesh: Baeume, Container, Felsen) anmelden – jede Instanz ein eigener Koerper in ihrer Matrix.
+// form: 'kreis' (Zylinder: Stamm, Kaktus), 'quader' (Container) oder 'kugel' (Felsen). nur(i): nur diese Instanzen
+// (z. B. bei Baeumen nur die Staemme). Rueckgabe: das Ding (eines fuer alle Instanzen).
+story.instanzen = function(inst, opt){
+  opt = opt || {};
+  inst.updateMatrixWorld(true);
+  const geo = inst.geometry; geo.computeBoundingBox();
+  const art = opt.form === 'kugel' ? 'kugel' : opt.form === 'kreis' ? 'zyl' : 'box';
+  const koerper = [], mi = new THREE.Matrix4();
+  for(let i = 0; i < inst.count; i++){
+    if(opt.nur && !opt.nur(i)) continue;
+    inst.getMatrixAt(i, mi);
+    const ersatz = { matrixWorld: new THREE.Matrix4().multiplyMatrices(inst.matrixWorld, mi) };   // wie ein Mesh fuer aktualisiereK
+    koerper.push(neuK(ersatz, art, opt.box || geo.boundingBox));
+  }
+  const d = { typ: opt.typ || inst.name || 'instanzen', welt: opt.welt !== undefined ? opt.welt : story.etappe, obj: inst, koerper, bb: new THREE.Box3(), beweglich: false, aus: false };
+  inst.userData.ding = d; dinge.push(d); d.stand = undefined;
+  d.bb.makeEmpty(); for(const k of koerper){ aktualisiereK(k); d.bb.union(k.wb); } d.stand = bildNr;
+  rastern(d);
+  return d;
+};
+// Viele Koerper (tausende Palmen auf km Laenge): in ZELLE-m-Felder einsortieren, tiefe() fragt nur die Felder um (x, z)
+const ZELLE = 20;
+function rastern(d){
+  if(d.koerper.length < 64) return;
+  d.zellen = new Map();
+  for(const k of d.koerper){
+    const w = k.wb;
+    for(let i = Math.floor(w.min.x / ZELLE); i <= Math.floor(w.max.x / ZELLE); i++)
+      for(let j = Math.floor(w.min.z / ZELLE); j <= Math.floor(w.max.z / ZELLE); j++){
+        const key = i * 100003 + j; let l = d.zellen.get(key); if(!l) d.zellen.set(key, l = []); l.push(k); }
+  }
+}
+const _leer = [];
+function koerperBei(d, x, z, r){
+  if(!d.zellen) return d.koerper;
+  const i0 = Math.floor((x - r) / ZELLE), i1 = Math.floor((x + r) / ZELLE), j0 = Math.floor((z - r) / ZELLE), j1 = Math.floor((z + r) / ZELLE);
+  if(i0 === i1 && j0 === j1) return d.zellen.get(i0 * 100003 + j0) || _leer;
+  const s = new Set(); for(let i = i0; i <= i1; i++) for(let j = j0; j <= j1; j++){ const l = d.zellen.get(i * 100003 + j); if(l) for(const k of l) s.add(k); }
+  return s;
+}
 
 // ---- Koerper aus den Bauteilen -----------------------------------------------------------------
 function ausgenommen(o, root){
@@ -164,7 +205,9 @@ function aktualisiere(d, zwingen){
 story.dingNeu = (d) => aktualisiere(d, true);
 // Ding aus der Welt nehmen (z. B. in den Rucksack gesteckt): Grenze weg, Objekt bleibt dem Aufrufer
 story.entferne = function(d){ const i = dinge.indexOf(d); if(i >= 0) dinge.splice(i, 1); if(d.obj && d.obj.parent) d.obj.parent.remove(d.obj); };      // nach dem Verschieben eines festen Dings
-function aktiv(d){ return d.obj && d.obj.parent && !d.aus && (d.welt === '*' || d.welt === story.etappe) && locale === (d.ort || 'earth'); }
+// unsichtbare Dinge sperren nicht (z. B. die geparkte Kulisse eines Fliegers, waehrend man selbst darin sitzt)
+// nurZuFuss: Fahrzeuge (Boote, U-Boote) sperren nur Samus Schritte – faehrt er selbst, rammt er sie nicht (Verfolgung)
+function aktiv(d){ return d.obj && d.obj.parent && d.obj.visible && !d.aus && (!d.nurZuFuss || !!eva) && (d.welt === '*' || d.welt === story.etappe) && locale === (d.ort || 'earth'); }
 
 // ---- Abfrage: wie tief steckt eine Kugel / Saeule in den Grenzen? ---------------------------------------------
 const _l = new THREE.Vector3(), _q = new THREE.Vector3(), _p = new THREE.Vector3();
@@ -198,7 +241,7 @@ function tiefe(x, z, fuss, h, r, stufe, ausser){
     aktualisiere(d);
     const bb = d.bb;
     if(x < bb.min.x - r || x > bb.max.x + r || z < bb.min.z - r || z > bb.max.z + r || y1 + r < bb.min.y || y0 - r > bb.max.y) continue;
-    for(const k of d.koerper){
+    for(const k of koerperBei(d, x, z, r)){
       const w = k.wb;
       if(x < w.min.x - r || x > w.max.x + r || z < w.min.z - r || z > w.max.z + r) continue;
       for(let i = 0; i < n; i++){
@@ -212,6 +255,33 @@ function tiefe(x, z, fuss, h, r, stufe, ausser){
   return t;
 }
 story.tiefe = tiefe;
+// ---- Tiere als Koerper (Live-Wunsch 18.10.2026: "durch die Tiere moechte ich nicht durchlaufen") ------------------
+// Tiere sind animiert und laufen umher – statt ihrer Bauteile zaehlt eine aufrechte Saeule (Kreis r, Hoehe h) um ihren
+// Platz. Jede Tierdatei meldet ihre Liste an: story.tierQuelle(() => [{ x, z, y, r, h }, ...]) in Weltkoordinaten.
+// story.tierListe() liefert alle der aktuellen Etappe (auch fuer den Hund: drumherum laufen).
+const tierQuellen = [];
+story.tierQuelle = (f) => tierQuellen.push(f);
+let tierBild = -1, tierCache = [];
+story.tierListe = function(){
+  if(tierBild === bildNr) return tierCache;
+  tierBild = bildNr; tierCache = [];
+  if(locale === 'space') return tierCache;
+  // Quellen gelten auf der Erde; eine Quelle mit ort ('moon' / 'mars', z. B. die Aliens) gilt nur dort
+  for(const f of tierQuellen){ if((f.ort || 'earth') !== locale) continue; try { const l = f(); if(l) for(const t of l) tierCache.push(t); } catch(e){ console.warn('Tierquelle', e); } }
+  return tierCache;
+};
+story.tierQuelleOrt = (ort, f) => { f.ort = ort; tierQuellen.push(f); };
+// > 0 = steckt drin (wie tiefe)
+function tierTiefe(x, z, fuss, r){
+  let t = -Infinity;
+  for(const a of story.tierListe()){
+    if(a.y !== undefined && (fuss > a.y + (a.h || 1) || fuss + FIGUR.h < a.y)) continue;   // drueber / drunter
+    const e = r + a.r - Math.hypot(x - a.x, z - a.z);
+    if(e > t) t = e;
+  }
+  return t;
+}
+story.tierTiefe = tierTiefe;
 // ---- Setzen: freier Platz, auf derselben Flaeche ------------------------------------------------------------
 const _f = new THREE.Box3();
 const ueber = (a, b) => a.min.x < b.max.x - 0.01 && a.max.x > b.min.x + 0.01 && a.min.y < b.max.y - 0.01 && a.max.y > b.min.y + 0.01 &&
@@ -279,7 +349,7 @@ function platziere(d, def, opt){
   console.warn('Kein freier Platz fuer', d.typ, '– bleibt an der gewuenschten Stelle');
   stelleFrei(d, def, Object.assign({}, opt, { fest: true }), x0, z0);
 }
-// Freier Platz fuer Kenji bei (x, z): fester Boden, keine Grenze
+// Freier Platz fuer Samu bei (x, z): fester Boden, keine Grenze
 story.freierPlatz = function(x, z){
   const hits = story.hitsOhneDinge || hitsBuilding;
   const ok = (px, pz) => {
@@ -308,8 +378,67 @@ story.pruefeWelt = function(n){
 const entsOrig = story.weltEntsorgen;
 story.weltEntsorgen = function(n){ for(let i = dinge.length - 1; i >= 0; i--) if(dinge[i].welt === n) dinge.splice(i, 1); return entsOrig.apply(this, arguments); };
 
+// ---- Das eigene Fahrzeug der Engine (planeGroup) -------------------------------------------------------------------
+// Live-Befund 18.10.2026: durch den geparkten Flieger (X-Wing, Alpha Jet am Bahnende, Transall ...) lief Samu hindurch –
+// er ist kein Kulissen-Klon, sondern das Engine-Fahrzeug. Es bekommt dieselbe Grenze in seiner echten Form, aber NUR,
+// solange Samu ausgestiegen ist: sitzt er drin, fragt die Engine hitsBuilding fuer den Absturz – da darf der Flieger
+// nicht an sich selbst haengen bleiben. Wechselt das Modell (buildModel), wird die Grenze neu gebaut.
+const eigen = { d: null, mesh: null };
+function eigenesFahrzeug(){
+  if(typeof planeGroup === 'undefined' || typeof modelHolder === 'undefined') return;
+  const m = modelHolder.children[0] || null;
+  if(m !== eigen.mesh){
+    if(eigen.d){ const i = dinge.indexOf(eigen.d); if(i >= 0) dinge.splice(i, 1); eigen.d = null; }
+    eigen.mesh = m;
+    if(m){ eigen.d = ding(planeGroup, { welt: '*', typ: 'fahrzeug', beweglich: true });
+      // Schatten, Schubbalken o. Ae. der Engine haengen nicht am Modell: nur das Modell zaehlt
+      eigen.d.koerper = koerperAus(modelHolder); eigen.d.obj = planeGroup; }
+  }
+  if(eigen.d){
+    // auch auf Mond und Mars (Live-Wunsch 18.10.2026): dort steht der Flieger auf dem Boden des Himmelskoerpers
+    const amBoden = locale === 'earth' ? (state.onGround || state.pos.y < ISLAND_Y + 3) : state.onGround;
+    eigen.d.aus = !eva || !planeGroup.visible || locale === 'space' || !amBoden;
+    eigen.d.ort = locale;                                            // aktiv() vergleicht ort mit locale
+  }
+}
+story.eigenesFahrzeug = () => eigen.d;               // fuer Tests
+
+// ---- Mond und Mars: Fuesse auf der SICHTBAREN Oberflaeche (Live-Befund 18.10.2026, Screenshot: Samu und Barki bis
+// ueber die Schuhe im Boden) -------------------------------------------------------------------------------------------
+// Die Engine rechnet dort mit einem groben Hoehenraster (+1,5 m Aufschlag) und nur an EINER Stelle je Bild genau (Raycast
+// unter dem Fokus, gilt 1,5 m weit). Je nach Gelaende stand man daneben in der Flaeche oder darueber. evaFootY (Fusshoehe
+// fuer Samu, Barki, Aliens) misst hier jetzt selbst per Raycast gegen die Bodenkachel unter dem Punkt, zwischengespeichert
+// auf 0,25 m genau. surfaceY (Flieger, Landung) bleibt, wie die Engine es braucht.
+const _bRay = new THREE.Raycaster(), _bVon = new THREE.Vector3(), _bAb = new THREE.Vector3(0, -1, 0);
+const bodenCache = new Map(); let bodenOrt = null;
+function bodenGenau(x, z){
+  const G = typeof GROUNDS !== 'undefined' && GROUNDS[locale]; if(!G || !G.tiles) return null;
+  if(bodenOrt !== locale){ bodenCache.clear(); bodenOrt = locale; }
+  const key = Math.round(x * 4) + ',' + Math.round(z * 4);
+  if(bodenCache.has(key)) return bodenCache.get(key);
+  const T = G.tile, tile = G.tiles.get(Math.round(x / T) + ',' + Math.round(z / T)); if(!tile) return null;
+  _bVon.set(x, 4000, z); _bRay.set(_bVon, _bAb);
+  let y = null;
+  const hit = _bRay.intersectObject(tile, true); if(hit.length) y = hit[0].point.y;
+  if(locale === 'moon' && typeof moonBaseObj !== 'undefined' && moonBaseObj && moonBaseObj.visible){   // Plattform der Basis
+    const h2 = _bRay.intersectObject(moonBaseObj, true); for(const h of h2) if(y === null || h.point.y > y) y = h.point.y; }
+  if(y === null) return null;                                     // Kachel da, aber kein Treffer: nicht merken
+  if(bodenCache.size > 4000) bodenCache.clear();
+  bodenCache.set(key, y);
+  return y;
+}
+story.bodenGenau = bodenGenau;
+function hookBodenGenau(){
+  const fussOrig = evaFootY;
+  evaFootY = function(x, z){
+    if(locale === 'moon' || locale === 'mars'){ const y = bodenGenau(x, z); if(y !== null) return y; }
+    return fussOrig.apply(this, arguments);
+  };
+  // (Kacheln werden beim Weiterlaufen neu geklont, haben an derselben Stelle aber dieselbe Form – gemerkte Werte bleiben gueltig)
+}
+
 // ---- Jedes Bild: Zaehler (bewegliche Grenzen einmal pro Bild nachfuehren) -------------------------------------
-story.updateObjekte = function(){ bildNr++; };
+story.updateObjekte = function(){ bildNr++; eigenesFahrzeug(); };
 
 // ---- Einhaengen: als AEUSSERSTE Huelle um hitsBuilding (nach allen anderen Hooks, also zum Start) ----------------
 function hookAussen(){
@@ -319,7 +448,7 @@ function hookAussen(){
     if(locale === 'earth' && dinge.length){
       const von = story.schrittVon && story.schrittVon();
       if(von){
-        // Kenjis eigener Schritt: die Engine fragt 1 m ueber den Fuessen. Wer schon drinsteckt, darf hinaus.
+        // Samus eigener Schritt: die Engine fragt 1 m ueber den Fuessen. Wer schon drinsteckt, darf hinaus.
         const luft = story.figurInLuft && story.figurInLuft() ? SPRUNG : 0;
         // Fusshoehe: die hoehere von "da, wo er steht" und "Boden dort". An einer Kante (Steg) liegt der Boden dahinter
         // tief im Wasser – von dort gesehen waere der Traeger unter dem Steg eine Wand, und er bliebe oben haengen
@@ -327,20 +456,38 @@ function hookAussen(){
         const fuss = Math.max(y - 1, von.y) + luft;
         const t = tiefe(x, z, fuss, FIGUR.h, FIGUR.r, FIGUR.stufe);
         if(t > 0 && t > tiefe(von.x, von.z, Math.max(evaFootY(von.x, von.z), von.y) + luft, FIGUR.h, FIGUR.r, FIGUR.stufe) + 1e-6) return true;
+        // Tiere: nicht hindurch, wer drinsteckt (Tier lief in ihn hinein), darf hinaus
+        const tt = tierTiefe(x, z, fuss, FIGUR.r);
+        if(tt > 0 && tt > tierTiefe(von.x, von.z, fuss, FIGUR.r) + 1e-6) return true;
       } else if(tiefe(x, z, y - 1, FIGUR.h, FIGUR.r) > 0) return true;     // alle anderen (Kamera, Engine): Saeule um y
     }
     return hitsOrig.apply(this, arguments);
   };
-  // Kenjis eigener Schritt (schrittVon): waehrend die Engine ihn bewegt; in der Luft zaehlen die Fuesse hoeher
+  // Samus eigener Schritt (schrittVon): waehrend die Engine ihn bewegt; in der Luft zaehlen die Fuesse hoeher
   const evaOrig = updateEva;
   updateEva = function(){ schritt = true; try { return evaOrig.apply(this, arguments); } finally { schritt = false; } };
   story.schrittVon = () => (schritt && eva) ? eva.group.position : null;
   story.figurInLuft = () => !!(eva && !eva.onGround);
+  // Mond und Mars: die Engine fragt dort fuer Samus Schritte nur evaSolid (hitsBuilding gilt nur auf der Erde) – das
+  // eigene Fahrzeug ist dort trotzdem eine Grenze (Live-Wunsch 18.10.2026). Nur fuer Samus Schritt, wer drinsteckt, darf hinaus.
+  const solidOrig = evaSolid;
+  evaSolid = function(x, z){
+    const r = solidOrig.apply(this, arguments);
+    if(!r || locale === 'earth' || locale === 'space' || !schritt || !eva) return r;
+    const von = eva.group.position, fuss = von.y;
+    if(eigen.d && !eigen.d.aus){
+      const t = tiefe(x, z, fuss, FIGUR.h, FIGUR.r, FIGUR.stufe);
+      if(t > 0 && t > tiefe(von.x, von.z, fuss, FIGUR.h, FIGUR.r, FIGUR.stufe) + 1e-6) return false;
+    }
+    // Tiere / Aliens auf Mond und Mars (story.tierQuelleOrt)
+    const tt = tierTiefe(x, z, fuss, FIGUR.r);
+    return !(tt > 0 && tt > tierTiefe(von.x, von.z, fuss, FIGUR.r) + 1e-6);
+  };
   // Zaehler je Bild (bewegliche Grenzen)
   const loopOrig = loop;
   loop = function(){ story.updateObjekte(); return loopOrig.apply(this, arguments); };
 }
 let schritt = false;
 const startVorher = window.STORY_START;
-window.STORY_START = function(){ hookAussen(); if(startVorher) return startVorher.apply(this, arguments); };
+window.STORY_START = function(){ hookAussen(); hookBodenGenau(); if(startVorher) return startVorher.apply(this, arguments); };
 })();

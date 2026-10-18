@@ -20,22 +20,13 @@ const UBOOT1 = { x: FEST.x - 100, z: 0, rot: Math.PI / 2 };   // U-Boot draussen
 const XWING1 = { x: FEST.x + 32, z: 75, yaw: Math.PI / 2 };   // X-Wing auf dem kleinen Parkplatz am Strand, Nase zum Meer
 const PARK1  = { x: XWING1.x, z: XWING1.z, b: 26, l: 26 };
 const SCHULE = { x: 30, z: 0, yaw: Math.PI / 2, B: 32, T: 14 };   // Tuer zum Meer (-x)
-const START1 = { x: SCHULE.x - SCHULE.T / 2 - 1.5, z: 0, yaw: Math.PI / 2 };   // Schultuer, Kenji schaut aufs Meer
+const START1 = { x: SCHULE.x - SCHULE.T / 2 - 1.5, z: 0, yaw: Math.PI / 2 };   // Schultuer, Samu schaut aufs Meer
 const ARIANE = { x: 75, z: -62 };                             // schraeg hinter der Schule
 const STADT  = { x0: 110, x1: 430, z0: -420, z1: 420 };
 story.e1 = { FEST, RING1, UBOOT1, XWING1, SCHULE, START1, ARIANE, festland };
 
-// ---- Kollision: Schule, Stadt, Ariane (Kenji laeuft nicht hindurch; Flieger stossen dagegen) -----------------------
-const feste = [];                                              // { x, z, hx, hz, h, rot }
-function trifftFest(x, y, z){
-  for(const f of feste){
-    if(y > ISLAND_Y + f.h) continue;
-    const dx = x - f.x, dz = z - f.z, c = Math.cos(f.rot), s = Math.sin(f.rot);
-    const lx = dx * c - dz * s, lz = dx * s + dz * c;          // in Gebaeude-Achsen
-    if(Math.abs(lx) < f.hx && Math.abs(lz) < f.hz) return true;
-  }
-  return false;
-}
+// ---- Kollision: Schule, Stadt, Ariane, Nadelbaeume ueber den Objekt-Katalog (objekte.js, 16.10.2026) – die eigene
+// Rechteck-Liste ist weg. Samu laeuft nicht hindurch, Flieger stossen dagegen (die Katalog-Huelle um hitsBuilding).
 
 // ---- Welt bauen ----------------------------------------------------------------------------------------------
 const welt = { gebaut: false, uboot: null, xwing: null, ariane: null };
@@ -46,7 +37,7 @@ function baueWelt(){
   baueParkplatz(w);
   baueNadelbaeume(w);
   baueStadt(w);
-  feste.push({ x: SCHULE.x, z: SCHULE.z, hx: SCHULE.T / 2 + 0.3, hz: SCHULE.B / 2 + 0.3, h: 10, rot: 0 });   // Schule (quer zum Meer)
+  // Schule: Grenze aus dem Katalog, sobald sie steht (story.schule, baut story.js introVorbereiten) – siehe stelleModelle
 }
 // Strand etwas dunkler als in Fukuoka (eigenes Material, Live-Wunsch), Wiese mit der Engine-Graskachel
 function baueBoden(w){
@@ -84,13 +75,15 @@ function baueNadelbaeume(w){
     sc.set(1, h * 0.2, 1); ps.set(x, ISLAND_Y, z); m4.compose(ps, q, sc); st.setMatrixAt(ns++, m4);
   }
   inst.forEach((m, k) => { m.count = n[k]; m.frustumCulled = false; w.add(m); }); st.count = ns; st.frustumCulled = false; w.add(st);
+  // Grenze (Live-Wunsch 16.10.2026, objekte.js): der Stamm, etwas dicker (0,5 m) – unter der Krone kommt man nicht durch,
+  // die Krone selbst sperrt nicht (wie die Palmen im Geheimland). Die Kronen sind Deko.
+  inst.forEach(m => { m.userData.deko = true; });
+  if(story.instanzen) story.instanzen(st, { welt: 1, form: 'kreis', typ: 'nadelbaum', box: new THREE.Box3(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1, 0.5)) });
 }
 // Stadt hinter der Schule: Raster wie in Fukuoka, zur Schule hin niedriger, keine Gleise
+// Live-Wunsch 16.10.2026: Haeuser im Stil der Region aus dem Katalog (haeuser.js: 'deutsch', 'turm') – mit Grenze in
+// ihrer echten Form (objekte.js), Tuer zum Meer (-x)
 function baueStadt(w){
-  const box = new THREE.BoxGeometry(1, 1, 1), kegel = new THREE.ConeGeometry(0.75, 1, 4);
-  const wand = [0xe6dccb, 0xd5c2a2, 0xcfdbe6, 0xeed3c2, 0xc0c7ce].map(c => new THREE.MeshLambertMaterial({ color: c }));
-  const dach = [0x5f6068, 0x3d4f66, 0x8a5a3a, 0xa83c2e].map(c => new THREE.MeshLambertMaterial({ color: c }));
-  const turm = [0x9aa7b4, 0x6f7f8f, 0xc9d2da, 0x8fa3b8].map(c => new THREE.MeshLambertMaterial({ color: c }));
   let sd = 3131; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
   const RASTER = 34;
   for(let x = STADT.x0; x < STADT.x1; x += RASTER) for(let z = STADT.z0; z < STADT.z1; z += RASTER){
@@ -100,10 +93,7 @@ function baueStadt(w){
     const tief = (x - STADT.x0) / (STADT.x1 - STADT.x0), hoch = rnd() < 0.06 + tief * 0.3;
     const b = hoch ? 14 + rnd() * 8 : 9 + rnd() * 7, t = hoch ? 14 + rnd() * 8 : 9 + rnd() * 7;
     const h = hoch ? 28 + rnd() * (35 + tief * 45) : 5 + rnd() * 7;
-    const k = new THREE.Mesh(box, hoch ? turm[Math.floor(rnd() * turm.length)] : wand[Math.floor(rnd() * wand.length)]);
-    k.scale.set(b, h, t); k.position.set(cx, ISLAND_Y + h / 2, cz); w.add(k);
-    if(!hoch){ const d = new THREE.Mesh(kegel, dach[Math.floor(rnd() * dach.length)]); d.scale.set(Math.max(b, t), 3, Math.max(b, t)); d.rotation.y = Math.PI / 4; d.position.set(cx, ISLAND_Y + h + 1.5, cz); w.add(d); }
-    feste.push({ x: cx, z: cz, hx: b / 2 + 0.3, hz: t / 2 + 0.3, h: h + (hoch ? 0 : 3), rot: 0 });
+    story.setze('haus', 1, { x: cx, z: cz, y: ISLAND_Y, dreh: -Math.PI / 2, stil: hoch ? 'turm' : 'deutsch', b, t, h, seed: Math.floor(rnd() * 1e6), fest: true });
   }
 }
 // Modelle aus den Engine-Vorlagen, sobald sie geladen sind (U-Boot, X-Wing geparkt, Ariane mit Rampe)
@@ -112,12 +102,14 @@ function stelleModelle(){
   if(!welt.uboot && typeof shipTemplates !== 'undefined' && shipTemplates.sub && !isSub()){
     const o = shipTemplates.sub.clone(true); o.position.set(UBOOT1.x, 0, UBOOT1.z); o.rotation.y = UBOOT1.rot;
     o.userData.fremd = true; w.add(o); welt.uboot = o;
+    if(story.ding) story.ding(o, { welt: 1, typ: 'uboot', nurZuFuss: true });       // Grenze (18.10.2026): vom Strand aus nicht hindurch
   }
   if(welt.uboot) welt.uboot.visible = !isSub();
+  if(!welt.schuleDing && story.schule && story.ding){ welt.schuleDing = story.ding(story.schule, { welt: 1, typ: 'schule' }); }
   if(!welt.ariane && typeof rocketTemplate !== 'undefined' && rocketTemplate && padTemplate){
     const g = new THREE.Group(); g.add(padTemplate.clone(true)); const r = rocketTemplate.clone(true); g.add(r);
     g.position.set(ARIANE.x, ISLAND_Y, ARIANE.z); g.userData.fremd = true; w.add(g); welt.ariane = g;
-    feste.push({ x: ARIANE.x, z: ARIANE.z, hx: 7, hz: 7, h: 62, rot: 0 });
+    if(story.ding) story.ding(g, { welt: 1, typ: 'ariane' });     // Grenze in der echten Form (Rampe + Rakete)
   }
 }
 
@@ -141,9 +133,9 @@ function hookE1(){
   const bedOrig = seabedY;
   seabedY = function(x, z, islands){ if(hier() && !islands) return bedOrig.call(this, x, z, [FEST_MX, FEST_MZ, FEST.R + 20]); return bedOrig.apply(this, arguments); };
   collectSeabedIslands = function(){ const r = sbIslOrig.apply(this, arguments); if(hier()){ _sbIslands.length = 0; _sbIslands.push(FEST_MX, FEST_MZ, FEST.R + 20); } return r; };
-  // Gebaeude: Schule, Stadt, Ariane (Engine-Inselhaeuser gibt es keine)
+  // Gebaeude: keine Engine-Inselhaeuser (die eigenen Grenzen kommen aus dem Katalog, objekte.js)
   const hitsOrig = hitsBuilding;
-  hitsBuilding = function(x, y, z){ if(hier()) return trifftFest(x, y, z); return hitsOrig.apply(this, arguments); };
+  hitsBuilding = function(x, y, z){ if(hier()) return false; return hitsOrig.apply(this, arguments); };
   // U-Boot-Liegeplatz der Engine = UBOOT1 (Einstieg ueber den Ring nutzt harborSubLocal(0, 0))
   const subOrig = harborSubLocal;
   harborSubLocal = function(cx, cz){ if(e1() && cx === 0 && cz === 0){ const i = islandInfo(0, 0); return { x: UBOOT1.x - i.wx, z: UBOOT1.z - i.wz, rot: UBOOT1.rot }; } return subOrig.apply(this, arguments); };

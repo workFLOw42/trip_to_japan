@@ -1,7 +1,7 @@
 // Trip to Japan – Etappe 6: Japan (Tokio) mit dem Fuji. Am Ende geht es nach Fukuoka (Strand, Ziel), Globus mit 🌊.
 // Laedt nach etappe5b.js, vor der Engine. Aktiv erst, wenn story.etappe === 6.
 // Welt: die Startinsel der Engine (Zelle 0,0) als Stadt. Auf der einen Seite die Startbahn mit dem Alpha Jet, auf der
-// anderen ein Bahnhof mit dem Shinkansen (Einstieg ueber einen Ring; 6a folgt -> vorerst nur ein Hinweis). Kenji schaut
+// anderen ein Bahnhof mit dem Shinkansen (Einstieg ueber einen Ring; 6a folgt -> vorerst nur ein Hinweis). Samu schaut
 // nach vorne (-z) zum Fuji: 2 km hoch, steht im Meer (Kegel geht direkt ins Wasser ueber). Hinter dem Fuji beginnt das
 // Festland: grosser Strand, dahinter eine Wiese mit Flugfeld (C-400 auf dem Vorfeld) und Bahnhof (Ziel von 6c),
 // Mini-Godzillas, Samurai und Moewen.
@@ -19,10 +19,10 @@ function hier(){ return e6() && locale === 'earth'; }
 // Startinsel (0,0), Radius 260, Startbahn 24 x 260 m laengs z (Engine). Alpha Jet am +z-Ende, Nase nach -z (zum Fuji).
 const RW_HALB = 130;
 const ALPHA = { x: 0, z: RW_HALB - 20, yaw: 0 };
-// Bahnhof am Westufer (x < 0), Gleis laengs z; Kenji zwischen Bahnhof und Bahn, Blick nach -z (zum Fuji).
+// Bahnhof am Westufer (x < 0), Gleis laengs z; Samu zwischen Bahnhof und Bahn, Blick nach -z (zum Fuji).
 const BAHNHOF = { x: -120, z: 20, laenge: 110 };       // Bahnsteigmitte, Gleis bei x = BAHNHOF.x - 7
 const RING6 = { x: BAHNHOF.x + 12, z: BAHNHOF.z };     // Einstieg Shinkansen: auf der Wiese vor dem Bahnsteig (Bahnsteig bis x + 5)
-const START6 = { x: -55, z: 90, yaw: 0.2 };            // Kenji: Bahnhof links, Alpha rechts, Fuji voraus (leicht nach rechts zur Bahnmitte)
+const START6 = { x: -55, z: 90, yaw: 0.2 };            // Samu: Bahnhof links, Alpha rechts, Fuji voraus (leicht nach rechts zur Bahnmitte)
 // Fuji im Meer, 2 km hoch (Live-Wunsch). Fuss 3,4 km Radius: so liegt der Hang flach genug fuer die Ansicht von der Stadt
 // und reicht bis ins Wasser. Kein eigener Fels-Boden: der Kegel steht auf dem Meeresgrund, das Meer laeuft dran.
 // Live-Test: bei 7,5 km verschwand er im Nebel (Engine: fog.far 3 km) -> 4,6 km weit, eigenes Material ohne Nebel
@@ -41,17 +41,17 @@ const FLUGFELD = { x: 105, z: -11000, laenge: 1000, breite: 30 }; // Landen = Et
 // Vorfeld 15..75, Bahn 90..120, Bahnhof ~145, Stadt 175..460.
 const FEST = { x: -60, z: FLUGFELD.z, strand: 60, R: 6000 };
 const BAHNHOF2 = { x: FLUGFELD.x + 45, z: FLUGFELD.z, laenge: 110 };   // Bahnsteig oestlich der Bahn, Gleis laengs z
-const STRANDPLATZ = { x: FEST.x + 14, z: FLUGFELD.z + 250, yaw: Math.PI / 2 };    // Kenji nach der Etappe, Blick aufs Meer (-x)
-// Sehenswuerdigkeiten vor dem Strand (Vorbild Sakurai-Futamigaura, Itoshima): Torii im flachen Wasser vor Kenji, die zwei
+const STRANDPLATZ = { x: FEST.x + 14, z: FLUGFELD.z + 250, yaw: Math.PI / 2 };    // Samu nach der Etappe, Blick aufs Meer (-x)
+// Sehenswuerdigkeiten vor dem Strand (Vorbild Sakurai-Futamigaura, Itoshima): Torii im flachen Wasser vor Samu, die zwei
 // Felsen der Meoto-Iwa weiter draussen, leicht nach rechts versetzt (wie auf dem Foto). Kueste an der Stelle: x ~ FEST.x.
-const TORII = { x: FEST.x - 12, z: STRANDPLATZ.z + 4 };       // direkt vor Kenji im flachen Wasser (Live-Wunsch: nicht weit laufen)
+const TORII = { x: FEST.x - 12, z: STRANDPLATZ.z + 4 };       // direkt vor Samu im flachen Wasser (Live-Wunsch: nicht weit laufen)
 const SURF = { x: FEST.x + 6, z: STRANDPLATZ.z - 11 };         // Surfbrett rechts neben dem Torii im Sand (Blick -x: rechts = -z)
 const MEOTO = { x: FEST.x - 230, z: STRANDPLATZ.z - 120 };    // rechts dahinter (Blick -x: rechts = -z)
 // Felsen (Versatz quer dz, Hoehe h, Breite b) und Seil: beim Surfen feste Hindernisse (finale.js). Zwischen den Sockeln bleiben
 // ~18 m frei; das Seil haengt in der Mitte so tief (durch = m unter der Verbindungslinie), dass man es ueberspringen kann
 const MEOTO_FELS = [{ dz: -26, h: 16, b: 13 }, { dz: 24, h: 22, b: 16 }], MEOTO_SEIL = { durch: 8.5, kurve: null, g: null };
-const FEUER = { x: FEST.x + 30, z: STRANDPLATZ.z + 90 };       // Lagerfeuer auf einem freien Strandabschnitt links von Kenji
-const SAMURAI_GRUPPE = { x: FEST.x + 28, z: STRANDPLATZ.z - 92 };   // stehende Samurai, freie Flaeche rechts von Kenji
+const FEUER = { x: FEST.x + 30, z: STRANDPLATZ.z + 90 };       // Lagerfeuer auf einem freien Strandabschnitt links von Samu
+const SAMURAI_GRUPPE = { x: FEST.x + 28, z: STRANDPLATZ.z - 92 };   // stehende Samurai, freie Flaeche rechts von Samu
 story.e6 = { get VORFELD(){ return VORFELD; }, MEOTO, MEOTO_FELS, MEOTO_SEIL, SURF, ALPHA, BAHNHOF, RING6, START6, FUJI, ZIEL6, FEST, FLUGFELD, BAHNHOF2, STRANDPLATZ, FEUER, SAMURAI_GRUPPE, get STADT(){ return STADT; } };
 
 // Fuji-Hoehe an (x, z): Kegel nach dem vereinfachten Modell (fuji_glb.js, Hoehe 1 bei Radius 0, 0 bei Radius 1). Fuer
@@ -86,20 +86,18 @@ function baueWelt(){
   baueFuji(w);
   baueFestland(w);
 }
-// Stadt: Haeuser und ein paar Tuerme rund um die Bahn, frei: Bahn (+-20 m), Bahnhof, Kenjis Weg, Ring, Alpha-Platz
+// Stadt: Haeuser und ein paar Tuerme rund um die Bahn, frei: Bahn (+-20 m), Bahnhof, Samus Weg, Ring, Alpha-Platz
 const stadtHaeuser = [];
+// Live-Wunsch 16.10.2026: Haeuser im Stil der Region aus dem Katalog (haeuser.js: 'japan', 'turm'), mit Grenze in ihrer
+// echten Form. stadtHaeuser bleibt fuer die Platzsuche und als Hindernis fuer Flieger (hitsBuilding).
 function baueStadt(w){
-  const box = new THREE.BoxGeometry(1, 1, 1), kegel = new THREE.ConeGeometry(0.75, 1, 4);
-  const wand = [0xe8ddc8, 0xd8c0a0, 0xcfe0ec, 0xf0d0c0, 0xbfc7cf].map(c => new THREE.MeshLambertMaterial({ color: c }));
-  const dach = [0x6a6a72, 0x3d4f66, 0x8a5a3a, 0xb04030].map(c => new THREE.MeshLambertMaterial({ color: c }));
-  const turm = [0x9aa7b4, 0x6f7f8f, 0xc9d2da].map(c => new THREE.MeshLambertMaterial({ color: c }));
   const frei = (x, z, r) => {
     if(Math.hypot(x, z) > 235 - r) return false;                        // auf der Insel, nicht am Strand
     if(Math.abs(x) < 24 + r && Math.abs(z) < RW_HALB + 30) return false;          // Startbahn
     if(Math.abs(x - BAHNHOF.x) < 26 + r && Math.abs(z - BAHNHOF.z) < BAHNHOF.laenge / 2 + 20) return false;   // Bahnhof
     if(Math.abs(x - (BAHNHOF.x - 7)) < 8 + r && Math.abs(z) < RING_R) return false;                             // Gleis gerade
     if(Math.abs(Math.hypot(x, z) - RING_R) < 8 + r) return false;                                                // Ringgleis
-    if(Math.hypot(x - START6.x, z - START6.z) < 30 + r) return false;            // Kenji
+    if(Math.hypot(x - START6.x, z - START6.z) < 30 + r) return false;            // Samu
     if(x > BAHNHOF.x && x < 0 && z > START6.z - 140 && z < START6.z + 10 && Math.abs(x - START6.x) < 18 + r) return false; // Blick nach vorn
     return !stadtHaeuser.some(h => Math.hypot(x - h.x, z - h.z) < h.r + r + 4);
   };
@@ -108,13 +106,10 @@ function baueStadt(w){
     const hoch = rnd() < 0.18, b = hoch ? 14 + rnd() * 8 : 8 + rnd() * 6, t = hoch ? 14 + rnd() * 8 : 8 + rnd() * 6;
     const r = Math.max(b, t) / 2;
     if(!frei(x, z, r)) continue;
-    const h = hoch ? 30 + rnd() * 50 : 5 + rnd() * 6;
-    const g = new THREE.Group();
-    const k = new THREE.Mesh(box, hoch ? turm[Math.floor(rnd() * turm.length)] : wand[Math.floor(rnd() * wand.length)]);
-    k.scale.set(b, h, t); k.position.y = h / 2; g.add(k);
-    if(!hoch){ const d = new THREE.Mesh(kegel, dach[Math.floor(rnd() * dach.length)]); d.scale.set(Math.max(b, t), 3, Math.max(b, t)); d.rotation.y = Math.PI / 4; d.position.y = h + 1.5; g.add(d); }
-    g.position.set(x, ISLAND_Y, z); g.rotation.y = (rnd() - 0.5) * 0.4;
-    w.add(g); stadtHaeuser.push({ x, z, r: r + 0.5, h: h + (hoch ? 0 : 3) });
+    const h = hoch ? 30 + rnd() * 50 : 4 + rnd() * 4;
+    // Tuer zur Inselmitte (dort laufen Bahn und Wege), leicht verdreht
+    story.setze('haus', 6, { x, z, y: ISLAND_Y, dreh: Math.atan2(-x, -z) + (rnd() - 0.5) * 0.4, stil: hoch ? 'turm' : 'japan', b, t, h, seed: Math.floor(rnd() * 1e6), fest: true });
+    stadtHaeuser.push({ x, z, r: r + 0.5, h: h + (hoch ? 0 : 3) });
   }
 }
 // Bahnhof: Bahnsteig, Dach auf Stuetzen, Gleis; der Shinkansen (zug_glb.js: Triebwagen vorn + Mittelwagen + Triebwagen
@@ -206,6 +201,7 @@ function ladeZug(w, gx){
     zug.rotation.y = Math.PI / 2;                                       // +x (Nase) -> -z (zum Fuji)
     zug.position.set(gx, ISLAND_Y + 0.55 + 0.25 * ZUG_K, BAHNHOF.z);   // Unterkante (-0,25) auf die Schienen
     w.add(zug); welt.zug = zug;
+    if(story.ding) story.ding(zug, { welt: 6, typ: 'shinkansen' });   // Grenze: Samu laeuft nicht durch den Zug (18.10.2026)
   }));
 }
 story.e6zugVorlage = () => welt.zug;                 // etappe6c.js: Kopie fuer die Fahrt
@@ -229,7 +225,7 @@ const FEST_MX = FEST.x + FEST.R, FEST_MZ = FEST.z;      // Mitte des grossen Kre
 function festland(x, z){ return Math.hypot(x - FEST_MX, z - FEST_MZ) < FEST.R + 20; }   // bis zum Ende des Sands (Ring bis R + 20)
 function aufWiese(x, z){ return Math.hypot(x - FEST_MX, z - FEST_MZ) < FEST.R - FEST.strand; }
 function aufBahn(x, z){ return Math.abs(x - FLUGFELD.x) <= FLUGFELD.breite / 2 && Math.abs(z - FLUGFELD.z) <= FLUGFELD.laenge / 2; }
-const VORFELD = { x: FLUGFELD.x - 60, z: STRANDPLATZ.z - 20, b: 60, l: 80 };   // zwischen Strand und Bahn, auf Hoehe von Kenjis Platz
+const VORFELD = { x: FLUGFELD.x - 60, z: STRANDPLATZ.z - 20, b: 60, l: 80 };   // zwischen Strand und Bahn, auf Hoehe von Samus Platz
 const STADT = { x0: BAHNHOF2.x + 30, x1: BAHNHOF2.x + 320, z0: FLUGFELD.z - 450, z1: FLUGFELD.z + 450 };   // hinter dem Bahnhof
 STADT.riese = STADT.x0 + (STADT.x1 - STADT.x0) * 0.35;      // Laufschneise des Riesen-Godzillas (frei von Haeusern)
 // Tiere (tiere.js) kommen in die Gruppe g; frei = Wiese, nicht auf Bahn, Vorfeld, Bahnhof
@@ -289,6 +285,7 @@ function baueTorii(g){
   const nuki = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.62, SA * 2 + 1.2), weiss); nuki.position.set(0, H - 2.7, 0); T.add(nuki);
   T.position.set(TORII.x, -0.6, TORII.z);             // Fuesse im Wasser
   g.add(T);
+  if(story.ding) story.ding(T, { welt: 6, typ: 'torii' });       // Grenze: Saeulen und Gestell (objekte.js, 16.10.2026)
 }
 // Meoto-Iwa: zwei zerklueftete Felsen (gestreckte Ikosaeder, Grau-Braun), der linke etwas niedriger, dazwischen das
 // Shimenawa (dickes Strohseil, leicht durchhaengend) mit weissen Papierstreifen (Shide).
@@ -336,14 +333,19 @@ function ladeSurfbrett(g){
   }, (e) => console.warn('Surfbrett-GLB', e));
 }
 function surfNah(){ return !!(surf.ring && surf.ring.drin()); }
+// Y-Zeichen am Surfbrett (story.js updateHUD): nur, wenn man dort wirklich aufs Brett kann (nicht bei "Außer Betrieb")
+story.surfNah6 = () => e6() && story.phase === 'ankunft' && surfNah() && !!story.finaleSurfen && (story.freiesSpiel || !(story.finaleStufe && story.finaleStufe() >= 5));
 // Stadt hinter dem Bahnhof (Fukuoka): Haeuser mit Dach, dazwischen Hochhaeuser, Strassenraster frei, zum Bahnhof hin
 // niedriger. Kollision ueber stadtHaeuser (dieselbe Liste wie die Stadt in Tokio, hitsBuilding).
 function baueStadt2(g){
-  const box = new THREE.BoxGeometry(1, 1, 1), kegel = new THREE.ConeGeometry(0.75, 1, 4);
-  const wand = [0xece2cf, 0xd9c6a8, 0xd4e2ec, 0xf2d6c6, 0xc4cbd2].map(c => new THREE.MeshLambertMaterial({ color: c }));
-  const dach = [0x5f6068, 0x3d4f66, 0x8a5a3a, 0xa83c2e].map(c => new THREE.MeshLambertMaterial({ color: c }));
-  const turm = [0x9aa7b4, 0x6f7f8f, 0xc9d2da, 0x8fa3b8].map(c => new THREE.MeshLambertMaterial({ color: c }));
   let sd = 4242; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  // Live-Wunsch 18.10.2026 ("landestypisch, zumindest die sichtbaren"): drei Pagoden in der ersten Reihe hinter dem
+  // Bahnhof, vom Strand aus ueber den Daechern zu sehen (haeuser.js 'pagode')
+  const PAGODEN = [{ z: STRANDPLATZ.z - 40 }, { z: STRANDPLATZ.z + 150 }, { z: STRANDPLATZ.z - 260 }].map(p => ({ x: STADT.x0 + 20, z: p.z }));
+  PAGODEN.forEach((P, i) => {
+    story.setze('haus', 6, { x: P.x, z: P.z, y: ISLAND_Y, dreh: -Math.PI / 2, stil: 'pagode', b: 9, t: 9, h: 24, seed: 900 + i, fest: true, in: g });
+    stadtHaeuser.push({ x: P.x, z: P.z, r: 7, h: 32 });
+  });
   const RASTER = 34;                                                  // Block 34 m, Strassen dazwischen frei
   for(let x = STADT.x0; x < STADT.x1; x += RASTER) for(let z = STADT.z0; z < STADT.z1; z += RASTER){
     if(rnd() < 0.12) continue;                                         // ein paar Luecken (Plaetze)
@@ -353,15 +355,15 @@ function baueStadt2(g){
     const tief = (x - STADT.x0) / (STADT.x1 - STADT.x0);               // 0 am Bahnhof .. 1 hinten
     const hoch = rnd() < 0.08 + tief * 0.35;
     const b = hoch ? 14 + rnd() * 8 : 9 + rnd() * 7, t = hoch ? 14 + rnd() * 8 : 9 + rnd() * 7;
-    const h = hoch ? 30 + rnd() * (40 + tief * 50) : 5 + rnd() * 7;
+    const h = hoch ? 30 + rnd() * (40 + tief * 50) : 4 + rnd() * 4;
     const cx = x + RASTER / 2 + (rnd() - 0.5) * 4, cz = z + RASTER / 2 + (rnd() - 0.5) * 4;
-    const k = new THREE.Mesh(box, hoch ? turm[Math.floor(rnd() * turm.length)] : wand[Math.floor(rnd() * wand.length)]);
-    k.scale.set(b, h, t); k.position.set(cx, ISLAND_Y + h / 2, cz); g.add(k);
-    if(!hoch){ const d = new THREE.Mesh(kegel, dach[Math.floor(rnd() * dach.length)]); d.scale.set(Math.max(b, t), 3, Math.max(b, t)); d.rotation.y = Math.PI / 4; d.position.set(cx, ISLAND_Y + h + 1.5, cz); g.add(d); }
+    if(PAGODEN.some(P => Math.abs(cx - P.x) < 24 && Math.abs(cz - P.z) < 24)) continue;   // Platz um die Pagoden
+    // Tuer zum Bahnhof/Strand (-x)
+    story.setze('haus', 6, { x: cx, z: cz, y: ISLAND_Y, dreh: -Math.PI / 2, stil: hoch ? 'turm' : 'japan', b, t, h, seed: Math.floor(rnd() * 1e6), fest: true, in: g });
     stadtHaeuser.push({ x: cx, z: cz, r: Math.max(b, t) / 2 + 0.5, h: h + (hoch ? 0 : 3) });
   }
 }
-// Palmen am Strand links und rechts von Kenjis Platz (nicht dort, wo er herumlaeuft, nicht am Surfbrett, nicht im Wasser),
+// Palmen am Strand links und rechts von Samus Platz (nicht dort, wo er herumlaeuft, nicht am Surfbrett, nicht im Wasser),
 // dasselbe Modell wie am Fluss in Etappe 3 (story.palmenGeo), drei InstancedMeshes
 function baueStrandPalmen(g){
   if(!story.palmenGeo) return;
@@ -374,7 +376,7 @@ function baueStrandPalmen(g){
   let nS = 0; const nK = [0, 0];
   for(let i = 0; i < N * 3 && nS < N; i++){
     const z = STRANDPLATZ.z + (rnd() - 0.5) * 1600, x = FEST.x + 6 + rnd() * (FEST.strand - 10);
-    if(Math.abs(z - STRANDPLATZ.z) < 55) continue;                     // Kenjis Platz, Torii, Surfbrett, Tiere frei
+    if(Math.abs(z - STRANDPLATZ.z) < 55) continue;                     // Samus Platz, Torii, Surfbrett, Tiere frei
     if(Math.hypot(x - FEUER.x, z - FEUER.z) < 22) continue;              // Lagerfeuer frei
     if(Math.hypot(x - SAMURAI_GRUPPE.x, z - SAMURAI_GRUPPE.z) < 20) continue;   // Samurai-Gruppe frei
     if(!festland(x, z) || aufWiese(x, z) && Math.hypot(x - VORFELD.x, z - VORFELD.z) < 60) continue;
@@ -416,6 +418,7 @@ function stelleC400(){
   const g = new THREE.Group(), m = glbTemplates.Transall.clone(true); g.add(m);
   g.position.set(VORFELD.x, ISLAND_Y, VORFELD.z); g.rotation.y = Math.PI / 2;    // auf dem Vorfeld, Nase zur Bahn (+x)
   g.userData.fremd = true; story.welt(6).add(g); welt.c400 = g;
+  if(story.ding) story.ding(g, { welt: 6, typ: 'c400' });        // Grenze (objekte.js, 16.10.2026)
 }
 story.e6c400 = () => welt.c400;
 story.e6strand = () => ({ wx: FLUGFELD.x, wz: FLUGFELD.z, radius: FLUGFELD.laenge / 2 + 50 });   // 6b: Ziel der Landung
@@ -437,6 +440,7 @@ function ladeParkAlpha(){
   m.rotation.y = (typeof TRAFFIC_ROT !== 'undefined' && TRAFFIC_ROT.AlphaJet) || Math.PI / 2; g.add(m);
   g.position.set(ALPHA.x, ISLAND_Y, ALPHA.z); g.rotation.y = ALPHA.yaw;
   g.userData.fremd = true; story.welt(6).add(g); park.obj = g;
+  if(story.ding) park.ding = story.ding(g, { welt: 6, typ: 'alphajet' });   // Grenze; beim Einsteigen aus (park.ding.aus)
 }
 function alphaNah(){ return !!(e6() && !story.phase && eva && Math.hypot(eva.group.position.x - ALPHA.x, eva.group.position.z - ALPHA.z) < 12); }
 function ringNah(){ return !!(e6() && !story.phase && welt.ring && welt.ring.drin()); }
@@ -531,7 +535,7 @@ function nachSequenz(ok){
   if(!flug.aktiv) return;
   // Live-Wunsch: Startsequenz nicht geschafft -> 7 Tage, Gefaengnis (wer ohne Sequenz losfliegt, wird festgenommen)
   // Ansagen wie beim X-Wing mit der Startsequenz-Stimme (weiblich, SPRECHTEXTE_2.md)
-  if(!ok){ story.sprich(['Die Startsequenz hat nicht geklappt – ohne Startsequenz darf hier keiner fliegen.', 'Die Flughafenpolizei nimmt Kenji fest. Eine Woche Gefängnis.'],
+  if(!ok){ story.sprich(['Die Startsequenz hat nicht geklappt – ohne Startsequenz darf hier keiner fliegen.', 'Die Flughafenpolizei nimmt Samu fest. Eine Woche Gefängnis.'],
     () => story.spaeter(1, () => flugEnde(false, 'Startsequenz verpasst, Gefängnis'))); return; }
   story.sprich(['Startsequenz abgeschlossen. Guten Flug!']);
   flug.laeuft = true;
@@ -562,7 +566,7 @@ function flugEnde(ok, wie){
   story.e6ankunft(ok ? 1 : 7, wie, ok);                 // ueber story: das Reiselog (abspann.js) haengt sich ein
 }
 story.e6flugEnde = flugEnde;
-// Ende der Etappe (Live-Wunsch 09.10.2026): egal ob geschafft oder nicht, Schwarzblende mit den Tagen, danach steht Kenji
+// Ende der Etappe (Live-Wunsch 09.10.2026): egal ob geschafft oder nicht, Schwarzblende mit den Tagen, danach steht Samu
 // am Strand neben dem Flugfeld (geschafft: der Alpha steht am Ende der Bahn). 6c (Shinkansen) endet hier genauso.
 // Die Reise geht spaeter von hier weiter (Etappe 7 / Finale).
 function ankunft(tage, wie, alphaDa){
@@ -580,7 +584,7 @@ function ankunft(tage, wie, alphaDa){
     story.kunstflugAus = false;
     state.crashed = false; state.crashTimer = 0; state.falling = false; state.ejected = false;
     if(eva) clearEva();
-    // Flieger am Ende der Bahn (nur sichtbar, wenn er heil gelandet ist), Kenji steigt dort aus und steht dann am Strand
+    // Flieger am Ende der Bahn (nur sichtbar, wenn er heil gelandet ist), Samu steigt dort aus und steht dann am Strand
     state.pos.set(FLUGFELD.x, ISLAND_Y, FLUGFELD.z + FLUGFELD.laenge / 2 - 60);
     state.quat.setFromEuler(new THREE.Euler(0, 0, 0, 'YXZ'));
     state.vel.set(0, 0, 0); state.throttle = 0; state.onGround = true;
@@ -594,6 +598,7 @@ function ankunft(tage, wie, alphaDa){
     }
     snapCamera();
     story.phase = 'ankunft';
+    if(story.musikNeu) story.musikNeu(6);                            // am Strand wieder "Ancient Japan"
     if(!story.freiesSpiel) story.spaeter(4, () => { story.hinweis('Angekommen am Strand neben dem Fuji – die Reise geht bald weiter …'); story.spaeter(10, () => story.hinweis('')); });
   });
 }
@@ -685,7 +690,9 @@ function hookE6(){
 }
 
 function updateE6(dt){
-  story.etappenMusik(6, window.MUSIK_SND && window.MUSIK_SND.e6, dt || 0);
+  // Live-Befund 18.10.2026: 'Ancient Japan' beginnt sehr leise (die ersten 15 s ~1/3 so laut wie die anderen Stuecke, unter
+  // der Ankunftsansage praktisch unhoerbar) – am Anfang lauter, ab 15 s gleitend auf den normalen Pegel (0,12)
+  story.etappenMusik(6, window.MUSIK_SND && window.MUSIK_SND.e6, dt || 0, () => { const t = story.musikZeit ? story.musikZeit(6) : 0; return 0.12 * (t < 15 ? 2.8 : t < 25 ? 2.8 - 1.8 * (t - 15) / 10 : 1); });
   if(!e6()) return;
   ladeParkAlpha();
   if(park.obj) park.obj.visible = locale === 'earth' && story.phase !== 'alpha';

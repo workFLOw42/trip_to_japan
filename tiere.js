@@ -98,7 +98,7 @@ function updateFlieger(n, dt){
 }
 
 // ---- Sitzende Moewen, die auffliegen und wieder landen (uebernommen aus Spiel_JFG/insel.js, 16.10.2026) ----------
-// Ring-Billed Gull (sitzend, "Head Turn") + in Flight (Oregon State University Ecampus, CC-BY-4.0). Kommt Kenji zu nahe,
+// Ring-Billed Gull (sitzend, "Head Turn") + in Flight (Oregon State University Ecampus, CC-BY-4.0). Kommt Samu zu nahe,
 // wird aus der sitzenden die FLIEGENDE Moewe: sie steigt weg, zieht einen Bogen, fliegt zurueck und landet genau auf
 // ihrem Platz (dann wieder sitzend). Kommt er beim Anflug wieder zu nah, fliegt sie erneut auf. Fuer jede Etappe gleich:
 //   story.sitzMoewen(etappe, welt, gruppen, opt)
@@ -163,12 +163,19 @@ function moeweFliegt(o, dt){
   const f = o.flieg.k; f.position.copy(p); f.position.y += 0.15; f.rotation.set(neig, o.yaw, kipp, 'YXZ');
   if(o.flieg.mixer) o.flieg.mixer.update(dt * (o.weg === 'anflug' && o.v < 3 ? 0.7 : 1.3));
 }
+// Wer Moewen aufscheucht: Samu und alles aus story.scheuchQuellen (Funktionen -> { x, y, z } oder null, z. B. der Hund)
+story.scheuchQuellen = story.scheuchQuellen || [];
+function scheucher(){
+  const l = []; if(eva && eva.group && !eva.boat) l.push(eva.group.position);
+  for(const f of story.scheuchQuellen){ try { const q = f(); if(q) l.push(q); } catch(e){} }
+  return l;
+}
 function updateSitzer(n, dt){
   const liste = sitzer[n]; if(!liste) return;
-  const fig = eva && eva.group && !eva.boat ? eva.group.position : null, w = story.welt(n);
+  const wer = scheucher(), w = story.welt(n);
   for(const o of liste){
-    const nah = fig && Math.hypot(fig.x - o.k.position.x, fig.z - o.k.position.z) < SCHEU_R && Math.abs(fig.y - o.k.position.y) < 3;
-    if(nah && (!o.weg || o.weg === 'anflug')) moeweAuf(o, fig, w);
+    const fig = wer.find(q => Math.hypot(q.x - o.k.position.x, q.z - o.k.position.z) < SCHEU_R && Math.abs(q.y - o.k.position.y) < 3), nah = !!fig;
+    if(nah && (!o.weg || o.weg === 'anflug')){ moeweAuf(o, fig, w); if(story.moeweAufgeschreckt) story.moeweAufgeschreckt(fig); }   // z. B. der Hund bellt
     if(o.weg) moeweFliegt(o, dt);
     const fliegt = !!(o.weg && o.flieg);
     if(fliegt){ o.k.visible = false; sichtAnim(o.flieg, 0); }
@@ -258,7 +265,7 @@ function aufbau1(){
   const info = islandInfo(0, 0); if(!info) return false;
   const w = story.welt(1), i0 = story.intro && story.intro.start;
   const sx = i0 ? i0.x : info.wx, sz = i0 ? i0.z : info.wz;
-  // Festland (etappe1.js): Moewen ueber Strand und Meer vor Kenji, Hunde auf der Wiese bei der Schule
+  // Festland (etappe1.js): Moewen ueber Strand und Meer vor Samu, Hunde auf der Wiese bei der Schule
   const K = story.e1 && story.e1.FEST;
   story.moewenKreise(1, w, K ? [
     { x: K.x - 40, z: 0, r: 70, y: 24, n: 4 }, { x: sx, z: sz, r: 40, y: 18, n: 2 },
@@ -274,6 +281,13 @@ function aufbau1(){
                : [{ x: sx + 12, z: sz - 6, r: 6, n: 1 }, { x: sx - 10, z: sz - 14, r: 8, n: 2 }, { x: info.wx, z: info.wz, r: 60, n: 2 }],
     y: ISLAND_Y, frei: inselFrei,
   });
+  // Sitzende Moewen am Strand (Live-Wunsch 18.10.2026, wie am Kai in Etappe 4): fliegen auf, wenn Samu (oder der Hund)
+  // kommt, und landen wieder. Strand = x -60..0 (Kueste bei -60); Gruppen zwischen Schule, X-Wing und U-Boot-Ring
+  if(K) story.sitzMoewen(1, w, [
+    { x: K.x + 8, z: 20, n: 5 }, { x: K.x + 4, z: -22, n: 4 }, { x: K.x + 20, z: -60, n: 5 }, { x: K.x + 6, z: 110, n: 4 },
+    { x: K.x + 3, z: 45, n: 4, reihe: true, blick: -Math.PI / 2 }, { x: K.x + 3, z: -95, n: 5, reihe: true, blick: -Math.PI / 2 },
+    { x: K.x + 30, z: 8, n: 3 }, { x: K.x + 14, z: 160, n: 4 },
+  ], { seed: 61, frei: (x, z) => x > K.x + 1 && x < K.x + K.strand - 4 && inselFrei(x, z) });
   return true;
 }
 // Etappe 4: fliegende Moewen ueber Becken und Kai (die sitzenden stehen in etappe4.js)
@@ -289,7 +303,7 @@ function aufbau5(){
   const info = islandInfo(0, 0); if(!info) return false;
   const w = story.welt(5);
   const an = story.e5ankunft ? story.e5ankunft() : { x: info.wx + 60, z: info.wz };
-  const vorn = { x: -Math.sin(eva.yaw), z: -Math.cos(eva.yaw) };   // Kenjis Blick (Gesicht -Z)
+  const vorn = { x: -Math.sin(eva.yaw), z: -Math.cos(eva.yaw) };   // Samus Blick (Gesicht -Z)
   const rg = (story.ubootRingPlatz && story.ubootRingPlatz()) || an;
   story.moewenKreise(5, w, [
     { x: info.wx, z: info.wz, r: info.radius * 0.8, y: 30, n: 3 }, { x: an.x, z: an.z, r: 45, y: 17, n: 3 },
@@ -298,14 +312,22 @@ function aufbau5(){
   if(window.PANDA_GLB) story.bodenTiere(5, w, {
     name: 'panda', daten: window.PANDA_GLB, mass: 1.5, achse: 'z', kopf: 'z',   // Kopf auf +Z (C:\tmp\sfg\panda\t.png)
     tempo: 0.6,
-    // vor Kenji (wie die Kamele in Etappe 2): 12 m in seiner Blickrichtung, dazu zwei Gruppen seitlich
-    // vor Kenji (wie die Kamele in Etappe 2), dazu am Uferdorf beim U-Boot (Live-Wunsch 08.10.: "dort die Pandas")
+    // vor Samu (wie die Kamele in Etappe 2): 12 m in seiner Blickrichtung, dazu zwei Gruppen seitlich
+    // vor Samu (wie die Kamele in Etappe 2), dazu am Uferdorf beim U-Boot (Live-Wunsch 08.10.: "dort die Pandas")
     gruppen: [{ x: an.x + vorn.x * 12, z: an.z + vorn.z * 12, r: 4, n: 3 },
       { x: rg.x + (an.x - rg.x) * 0.15, z: rg.z + (an.z - rg.z) * 0.15, r: 8, n: 4 },
       { x: rg.x + (an.x - rg.x) * 0.35 + 20, z: rg.z + (an.z - rg.z) * 0.35, r: 8, n: 3 },
       { x: rg.x + (an.x - rg.x) * 0.35 - 20, z: rg.z + (an.z - rg.z) * 0.35, r: 6, n: 2 }],
     y: ISLAND_Y, frei: inselFrei,
   });
+  // Sitzende Moewen (Live-Wunsch 18.10.2026): am Strand beim Uferdorf/U-Boot-Ring und an der Sandkante bei Samus Ankunft
+  // – auf der Insel, nicht auf der Bahn, nicht in Haeusern (inselFrei), auf dem Strand (nicht im Wasser)
+  const sand = (x, z) => inselFrei(x, z) && !(story.e5dorf && story.e5dorf.haeuser.some(d => d.obj && Math.hypot(d.obj.position.x - x, d.obj.position.z - z) < 9));
+  story.sitzMoewen(5, w, [
+    { x: rg.x + 6, z: rg.z - 14, n: 5 }, { x: rg.x - 4, z: rg.z + 16, n: 4 }, { x: rg.x + 18, z: rg.z + 4, n: 4 },
+    { x: an.x + vorn.x * 25 + 10, z: an.z + vorn.z * 25, n: 4 }, { x: an.x - 14, z: an.z + 12, n: 3 },
+    { x: (rg.x + an.x) / 2, z: (rg.z + an.z) / 2 + 8, n: 5 },
+  ], { seed: 67, frei: sand });
   return true;
 }
 // ---- Moewen an jeder Insel (Live-Wunsch 08.10.2026) ------------------------------------------------------------
@@ -409,7 +431,7 @@ function aufbau6(){
     { x: info.wx, z: info.wz, r: info.radius * 0.8, y: 32, n: 3 }, { x: -60, z: 60, r: 45, y: 18, n: 3 },
     { x: info.wx - info.radius, z: info.wz, r: 70, y: 16, n: 2 }, { x: info.wx, z: info.wz - info.radius, r: 60, y: 22, n: 3 },
   ]);
-  // Live-Feedback: "keine Mini-Godzillas rumlaufen" -> auch in der Stadt, Gruppen auf der Wiese, eine direkt vor Kenji.
+  // Live-Feedback: "keine Mini-Godzillas rumlaufen" -> auch in der Stadt, Gruppen auf der Wiese, eine direkt vor Samu.
   // Nicht auf der Bahn (|x| < 30), nicht am Bahnhof, nicht in Haeusern (hitsBuilding kennt die Stadt).
   const frei = (x, z) => { if(!isOnLand(x, z) || Math.hypot(x, z) > 225) return false;
     if(Math.abs(x) < 30 && Math.abs(z) < 160) return false;
@@ -422,7 +444,7 @@ function aufbau6(){
       { x: 70, z: 80, r: 10, n: 4 }, { x: -150, z: -90, r: 12, n: 3 }],
     y: ISLAND_Y, frei,
   });
-  // Riesen-Godzilla: 60 m hoch, laeuft hinter Kenji (Kenji schaut nach -z) quer durch die Stadt, z ~ +200, zwischen
+  // Riesen-Godzilla: 60 m hoch, laeuft hinter Samu (Samu schaut nach -z) quer durch die Stadt, z ~ +200, zwischen
   // x -200 und +200 hin und her. Nur Kulisse (keine Kollision), Animation langsam wie ein schweres Tier.
   if(window.GODZILLA_GLB) vorlage('godzilla', window.GODZILLA_GLB, 1.0, 'y', null, (v) => {
     if(story.etappe !== 6) return;
@@ -435,7 +457,7 @@ function aufbau6(){
     const S = story.e6 && story.e6.STADT; if(S){
       const k2 = cloneSkinned(v.tpl); k2.scale.setScalar(130); w.add(k2);   // ueberragt die Tuerme (bis ~140 m, meist weniger)
       let m2 = null; if(v.clip){ m2 = new THREE.AnimationMixer(k2); m2.clipAction(v.clip).play(); m2.timeScale = 0.33; m2.setTime(1.3); }
-      riese2.o = { k: k2, mixer: m2, x: S.riese, z: (S.z0 + S.z1) / 2 + 250, weg: 260, dir: 1, t: 0, s: 0 };   // vor Kenjis Strandplatz (z +250) hin und her
+      riese2.o = { k: k2, mixer: m2, x: S.riese, z: (S.z0 + S.z1) / 2 + 250, weg: 260, dir: 1, t: 0, s: 0 };   // vor Samus Strandplatz (z +250) hin und her
     }
   });
   festlandTiere();
@@ -486,9 +508,21 @@ function festlandTiere(){
   vorlage('godzilla', window.GODZILLA_GLB, 1.0, 'y', null, (v) => {
     if(FL.g !== g || !g.parent) return;
     for(const [dx, dz, n] of [[-70, -60, 4], [80, -90, 3], [-90, 70, 4], [70, 110, 3]]) setze(v, n, info.wx + dx, info.wz + dz, 9, null, 'z');
-    // Live-Feedback: auch am Strand (Kenji steht nach der Etappe dort): zwei kleine Gruppen links und rechts von ihm
+    // Live-Feedback: auch am Strand (Samu steht nach der Etappe dort): zwei kleine Gruppen links und rechts von ihm
     const S = e6.STRANDPLATZ; if(S){ setze(v, 3, S.x - 2, S.z + 30, 5, null, 'z'); setze(v, 3, S.x + 2, S.z - 34, 5, null, 'z'); }
   });
+  // Sitzende Moewen am Fukuoka-Beach (Live-Wunsch 18.10.2026): links und rechts von Samus Platz, am Wasser in einer
+  // lockeren Reihe, nicht am Torii, Surfbrett oder Lagerfeuer (frei = Festland-Regel aus etappe6.js)
+  const S = e6.STRANDPLATZ; if(S) story.sitzMoewen(6, story.welt(6), [
+    { x: S.x - 8, z: S.z + 22, n: 5 }, { x: S.x - 2, z: S.z - 18, n: 4 }, { x: S.x + 10, z: S.z + 45, n: 4 },
+    { x: e6.FEST.x + 3, z: S.z + 60, n: 5, reihe: true, blick: -Math.PI / 2 }, { x: e6.FEST.x + 3, z: S.z - 60, n: 5, reihe: true, blick: -Math.PI / 2 },
+    { x: S.x + 6, z: S.z - 50, n: 4 }, { x: S.x - 6, z: S.z + 120, n: 4 }, { x: S.x - 4, z: S.z - 140, n: 4 },
+  ], { seed: 71, y: ISLAND_Y, frei: (x, z) => {
+    // FL.frei gilt fuer Wiese und inneren Sand – die Moewen sitzen aber auf dem ganzen Strand bis kurz vors Wasser
+    const r = Math.hypot(x - (e6.FEST.x + e6.FEST.R), z - e6.FEST.z) - e6.FEST.R;
+    return r > -55 && r < 6 && isOnLand(x, z) && Math.hypot(x - e6.SURF.x, z - e6.SURF.z) > 9
+      && !(e6.FEUER && Math.hypot(x - e6.FEUER.x, z - e6.FEUER.z) < 12) && !(e6.SAMURAI_GRUPPE && Math.hypot(x - e6.SAMURAI_GRUPPE.x, z - e6.SAMURAI_GRUPPE.z) < 8);
+  } });
   // Samurai: sitzende Runden (Idle Sit / Talk Sit) und stehende Gruppen (Idle Stand)
   vorlage('samurai', window.SAMURAI_GLB, 1.75, 'y', 'Armature|Idle Stand', (v) => {
     if(FL.g !== g || !g.parent) return;
@@ -539,6 +573,24 @@ function updateStrandTiere(dt){
     if(o.k.visible && o.mixer && d < ANIM) o.mixer.update(dt);
   }
 }
+
+// ---- Grenzen der Tiere (objekte.js: story.tierQuelle) – Kreis um jedes Tier, das am Boden ist ---------------------
+// Groessen: r ~ halbe Koerperbreite plus etwas Luft, h = Hoehe (darueber springt man nicht – nur gegen Tiefe/Hoehe)
+const TIER_R = { hund: 0.35, panda: 0.55, godzilla: 0.4, samurai: 0.35 };
+// Schatten (spuren.js story.tierSchatten, Live-Wunsch 18.10.2026): jedes Tier mit Grenze bekommt beim ersten Mal einen
+// kleinen Bodenschatten – Laenge ~ 2,6 x Grenzradius (laengs), Breite ~ 1,6 x (quer)
+function kreisVon(o, r, h){
+  if(!o.k.userData.schatten && story.tierSchatten) story.tierSchatten(o.k, r * 2.6, r * 1.6);
+  const p = o.k.getWorldPosition(_kw); return { x: p.x, z: p.z, y: p.y, r, h };
+}
+const _kw = new THREE.Vector3();
+if(story.tierQuelle) story.tierQuelle(() => {
+  const l = [], n = story.etappe;
+  for(const o of boden[n] || []) if(o.k.parent && o.k.visible) l.push(kreisVon(o, (TIER_R[o.opt.name] || 0.4) * o.k.scale.x, 1.5));
+  for(const o of sitzer[n] || []) if(!o.weg && o.k.parent && o.k.visible) l.push(kreisVon(o, 0.18, 0.4));   // fliegt sie, ist sie keine Grenze
+  if(n === 6) for(const o of strandTiere) if(o.insel.parent && o.k.visible) l.push(kreisVon(o, (o.v === vorlagen.samurai ? TIER_R.samurai : TIER_R.godzilla) * o.k.scale.x, 1.8));
+  return l;
+});
 
 story.tiereUpdate = function(dt){
   updateRiese(dt);

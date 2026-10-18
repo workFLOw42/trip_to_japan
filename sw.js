@@ -5,17 +5,19 @@
      schickt max-age=600, sonst kaeme bis zu 10 min lang die alte Datei in den neuen Cache).
    - MODELLE (gross, > 100 MB *_glb.js): eigene Version, zaehlt nur hoch, wenn sich ein Modell
      aendert. So muss nicht bei jedem Update alles neu geladen werden. */
-const CACHE   = 'reise-nach-japan-v65';
-const MODELLE = 'reise-nach-japan-modelle-v9';
+const CACHE   = 'reise-nach-japan-v66';
+const MODELLE = 'reise-nach-japan-modelle-v10';
 
 /* Kern-Dateien: sofort bei der Installation cachen. */
 const CORE = [
   './',
   './index.html',
   './manifest.json',
+  './samu_kopf.js',
   './story.js',
   './objekte.js',
   './haeuser.js',
+  './spuren.js',
   './etappe1.js',
   './geist.js',
   './etappe2.js',
@@ -25,6 +27,8 @@ const CORE = [
   './etappe5.js',
   './etappe5b.js',
   './tiere.js',
+  './begleiter.js',
+  './aliens.js',
   './etappe6.js',
   './etappe6b.js',
   './etappe6c.js',

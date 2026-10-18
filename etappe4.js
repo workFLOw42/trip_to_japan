@@ -222,7 +222,7 @@ function baueHafen(){
 // Modell: Ring-Billed Gull by Oregon State University Ecampus, CC-BY-4.0 (moewe_glb.js), Skelett + "Head Turn" 2,5 s;
 // jedes Tier ein eigener Klon (cloneSkinned der Engine) mit eigenem Mixer und Zeitversatz. Kopf im Modell auf +Z.
 // Live-Wunsch: "etwas zu wenig und fallen auf dem Weg zum Rennboot nicht auf" -> 0,7 m statt 0,45 m (echt ~45 cm,
-// aus der Verfolgerkamera aber kaum zu sehen) und doppelt so viele, die meisten an der Kaikante zwischen Kenjis
+// aus der Verfolgerkamera aber kaum zu sehen) und doppelt so viele, die meisten an der Kaikante zwischen Samus
 // Ankunft (-30, -30) und dem Rennboot-Ring (6, -110). kante: true = lockere Reihe an der Kante, Blick aufs Wasser.
 const MOEWE_SITZ_L = 0.7;
 const MOEWEN_SITZ = [
@@ -231,18 +231,18 @@ const MOEWEN_SITZ = [
   { x: 10.6, z: 40, n: 5, kante: true }, { x: 10.6, z: 120, n: 6, kante: true }, { x: 10.6, z: -150, n: 4, kante: true },
   { x: -18, z: -12, n: 3 }, { x: -45, z: 60, n: 4 },
 ];
-// Gesetzt und bewegt ueber tiere.js (story.sitzMoewen): sie fliegen auf, wenn Kenji kommt, und landen wieder.
+// Gesetzt und bewegt ueber tiere.js (story.sitzMoewen): sie fliegen auf, wenn Samu kommt, und landen wieder.
 function ladeMoewen(w){
   story.sitzMoewen(4, w, MOEWEN_SITZ.map(g => ({ x: g.x, z: g.z, n: g.n, reihe: g.kante, blick: g.kante ? Math.PI / 2 : undefined })),
     { y: KAI_Y, mass: MOEWE_SITZ_L, seed: 53, frei: (x) => x <= KAI_X - 0.4 });
 }
 function updateMoewen(){}
 
-// ---- Hinter Kenji: Containerlager, dahinter eine grosse Stadt ----------------------------------------------
-// Live-Wunsch: hinter Kenji (er schaut zum Rennboot, also nach Nordost) lag nur leerer Beton. Jetzt erst ein
+// ---- Hinter Samu: Containerlager, dahinter eine grosse Stadt ----------------------------------------------
+// Live-Wunsch: hinter Samu (er schaut zum Rennboot, also nach Nordost) lag nur leerer Beton. Jetzt erst ein
 // Containerlager (Stapel bis 4 hoch, Gassen dazwischen), dahinter eine Hochhaus-Stadt wie die Skyline in Etappe 5.
 // Containerfarben wie die Ladung (FARBEN); als InstancedMesh-Kisten mit Riffelstreifen (ein Aufruf je Farbe).
-// Lager: x -110..-60, z 0..150 (hinter Kenji, abseits von Kran, Ring und X-Wing bei (-80, 80) -> dort eine Gasse frei).
+// Lager: x -110..-60, z 0..150 (hinter Samu, abseits von Kran, Ring und X-Wing bei (-80, 80) -> dort eine Gasse frei).
 const LAGER = { x0: -112, x1: -58, z0: 10, z1: 150 };
 function baueHinterland(w){
   let s = 211;
@@ -269,6 +269,7 @@ function baueHinterland(w){
   for(let i = 0; i < 520; i++){
     const tief = Math.pow(rnd(), 0.8);                                      // 0 = gleich hinter dem Lager
     const x = -150 - tief * 1500, z = -900 + rnd() * 2200;
+    if(x > -275 && z > -380 && z < 620) continue;                           // dort steht die Altstadt (baueAltstadt)
     if(x > -260 && z < -40) continue;                                       // vorn links frei (Kanalufer-Haeuser stehen dort)
     const b = 18 + rnd() * 30, t = 18 + rnd() * 30;
     const h = 20 + Math.pow(rnd(), 1.6) * (60 + 220 * Math.min(1, tief * 1.6));
@@ -276,15 +277,58 @@ function baueHinterland(w){
       new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (rnd() - 0.5) * 0.3), new THREE.Vector3(b, h, t));
     proTurm[Math.floor(rnd() * tuerme.length)].push(m);
   }
-  const setze = (liste, farben) => liste.forEach((ms, i) => {
+  // Die ferne Stadt (520 Tuerme) bleibt Instanz-Geometrie (fuer Samu unerreichbar, ein Katalog-Ding je Turm waere zu
+  // teuer), bekommt aber denselben Anime-Look wie die Haeuser (haeuser.js: Toon-Stufen)
+  const setze = (liste, farben, geo) => liste.forEach((ms, i) => {
     if(!ms.length) return;
-    const inst = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ color: farben[i] }), ms.length);
+    const inst = new THREE.InstancedMesh(geo || box, story.toon ? story.toon(farben[i]) : new THREE.MeshLambertMaterial({ color: farben[i] }), ms.length);
     ms.forEach((m, k) => inst.setMatrixAt(k, m)); inst.frustumCulled = false; w.add(inst);
+    if(farben === FARBEN && story.instanzen) story.instanzen(inst, { welt: 4, form: 'quader', typ: 'containerlager' });
   });
+  // Live-Wunsch 18.10.2026: die sichtbare Stadt "landestypisch" (Suedostasien) – jeder hohe Turm bekommt eine Krone wie
+  // in Kuala Lumpur/Bangkok: abgestufter Aufsatz und eine Spitze (eigene Instanzen, Toon-Look). Matrizen aus proTurm.
+  const kronen = [[], []], spitzen = [];
+  const _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
+  for(const ms of proTurm) for(const m of ms){
+    m.decompose(_p, _q, _s); if(_s.y < 70) continue;
+    const top = _p.y + _s.y / 2;
+    kronen[0].push(new THREE.Matrix4().compose(new THREE.Vector3(_p.x, top + _s.y * 0.04, _p.z), _q, new THREE.Vector3(_s.x * 0.72, _s.y * 0.08, _s.z * 0.72)));
+    kronen[1].push(new THREE.Matrix4().compose(new THREE.Vector3(_p.x, top + _s.y * 0.11, _p.z), _q, new THREE.Vector3(_s.x * 0.45, _s.y * 0.06, _s.z * 0.45)));
+    spitzen.push(new THREE.Matrix4().compose(new THREE.Vector3(_p.x, top + _s.y * 0.14 + _s.y * 0.09, _p.z), _q, new THREE.Vector3(1.6, _s.y * 0.18, 1.6)));
+  }
   setze(proFarbe, FARBEN); setze(proTurm, tuerme);
+  setze(kronen, [0xd8cbb0, 0xb7c4cf]);
+  setze([spitzen], [0xc9d2da], new THREE.ConeGeometry(0.5, 1, 6));
+  // Vorne (sichtbar ueber dem Containerlager) ein Viertel aus Katalog-Haeusern: Shophouse-Reihen mit Arkaden, ein
+  // Tempel mit goldener Stupa, einzelne Tuerme – Front (Tuer, lokal +z) zum Hafen (+x)
+  baueAltstadt(w, rnd);
+  // Containerlager: jede Instanz ein Quader (objekte.js) – man laeuft durch die Gassen, nicht durch die Container
   // Betonflaeche bis zur Stadt (der Kai-Klotz endet bei x -120)
   const flaeche = new THREE.Mesh(new THREE.BoxGeometry(1700, KAI_Y + 3, 2400), new THREE.MeshLambertMaterial({ color: 0x6e6a64 }));
   flaeche.position.set(-120 - 850, (KAI_Y - 3) / 2, 300); w.add(flaeche);
+}
+
+// Altstadt-Viertel zwischen Lager und Hochhaeusern (x -128..-250, z -360..600): Strassenraster, Shophouses (haeuser.js 'asien')
+// in Zeilen, ab und zu ein Tempel ('tempel'), dazwischen Tuerme. Alles mit Grenze; hinter dem Lager, fuer Samu
+// erreichbar ueber die Betonflaeche.
+function baueAltstadt(w, rnd){
+  const X0 = -128, X1 = -250, Z0 = -360, Z1 = 600;
+  // zwei Tempel an festen, vom Kai aus sichtbaren Plaetzen (in der ersten Reihe, Blick vom Ankunftsplatz)
+  const TEMPEL = [{ x: -140, z: -10 }, { x: -140, z: -220 }];
+  TEMPEL.forEach((T, i) => story.setze('haus', 4, { x: T.x, z: T.z, y: KAI_Y, dreh: Math.PI / 2, stil: 'tempel', b: 12, t: 16, h: 4.5, seed: 700 + i, fest: true }));
+  for(let x = X0; x > X1; x -= 30) for(let z = Z0; z < Z1; z += 26){
+    if(rnd() < 0.15) continue;                                         // Plaetze, Gassen
+    const cx = x - 12, cz = z + 12 + (rnd() - 0.5) * 2;
+    if(TEMPEL.some(T => Math.abs(cx - T.x) < 20 && Math.abs(cz - T.z) < 24)) continue;
+    const hoch = rnd() < 0.08;
+    const b = hoch ? 14 : 6 + rnd() * 3, t = hoch ? 14 : 10 + rnd() * 4, h = hoch ? 28 + rnd() * 30 : 6.5 + rnd() * 4;
+    // Zeile aus 2-3 schmalen Shophouses nebeneinander (laengs z), wie die typischen Strassenfronten
+    const n = hoch ? 1 : 2 + Math.floor(rnd() * 2);
+    for(let i = 0; i < n; i++){
+      const zz = cz + (i - (n - 1) / 2) * (b + 0.2);
+      story.setze('haus', 4, { x: cx, z: zz, y: KAI_Y, dreh: Math.PI / 2, stil: hoch ? 'turm' : 'asien', b, t, h: hoch ? h : h + (rnd() - 0.5), seed: Math.floor(rnd() * 1e6) + 1, fest: true });
+    }
+  }
 }
 
 // Kran: Teile des Modells benutzen – Null_1 dreht (Ausleger), Cube = Laufkatze, Sweep_3 = Haken (weg).
@@ -315,6 +359,11 @@ function baueKran(g, w){
   kran.userData.fremd = false;
   w.add(kran);
   hafen.kran = kran; hafen.dreh = dreh; hafen.katze = katze;
+  // Grenze (objekte.js, Live-Wunsch 16.10.2026): der Kran in seiner echten Form; beweglich, weil der Ausleger dreht.
+  // Der Fuss ist ein Gitter – durch die Luecken laeuft man in echt nicht: ein unsichtbarer Block um den Turmfuss
+  const fuss = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 12), new THREE.MeshBasicMaterial({ visible: false }));
+  fuss.position.set(2, 3, 0); kran.add(fuss);
+  if(story.ding) story.ding(kran, { welt: 4, typ: 'kran', beweglich: true });
   // Eigene Laufkatze: gelber Kasten auf dem Ausleger, faehrt mit kran.r und dreht mit
   hafen.katze2 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.4, 2.4), new THREE.MeshLambertMaterial({ color: 0xf2c200 }));
   w.add(hafen.katze2);
@@ -380,6 +429,7 @@ function baueLadung(){
     const c = containerNeu([0xd94f2b, 0x1f7fbf, 0x2e9e4a, 0xe0a020][i]);
     c.position.set(p.x, KAI_Y + CONT.h / 2, p.z); c.rotation.y = -p.grad * Math.PI / 180 + Math.PI / 2;
     w.add(c); kran.lager.push({ obj: c, ziel: null, fertig: false });
+    if(story.ding) story.ding(c, { welt: 4, typ: 'container', form: 'quader', beweglich: true });   // der Kran hebt sie
   });
 }
 
@@ -606,8 +656,8 @@ function kranEinsteigen(){
   for(const l of LUECKEN) l.belegt = false;
   for(const c of kran.lager){ c.fertig = false; c.ziel = null; legeZurueck(c); }
   wind.t = 0; wind.richtung = 1;
-  // Kenji steigt "in den Kran" – zu Fuss bleibt er in der Kabine (unsichtbar), gesteuert wird der Kran
-  story.kenjiVersteckt = true; if(eva) eva.group.visible = false;
+  // Samu steigt "in den Kran" – zu Fuss bleibt er in der Kabine (unsichtbar), gesteuert wird der Kran
+  story.samuVersteckt = true; if(eva) eva.group.visible = false;
   story.hinweis('');
   kranHud(); planZeigen();
   kran.rede = story.sprich(KRAN_TEXT, () => {
@@ -627,7 +677,7 @@ function kranEnde(ok, wie, schonGesagt){
   if(kran.rede) kran.rede.abbrechen();
   const weiter = () => story.spaeter(1, () => {
     kran.aktiv = false; kranHud(); planZeigen();
-    story.kenjiVersteckt = false; if(eva) eva.group.visible = true;
+    story.samuVersteckt = false; if(eva) eva.group.visible = true;
     story.hinweis('');
     story.etappeEnde(ok ? 4 : 7, wie);
   });
@@ -669,7 +719,7 @@ function kranHud(){
 // Ladeplan als Draufsicht: man sieht direkt, wo Ausleger und Haken stehen und wo die Luecken liegen.
 // Gemalt wird aus Sicht des Kranfuehrers (Turm unten, Schiff oben, rechts = Stick rechts).
 // Darunter je Luecke Winkel und Marker. Wie man eine Luecke schafft (Flaute, Windtrick), steht hier
-// bewusst nicht – das soll Kenji selbst herausfinden (Konzept).
+// bewusst nicht – das soll Samu selbst herausfinden (Konzept).
 const PLAN_W = 260, PLAN_H = 250;
 function planZeigen(){
   if(!kran.planEl){
@@ -792,7 +842,7 @@ function hafenStart(){
   baueHafen();
   if(story.fluchtKulisse) story.fluchtKulisse();
   if(locale !== 'earth') enterEarth();
-  // Flieger/Boot: Kenji kommt zu Fuss an, das Fahrzeug der Reise (X-Wing) steht abseits auf dem Kai
+  // Flieger/Boot: Samu kommt zu Fuss an, das Fahrzeug der Reise (X-Wing) steht abseits auf dem Kai
   clearEva();
   currentModel = MODEL_NAMES.indexOf('XWing');
   buildModel('XWing'); spec = PLANE_SPECS.XWing || DEFAULT_SPEC;
@@ -841,7 +891,7 @@ function hookKran(){
 
     return boardYOrig.apply(this, arguments);
   };
-  // Kran steuert statt Kenji: Eingabe nehmen, Kenji nicht laufen lassen
+  // Kran steuert statt Samu: Eingabe nehmen, Samu nicht laufen lassen
   const evaOrig = updateEva;
   updateEva = function(dt, inp){
     if(hier() && kran.aktiv){
