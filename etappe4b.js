@@ -306,7 +306,7 @@ function ruderFaktor(){ const v = Math.hypot(state.vel.x, state.vel.z), k = Math
 const FLUCHT_TEXT = [ 'Halt! Polizei! Stehen bleiben!' ];
 function fluchtStart(){
   story.phase = 'flucht';
-  Object.assign(fl, { aktiv: true, fertig: false, laeuft: false, t: 0, kontakte: 0, cool: 0 });
+  Object.assign(fl, { aktiv: true, fertig: false, laeuft: false, entkommen: false, t: 0, kontakte: 0, cool: 0 });
   spur.length = 0;
   const idx = MODEL_NAMES.indexOf('Boat');
   clearEva();
@@ -499,11 +499,11 @@ const GEFAENGNIS = [
 ];
 function fluchtEnde(ok, wie){
   if(fl.fertig) return;
-  fl.fertig = true; fl.laeuft = false;
+  fl.fertig = true; fl.laeuft = false; fl.entkommen = !!ok;
   // Sirenen: entkommen -> ueber 2 s ausblenden; eingeholt -> bleiben bis zum Globus (die Polizei ist ja da)
   for(const p of fl.polizei) if(p.sirene && audioCtx){ const g = p.sirene.gain.gain, t = audioCtx.currentTime;
     g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(ok ? 0 : SIRENE_MAX * 0.8, t + (ok ? 2 : 0.5)); }
-  state.throttle = 0;
+  if(!ok) state.throttle = 0;          // entkommen: weiterfahren (Live-Wunsch 19.10.2026), Schub bleibt
   if(fl.rede) fl.rede.abbrechen();
   const weiter = () => story.spaeter(1, () => {
     sirenenStopp();
@@ -542,8 +542,11 @@ function hookFlucht(){
   stepPhysics = function(dt, inp){
     if(!(hier() && fl.aktiv)) return physOrig.apply(this, arguments);
     if(!fl.laeuft && !fl.fertig){ state.vel.set(0, 0, 0); state.throttle = 0; planeGroup.position.copy(state.pos); return; }
-    // Live-Feedback: nach dem Stopp durch die Polizei glitt das Boot weiter und liess sich lenken -> steht sofort
-    if(fl.fertig){ state.vel.set(0, 0, 0); state.throttle = 0; planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat); return; }
+    // Live-Feedback: nach dem Stopp durch die Polizei glitt das Boot weiter und liess sich lenken -> steht sofort.
+    // Live-Wunsch 19.10.2026: ENTKOMMEN ist anders – durch das Ziel faehrt man weiter, waehrend die Ansage kommt (vorher
+    // stoppte das Boot abrupt und liess sich nicht mehr steuern). fluchtUpdate laeuft mit: Felsen, Stroemung, Sirenen
+    // blenden aus (sirenenUpdate: an = false), die Polizei steht (fl.laeuft ist aus).
+    if(fl.fertig && !fl.entkommen){ state.vel.set(0, 0, 0); state.throttle = 0; planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat); return; }
     const r = fluchtPhysik(dt, inp, (d, i) => physOrig.call(this, d, i));
     fluchtUpdate(dt);
     return r;

@@ -642,7 +642,9 @@ function sprich(saetze, fertig, rolle, warteMax, beiSatz){
         return;
       }
       sprecher = r; wartetSeit = 0;
-      const u = utt = new SpeechSynthesisUtterance(rest);
+      // Live-Befund 19.10.2026: die maennliche Stimme (Pilot, z. B. Etappe 4b 'Samu muss mit auf die Wache') sagte "Semu". Nur ihr
+      // wird "Sahmu" vorgelesen (wie "Joschi" im Geheimland); Untertitel und Positionen (pos0, bPos) bleiben beim Originaltext.
+      const u = utt = new SpeechSynthesisUtterance(rolle === 'pilot' ? rest.replace(/Samu/g, 'Sahmu') : rest);
       const stimme = stimmeFuer(rolle);
       u.lang = 'de-DE'; if(stimme) u.voice = stimme; u.rate = 1.0;
       // ohne maennliche Stimme klingt der Pilot wenigstens tiefer
