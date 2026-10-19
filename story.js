@@ -3368,22 +3368,36 @@ function startStrand(){
 const U_ROLL_MAX = 0.26;      // rad (~15 Grad)
 const U_ROLL_PRO = 0.55;      // rad Querlage je rad/s Drehrate (SUB_YAW 0,55 rad/s volle Fahrt -> 0,30, gekappt auf U_ROLL_MAX)
 const U_ROLL_FOLGT = 2.2;     // 1/s
-function hookUbootNeigen(){
-  const orig = stepSub;
+// Motorboote (Feuerwehrboot, Schnellboot E4b – stepBoat; Live-Wunsch 19.10.2026: "auch leicht neigen, dann wirkt es realistischer").
+// Die Engine neigt sie schon mit BOAT_ROLL 0,25 (14 Grad) nach dem RUDERAUSSCHLAG – also auch im Stand voll. Hier wie beim
+// U-Boot aus der echten Drehrate, aber nur leicht: hoechstens B_ROLL_MAX.
+const B_ROLL_MAX = 0.10;      // rad (~6 Grad)
+const NEIG_FAHRT_VOLL = 0.6;  // ab 60 % der Hoechstfahrt die volle Neigung (darunter weniger, im Stand keine)
+const B_ROLL_PRO = 0.16;      // rad je rad/s (BOAT_YAW 0,9 rad/s volle Fahrt -> 0,14, gekappt)
+// Die Huelle um stepSub/stepBoat: das Original rechnet Kurs, Nicken (Duenung) und Fahrt, danach wird nur die Querlage ersetzt.
+function neigenWieDrehrate(name, max, pro){
+  const orig = window[name];
   let yawVor = null, roll = 0;
-  stepSub = function(dt, inp){
+  window[name] = function(dt, inp){
     const r = orig.apply(this, arguments);
     const e = new THREE.Euler().setFromQuaternion(state.quat, 'YXZ');
     if(yawVor === null || dt <= 0){ yawVor = e.y; return r; }
     let dy = e.y - yawVor; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); yawVor = e.y;
     const rate = dy / dt;                                         // rad/s, + = nach links
-    const ziel = Math.max(-U_ROLL_MAX, Math.min(U_ROLL_MAX, rate * U_ROLL_PRO));
+    // Kraengung kommt von der Fliehkraft, also von Fahrt UND Drehung: auf der Stelle drehen (die Schraube drueckt aufs Ruder)
+    // legt kein Boot schief. Darum mit dem Anteil an der Hoechstfahrt gewichtet (gemessen: ohne das 5 Grad im Stand).
+    const fahrt = Math.min(1, Math.hypot(state.vel.x, state.vel.z) / Math.max(1, spec.vMax || 1));
+    const ziel = Math.max(-max, Math.min(max, rate * pro * fahrt / NEIG_FAHRT_VOLL));
     roll += (ziel - roll) * Math.min(1, U_ROLL_FOLGT * dt);
     // Vorzeichen: Linkskurve (yaw waechst) -> linke Seite runter. Bei 'YXZ' ist das ein positives z (wie die Engine:
     // roll = -inp.yaw * SUB_ROLL, und inp.yaw < 0 ist links).
     state.quat.setFromEuler(new THREE.Euler(e.x, e.y, roll, 'YXZ'));
     return r;
   };
+}
+function hookUbootNeigen(){
+  neigenWieDrehrate('stepSub', U_ROLL_MAX, U_ROLL_PRO);
+  neigenWieDrehrate('stepBoat', B_ROLL_MAX, B_ROLL_PRO);
 }
 
 window.STORY_HOOK = function(){
