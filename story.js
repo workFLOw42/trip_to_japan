@@ -660,7 +660,23 @@ function sprich(saetze, fertig, rolle, warteMax, beiSatz){
       // stehen hier alle auf false – nachgemessen, C:/tmp/jfg/test/tts_var.js).
       synth.cancel();
       synth.resume();
-      synth.speak(u);
+      // Wache gegen eine haengende Sprachausgabe (Live-Befund 19.10.2026: nach Strg-F5 und Start mit dem Controller blieb sie
+      // "oft blockiert", die Musik lief; hier nicht nachstellbar, darum unabhaengig von der Ursache): faengt der Satz nach
+      // START_WARTE s nicht an (kein onstart), noch einmal freiraeumen und neu sprechen – hoechstens START_VERSUCHE mal, dann
+      // laeuft er als Untertitel weiter, statt das Spiel bis zur Notfall-Zeitsperre (Satzlaenge x 2,5) stumm haengen zu lassen.
+      u.onstart = () => { if(utt === u) u.lief = true; };
+      const START_WARTE = 1500, START_VERSUCHE = 2;
+      const versuch = (n) => {
+        synth.speak(u);
+        setTimeout(() => {
+          if(utt !== u || u.lief || done) return;
+          if(n < START_VERSUCHE){ synth.cancel(); synth.resume(); versuch(n + 1); return; }
+          utt = null; if(sprecher === r){ sprecher = null; } laut = false;
+          untertitel(s); clearTimeout(timer); timer = setTimeout(naechster, satzDauer(s) * (s.length - p) / s.length);
+          sprecherFrei(r);
+        }, START_WARTE);
+      };
+      versuch(1);
       // falls onend nie kommt
       timer = setTimeout(() => { if(utt === u) naechster(); }, (rest.length / ZEICHEN_PRO_S * 1000 + 1500) * 2.5);
     } else {
