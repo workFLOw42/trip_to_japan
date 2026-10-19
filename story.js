@@ -803,13 +803,20 @@ function startbildschirm(weiter){
   const knopf = (o, i, breit) => '<button data-i="' + i + '" style="min-width:' + breit + 'px;height:44px;border-radius:10px;'
     + 'border:2px solid rgba(255,255,255,.45);background:rgba(255,255,255,.1);color:#fff;font:600 18px system-ui;'
     + 'cursor:pointer;transition:all .12s">' + o.t + '</button>';
+  // Live-Befund 19.10.2026: "die Schrift rutscht beim Laden nach unten, als gaebe es zwei Startbildschirme". Das Ladebild in
+  // index.html hatte unter dem Titel einen Platz von 120 px Mindesthoehe, das Ladebild hier keinen, das Menue einen anderen –
+  // der Inhalt ist senkrecht zentriert, also sprang der Titel zweimal (index.html -> "wird geladen" -> Menue). Jetzt steht
+  // der Titel in allen drei Faellen gleich, darunter ein Platz fester Hoehe (UNTER_H), in dem erst "wird geladen …" und dann
+  // das Menue steht (oben ausgerichtet). index.html hat denselben Aufbau.
   const titel = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>';
+  const UNTER_H = 210;
+  const unter = (inhalt) => '<div style="height:' + UNTER_H + 'px;margin-top:34px;display:flex;flex-direction:column;align-items:center">' + inhalt + '</div>';
   function zeichnen(){
-    if(!bereit){ el.innerHTML = titel + '<div style="font-size:16px;margin-top:34px;opacity:.75">wird geladen …</div>'; knoepfe = []; return; }
+    if(!bereit){ el.innerHTML = titel + unter('<div style="font-size:16px;opacity:.75">wird geladen …</div>'); knoepfe = []; return; }
     if(seite === 'haupt'){ OPT = HAUPT();
-      el.innerHTML = titel + '<div style="display:flex;flex-direction:column;gap:12px;align-items:center;margin-top:34px">'
+      el.innerHTML = titel + unter('<div style="display:flex;flex-direction:column;gap:12px;align-items:center">'
         + OPT.map((o, i) => knopf(o, i, 230)).join('') + '</div>'
-        + '<div style="font-size:14px;margin-top:18px;opacity:.7">Linker Stick / ↑ ↓ wählen · A / Enter starten</div>';
+        + '<div style="font-size:14px;margin-top:18px;opacity:.7">Linker Stick / ↑ ↓ wählen · A / Enter starten</div>');
     } else if(seite === 'test'){ OPT = TEST;
       el.innerHTML = titel + '<div style="font-size:20px;margin-top:22px;opacity:.85">Testzugang</div>'
         + '<div style="display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap;max-width:94vw">' + OPT.map((o, i) => knopf(o, i, 54)).join('') + '</div>'
