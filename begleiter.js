@@ -27,6 +27,20 @@ const HA = { stehen: 'Dog|Idle', gehen: 'Dog|Walk', rennen: 'Dog|Run', springen:
 // SitDown (3,96 s) = hinsetzen (bis 0,9 s), sitzen (bis ~2,9 s), aufstehen (bis zum Ende) – als ein Clip, hier zerlegt
 const SITZ_AB = 0.9, SITZ_BIS = 2.85;
 const STREIF_R = 8, STREIF_MAX = 15, NACHHOLEN = 60;
+// Live-Befund 19.10.2026: "wenn Samu rennt, bleibt Barki immer hinten dran". Samu rennt 6 m/s (EVA_SPEED), Barki lief
+// hoechstens 7 – und seine Ziele lagen da, wo Samu beim Aussuchen WAR, dazu wartete er an jedem 0,8 bis 3,3 s. Jetzt:
+// laeuft Samu, sind die Ziele an ihm festgemacht (vor/quer relativ zu Samu, sie wandern mit), Barki sprintet bis
+// HUND_SPRINT, wenn er hinten liegt. Schnuppern darf er (Live-Wunsch 19.10.2026: "er kann ja schnuppern, aber rennt immer
+// ein wenig vorne weg; aendert Samu die Richtung, muss er halt schnell ueberholen") – nur kurz, und sobald Samu an ihm
+// vorbei ist oder woanders hinlaeuft (er liegt nicht mehr VOR ihm), bricht er ab und sprintet wieder nach vorn.
+const HUND_SPRINT = 9.5;                   // m/s, wenn er hinter dem laufenden Samu liegt (Samu rennt 6)
+// Live-Wunsch 19.10.2026: "Barki kann einfach immer ca. 5 bis 10 m Vorsprung haben". Laeuft Samu, haelt Barki einen Platz
+// VORAUS_MIN..VORAUS_MAX vor ihm in Laufrichtung (die zeigt der Stick: eva.yaw), leicht zur Seite versetzt und ab und zu
+// wechselnd; dort schnuppert er, faellt er zurueck, sprintet er wieder vor. Liegt in Laufrichtung ein Einstieg (Y: Ring,
+// Flieger – story.einstiege), laeuft er schon hin, setzt sich und wartet; dreht Samu ab, steht er auf und ueberholt.
+const VORAUS_MIN = 5, VORAUS_MAX = 10, VORAUS_QUER = 2.5;
+const EINSTIEG_SICHT = 40;                 // m: so weit voraus erkennt er einen Einstieg
+const EINSTIEG_KEGEL = 0.35;               // rad (20 Grad) um die Laufrichtung
 const STEH_KOMMEN = 1.2;                   // s Samu steht -> Hund kommt und setzt sich
 // Live-Befund 19.10.2026: Barki tollte und bellte schon nach 14 s, Samu ging aber erst nach 25 s in den Leerlauf (Moonwalk,
 // story.js MOON_NACH). Jetzt haengt das Tollen an Samus Leerlauf selbst und nicht an einer eigenen Uhr: es beginnt, wenn
@@ -424,19 +438,82 @@ function update(dt){
     // streifen: frei begleitend
     if(hund.modus !== 'streifen'){ hund.modus = 'streifen'; hund.ziel = null; hund.warte = 0.3; aufstehen(); }
     if(stehtAuf() || laeuft(HA.springen)){ /* fertig aufstehen / springen */ }
+    else if((T.ausschlag || 0) > 0.05 && eva.onGround){ voraus(dt, g, hp, T.ausschlag); }
     else if(dSamu > STREIF_MAX){
-      const h = neben(-2.2, 1.2); laufe(dt, h.x, h.z, 7); hund.ziel = null; hund.warte = 0.4; hund.tun = null;
+      const h = neben(-2.2, 1.2); laufe(dt, h.x, h.z, HUND_SPRINT); hund.ziel = null; hund.warte = 0.4; hund.tun = null;   // aufholen (vorher 7 m/s: kaum schneller als Samu)
     } else if(hund.ziel){
-      const d = laufe(dt, hund.ziel.x, hund.ziel.z, hund.ziel.tempo);
-      if(d < 0.3 || (hund.blockiert && (hund.zielT = (hund.zielT || 0) + dt) > 1)){ hund.ziel = null; hund.zielT = 0; hund.warte = 0.8 + Math.random() * 2.5; hund.tun = laune(); }
+      const lauf = T.ausschlag || 0, Z = hund.ziel;
+      let tempo = Z.tempo;
+      if(Z.mit && lauf > 0.05){
+        const q = neben(Z.mit.vor, Z.mit.quer); Z.x = q.x; Z.z = q.z;            // mit Samu mitwandern
+        // liegt er hinter Samu (Ziel vor ihm und weiter weg), sprinten – sonst haelt er das Tempo von Samu nie
+        const fx = -Math.sin(eva.yaw), fz = -Math.cos(eva.yaw), hinten = (hp.x - g.x) * fx + (hp.z - g.z) * fz < Z.mit.vor - 1;
+        const evaV = lauf > 0.5 ? EVA_SPEED * lauf : EVA_SPEED * 0.3 * lauf / 0.5;
+        tempo = Math.max(tempo, hinten ? Math.min(HUND_SPRINT, evaV + 3.5) : evaV + 0.5);
+      }
+      const d = laufe(dt, Z.x, Z.z, tempo);
+      if(d < 0.3 || (hund.blockiert && (hund.zielT = (hund.zielT || 0) + dt) > 1)){
+        hund.ziel = null; hund.zielT = 0;
+        // laeuft Samu: kurz schnuppern (nicht sitzen) – die Wache unten holt ihn nach vorn, sobald Samu vorbei ist;
+        // steht er, wie bisher eine Weile und nach Laune
+        if(lauf > 0.05){ hund.warte = 0.6 + Math.random() * 1.4; hund.tun = Math.random() < 0.8 ? 'schnuppern' : 'springen'; }
+        else { hund.warte = 0.8 + Math.random() * 2.5; hund.tun = laune(); }
+      }
     } else {
       hund.warte -= dt;
-      beschaeftigt(dt, g);
+      // Samu laeuft und Barki ist nicht mehr vor ihm (Samu ist vorbei oder hat die Richtung geaendert): Schnuppern
+      // abbrechen und nach vorn – neuesZiel legt das Ziel vor Samu, der Sprint oben holt ihn dorthin
+      const lauf = T.ausschlag || 0, fx = -Math.sin(eva.yaw), fz = -Math.cos(eva.yaw);
+      if(lauf > 0.05 && (hp.x - g.x) * fx + (hp.z - g.z) * fz < 1){ if(hund.sitzt) aufstehen(); hund.warte = 0; hund.tun = null; }
+      else beschaeftigt(dt, g);
       if(hund.warte <= 0) neuesZiel(g);
     }
   }
   pflegen(dt);
   bellTakt(dt);
+}
+// Samu laeuft: voraus (siehe VORAUS_MIN). Barki hat einen Platz vor Samu (V.vor, V.quer relativ zu ihm, wandert mit), an
+// dem er schnuppert; liegt ein Einstieg in Laufrichtung, ist das sein Platz, und er setzt sich dort.
+function voraus(dt, g, hp, lauf){
+  const V = hund.voraus || (hund.voraus = { vor: 7, quer: VORAUS_QUER, wechsel: 3, schnuppern: 0 });
+  const fx = -Math.sin(eva.yaw), fz = -Math.cos(eva.yaw);
+  const evaV = lauf > 0.5 ? EVA_SPEED * lauf : EVA_SPEED * 0.3 * lauf / 0.5;
+  // Einstieg in Laufrichtung voraus?
+  let ein = null, bestD = EINSTIEG_SICHT;
+  for(const e of (story.einstiege ? story.einstiege() : [])){
+    const dx = e.x - g.x, dz = e.z - g.z, d = Math.hypot(dx, dz);
+    if(d < 3 || d > bestD) continue;
+    if(Math.acos(klemme((dx * fx + dz * fz) / d, -1, 1)) > EINSTIEG_KEGEL) continue;
+    ein = e; bestD = d;
+  }
+  if(ein){
+    // vor dem Einstieg auf Samus Seite warten (nicht mitten im Ring, dort steigt Samu ein): Platz zwischen Samu und Einstieg
+    const dx = ein.x - g.x, dz = ein.z - g.z, d = Math.hypot(dx, dz);
+    const ab = Math.min(d - 1, Math.max(2, d - (ein.r || 4) - 1.5));
+    const q = freierPlatz(g.x + dx / d * ab + dz / d * 1.2, g.z + dz / d * ab - dx / d * 1.2) || { x: g.x + dx / d * ab, z: g.z + dz / d * ab };
+    if(hund.sitzt){ hund.yaw += klemme(winkelDiff(hund.yaw, Math.atan2(g.x - hp.x, g.z - hp.z)), -3 * dt, 3 * dt); return; }   // wartet, schaut zu Samu
+    if(stehtAuf()) return;
+    const w = laufe(dt, q.x, q.z, Math.min(HUND_SPRINT, evaV + 3.5));
+    if(w < 0.4 || (hund.blockiert && w < FUSS_NAH * 2)) setzen();
+    return;
+  }
+  // kein Einstieg: sass er (wartete auf einen, Samu ist abgedreht), aufstehen und ueberholen
+  if(hund.sitzt){ aufstehen(); return; }
+  if(stehtAuf()) return;
+  // ab und zu die Seite / den Abstand wechseln, damit er nicht starr vorausfaehrt
+  if((V.wechsel -= dt) <= 0){ V.wechsel = 3 + Math.random() * 4; V.quer = (Math.random() < 0.5 ? -1 : 1) * VORAUS_QUER * (0.4 + Math.random() * 0.6); V.vor = VORAUS_MIN + Math.random() * (VORAUS_MAX - VORAUS_MIN); }
+  const q = neben(V.vor, V.quer);
+  const vorJetzt = (hp.x - g.x) * fx + (hp.z - g.z) * fz;
+  // am Platz (oder schon gut voraus): kurz schnuppern, solange er nicht unter VORAUS_MIN zurueckfaellt
+  if(V.schnuppern > 0){
+    V.schnuppern -= dt;
+    if(vorJetzt > VORAUS_MIN * 0.6){ if(!laeuft(HA.springen)) anim(HA.stehen, 0.3); hund.yaw += Math.sin(hund.t * 1.3) * 0.6 * dt; return; }
+    V.schnuppern = 0;                                       // zu weit zurueck: weiter
+  }
+  // hinten (unter dem Platz): sprinten, sonst knapp ueber Samus Tempo, damit er nicht davonzieht
+  const tempo = vorJetzt < V.vor - 1.5 ? Math.min(HUND_SPRINT, evaV + 3.5) : Math.max(1.6, evaV + 0.6);
+  const d = laufe(dt, q.x, q.z, tempo);
+  if(d < 0.6 && Math.random() < dt * 0.5) V.schnuppern = 0.8 + Math.random() * 1.2;   // ab und zu am Platz schnuppern
 }
 function laune(){ const r = Math.random(); return r < 0.6 ? 'schnuppern' : r < 0.8 ? 'sitzen' : 'springen'; }
 function beschaeftigt(dt, g){
@@ -453,7 +530,8 @@ function neuesZiel(g){
     if(Math.hypot(z.x - g.x, z.z - g.z) < 1.8 || Math.hypot(z.x - hp.x, z.z - hp.z) < 2) continue;
     if(!frei(z.x, z.z)) continue;
     const weit = Math.hypot(z.x - hp.x, z.z - hp.z) > 6;
-    hund.ziel = { x: z.x, z: z.z, tempo: lauf > 0.5 ? 7 : weit && Math.random() < 0.6 ? 5 : 1.6 }; hund.tun = null;
+    // laeuft Samu, merkt sich das Ziel seine Lage relativ zu ihm (vor, quer) und wandert mit (siehe streifen)
+    hund.ziel = { x: z.x, z: z.z, tempo: lauf > 0.5 ? 7 : weit && Math.random() < 0.6 ? 5 : 1.6, mit: lauf > 0.05 ? { vor, quer } : null }; hund.tun = null;
     return;
   }
   hund.warte = 0.6;

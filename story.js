@@ -323,6 +323,17 @@ story.einstiegsRing = function(x, y, z){
 };
 // Alle Ringe (yZeichenZeigen: steht Samu in einem, schwebt das Y ueber der Ringmitte statt ueber Samu)
 const einstiegsRinge = [];
+// Wo kann Samu gerade einsteigen (Y)? Fuer Barki (begleiter.js, Live-Wunsch 19.10.2026): laeuft Samu auf eines zu, setzt
+// er sich schon mal dort hin und wartet. Die gelben Ringe dieser Etappe, der U-Boot-Ring in Etappe 1 und der abgestellte
+// Flieger (eva.planeAt, sofern zu sehen).
+story.einstiege = function(){
+  const l = [];
+  for(const r of einstiegsRinge) if(r.etappe === story.etappe && r.mesh.parent && r.mesh.visible !== false) l.push({ x: r.x, z: r.z, r: RING_R });
+  const u = typeof ubootRingPlatz === 'function' ? ubootRingPlatz() : null;
+  if(u && story.etappe === 1) l.push({ x: u.x, z: u.z, r: RING_R });
+  if(eva && eva.planeAt && planeGroup.visible) l.push({ x: eva.planeAt.x, z: eva.planeAt.z, r: EVA_BOARD_R });
+  return l;
+};
 function ringUnterSamu(){
   if(!eva) return null;
   const p = eva.group.position;
