@@ -1879,6 +1879,68 @@ function refreshCarriers(){
 // sitzt sie mittschiffs, damit vor ihr mehr Container gestapelt werden können — genau so ist dieses
 // Modell gebaut). Ich habe den Container deshalb erst falsch gedreht. Wer hier etwas ändert:
 // im Spiel nachsehen, nicht rechnen.
+// ---------- Rumpf-Vermessung (gemeinsamer Kern) ----------
+// Wie breit ist ein Modell in einer Laengsscheibe und einem Hoehenband? Das brauchen drei Stellen: die
+// 3D-Grenze der Schiffe (shipGrid), das Halbbreiten-Profil an der Wasserlinie (prof) und das Loch im Meer
+// bei offenen Booten (measureOpenHull). Frueher wurden dafuer PUNKTE gezaehlt – ein grosses Dreieck hat
+// aber nur drei Ecken, und Scheiben dazwischen blieben leer (beim Schlauchboot fast alle, gemessen).
+// Jetzt wird jedes Dreieck auf das Band zugeschnitten (Sutherland-Hodgman an zwei waagerechten Ebenen)
+// und jede Kante des Reststuecks in ALLE Scheiben eingetragen, die sie ueberquert: innerhalb einer
+// Scheibe liegt das Breiteste eines Polygons immer auf seinem Rand, also ist das Ergebnis lueckenlos.
+// obj = was vermessen wird, opts.ref = in wessen Koordinaten (Standard obj; Laenge auf z, oben +y),
+// opts.ns = Scheiben, opts.bands = [[yUnten, yOben], ...] (yUnten darf -Infinity sein: "alles darunter"),
+// opts.z0/z1 = Laengsbereich (Standard: was in den Baendern liegt), opts.meshes = RegExp auf Mesh-Namen.
+// Rueckgabe { z0, z1, lo, hi }: Bordwand links/rechts an Index band * ns + scheibe, leer = +-Infinity.
+const _hsM = new THREE.Matrix4(), _hsI = new THREE.Matrix4(), _hsV = new THREE.Vector3();
+function hullSlices(obj, opts){
+  const ref = opts.ref || obj, ns = opts.ns, bands = opts.bands, nb = bands.length;
+  const nimm = (o) => o.isMesh && o.geometry && o.geometry.attributes && o.geometry.attributes.position
+                      && (!opts.meshes || opts.meshes.test(o.name));
+  ref.updateMatrixWorld(true); obj.updateMatrixWorld(true);
+  _hsI.copy(ref.matrixWorld).invert();
+  let yLo = Infinity, yHi = -Infinity;
+  for(const b of bands){ if(b[0] < yLo) yLo = b[0]; if(b[1] > yHi) yHi = b[1]; }
+  let z0 = opts.z0, z1 = opts.z1;
+  if(z0 === undefined || z1 === undefined){
+    z0 = Infinity; z1 = -Infinity;
+    obj.traverse(o => { if(!nimm(o)) return; _hsM.multiplyMatrices(_hsI, o.matrixWorld); const p = o.geometry.attributes.position;
+      for(let i = 0; i < p.count; i++){ _hsV.fromBufferAttribute(p, i).applyMatrix4(_hsM);
+        if(_hsV.y < yLo || _hsV.y > yHi) continue; if(_hsV.z < z0) z0 = _hsV.z; if(_hsV.z > z1) z1 = _hsV.z; } });
+    if(!(z1 > z0)) return null;
+  }
+  const L = (z1 - z0) / ns, lo = new Float32Array(nb * ns).fill(Infinity), hi = new Float32Array(nb * ns).fill(-Infinity);
+  const trage = (n0, k, x) => { if(k < 0) k = 0; else if(k >= ns) k = ns - 1; const n = n0 + k; if(x < lo[n]) lo[n] = x; if(x > hi[n]) hi[n] = x; };
+  const strecke = (n0, xa, za, xb, zb) => { if(za > zb){ let q = xa; xa = xb; xb = q; q = za; za = zb; zb = q; }
+    const ka = Math.floor((za - z0) / L), kb = Math.floor((zb - z0) / L); trage(n0, ka, xa); trage(n0, kb, xb);
+    for(let k = Math.max(ka, -1) + 1; k <= Math.min(kb, ns); k++){ const x = xa + (xb - xa) * (z0 + k * L - za) / (zb - za); trage(n0, k - 1, x); trage(n0, k, x); } };
+  // Polygon als flache Liste x,y,z; an der Ebene y = h abschneiden, behalten wird oben (y <= h) bzw. unten (y >= h)
+  const clip = (src, dst, h, oben) => { dst.length = 0; const n = src.length / 3;
+    for(let e = 0; e < n; e++){ const f = (e + 1) % n, py = src[e * 3 + 1], qy = src[f * 3 + 1];
+      const pin = oben ? py <= h : py >= h, qin = oben ? qy <= h : qy >= h;
+      if(pin) dst.push(src[e * 3], py, src[e * 3 + 2]);
+      if(pin !== qin){ const t = (h - py) / (qy - py); dst.push(src[e * 3] + (src[f * 3] - src[e * 3]) * t, h, src[e * 3 + 2] + (src[f * 3 + 2] - src[e * 3 + 2]) * t); } } };
+  const tri = [], A = [], B = [];
+  obj.traverse(o => { if(!nimm(o)) return; _hsM.multiplyMatrices(_hsI, o.matrixWorld);
+    const p = o.geometry.attributes.position, idx = o.geometry.index, n = idx ? idx.count : p.count;
+    for(let i = 0; i + 2 < n; i += 3){
+      tri.length = 0;
+      for(let e = 0; e < 3; e++){ _hsV.fromBufferAttribute(p, idx ? idx.getX(i + e) : i + e).applyMatrix4(_hsM); tri.push(_hsV.x, _hsV.y, _hsV.z); }
+      const ty0 = Math.min(tri[1], tri[4], tri[7]), ty1 = Math.max(tri[1], tri[4], tri[7]);
+      if(ty1 < yLo || ty0 > yHi) continue;
+      for(let j = 0; j < nb; j++){ const ya = bands[j][0], yb = bands[j][1]; if(ty1 < ya || ty0 > yb) continue;
+        let src = tri;
+        if(ty0 < ya){ clip(src, B, ya, false); src = B; }
+        if(ty1 > yb){ clip(src, A, yb, true); src = A; }
+        const m = src.length / 3; if(!m) continue;
+        const n0 = j * ns;
+        if(m === 1){ trage(n0, Math.floor((src[2] - z0) / L), src[0]); continue; }
+        for(let e = 0; e < m; e++){ const f = (e + 1) % m; strecke(n0, src[e * 3], src[e * 3 + 2], src[f * 3], src[f * 3 + 2]); } } } });
+  return { z0, z1, lo, hi };
+}
+
+// So viele Hoehenbaender hat die 3D-Rumpfform der Schiffe (Kiel bis Mastspitze, siehe preloadSeaShips).
+// 16 geben beim Containerschiff (rund 60 m hoch) knapp 4 m je Band – feiner als der Rand von 4 m.
+const SHIP_BANDS = 16;
 const SHIP_TYPES = [
   { key:'cruise',    glb:()=>window.CRUISE_GLB,    len:250, wl:0.0320, spd:5.5, sym:'🛳️', rot180:true },
   // rot180: das Modell zeigt mit dem Bug nach hinten — gemessen war die Breite vorne 16,5 und hinten
@@ -2033,7 +2095,6 @@ function preloadSeaShips(){
       const hullMin = new THREE.Vector3( 1e30,  1e30,  1e30);
       const hullMax = new THREE.Vector3(-1e30, -1e30, -1e30);
       const _hv = new THREE.Vector3();
-      const hullPts = [];                     // Rumpfpunkte im Band, fuer das Profil weiter unten
       wrap.traverse((o)=>{
         if(!o.isMesh || !o.geometry || !o.geometry.attributes || !o.geometry.attributes.position) return;
         const pa = o.geometry.attributes.position;
@@ -2042,34 +2103,34 @@ function preloadSeaShips(){
           if(_hv.y < -2 || _hv.y > 3) continue;         // nur das Band um die Wasserlinie
           if(_hv.x<hullMin.x)hullMin.x=_hv.x; if(_hv.x>hullMax.x)hullMax.x=_hv.x;
           if(_hv.z<hullMin.z)hullMin.z=_hv.z; if(_hv.z>hullMax.z)hullMax.z=_hv.z;
-          hullPts.push(_hv.x, _hv.z);
         }
       });
       // Nichts im Band gefunden (darf nicht vorkommen — ein fehlendes Hindernis waere aber schlimmer
       // als ein zu grosses) -> auf die Gesamtbox zurueckfallen.
       const okHull = hullMin.x < hullMax.x && hullMin.z < hullMax.z;
-      // HALBBREITEN-PROFIL: die Grenze folgt der Rumpfform statt einem Rechteck. Der Rumpf wird in
-      // SHIP_SLICES Scheiben laengs geteilt, je Scheibe die groesste halbe Breite. Am spitzen Bug
-      // wird die Sperre damit schmal, wie der Rumpf selbst — gemessen sind am Rechteck 20 bis 26 %
-      // der Sperrzone ueberfluessig (C:/tmp/form.js).
-      // Zwei Dinge sind wichtig:
-      //  - Leere Scheiben werden aus den Nachbarn GEFUELLT. Die Vertexdichte ist ungleich, einzelne
-      //    Scheiben treffen gar keinen Punkt — ohne Fuellen waere dort ein Loch im Rumpf, durch das
-      //    man hindurchfaehrt. Das ist genau die Falle bei diesem Ansatz.
-      //  - Jede Scheibe bekommt das MAXIMUM ihrer Nachbarschaft, nie weniger als der Rumpf breit ist.
-      //    Zu breit ist harmlos (etwas Wasser gesperrt), zu schmal laesst einen durch den Stahl.
+      // RUMPFFORM IN 3D (shipGrid, hullSlices): SHIP_SLICES Laengsscheiben x SHIP_BANDS Hoehenbaender vom
+      // Kiel bis zur Mastspitze, je Zelle die Bordwand links/rechts. Vorher war die Grenze ein Umriss an
+      // der Wasserlinie mit einer Obergrenze (top + 4) und OHNE Untergrenze: ein getauchtes U-Boot stiess
+      // weit unter dem Kiel noch an, und ueber Deck sperrte bis zur Mastspitze ein voller Kasten. Jetzt
+      // zaehlt der Kiel von unten, das Deck von oben, und neben dem Mast ist frei (hitsSeaShip).
+      // Laengs ueber das ganze Modell (Bugspriet, Heckaufbau), nicht nur den Rumpf an der Wasserlinie.
+      const gridH = Math.max(0.5, box4.max.y - box4.min.y) / SHIP_BANDS, bands = [];
+      for(let j = 0; j < SHIP_BANDS; j++) bands.push([box4.min.y + j * gridH, box4.min.y + (j + 1) * gridH]);
+      const sl = hullSlices(wrap, { ns: SHIP_SLICES, bands, z0: box4.min.z, z1: box4.max.z });
+      const grid = sl ? { z0: sl.z0, z1: sl.z1, y0: box4.min.y, dh: gridH, lo: sl.lo, hi: sl.hi } : null;
+      // HALBBREITEN-PROFIL an der Wasserlinie (Bootsfahrt, Verdraengung, KI): die Grenze folgt der
+      // Rumpfform statt einem Rechteck – am spitzen Bug wird die Sperre schmal, wie der Rumpf selbst
+      // (gemessen sind am Rechteck 20 bis 26 % der Sperrzone ueberfluessig, C:/tmp/form.js). Aus demselben
+      // Kern wie die 3D-Form, im Band -2 .. +3 m um die Wasserlinie, je Scheibe die groessere Seite um cx.
+      // Zwei Sicherungen bleiben, auch wenn der Kern lueckenlos misst:
+      //  - Leere Scheiben werden aus den Nachbarn GEFUELLT (ein Loch im Rumpf waere schlimmer als zu breit).
+      //  - Jede Scheibe bekommt das MAXIMUM ihrer Nachbarschaft: so entsteht keine Einschnuerung zwischen
+      //    zwei Stuetzstellen, durch die eine Bootsnase schluepfen koennte.
       let prof = null;
-      if(okHull){
-        const pz0 = hullMin.z, pzL = hullMax.z - hullMin.z;
-        const raw = new Float32Array(SHIP_SLICES);
-        for(let i=0;i<hullPts.length;i+=2){
-          const px = hullPts[i], pz = hullPts[i+1];
-          let s = Math.floor((pz - pz0) / pzL * SHIP_SLICES);
-          if(s < 0) s = 0; else if(s >= SHIP_SLICES) s = SHIP_SLICES - 1;
-          const w = Math.abs(px - (hullMax.x + hullMin.x)/2);
-          if(w > raw[s]) raw[s] = w;
-        }
-        // Leere Scheiben aus den naechsten belegten Nachbarn fuellen (siehe oben).
+      const wlS = okHull ? hullSlices(wrap, { ns: SHIP_SLICES, bands: [[-2, 3]], z0: hullMin.z, z1: hullMax.z }) : null;
+      if(wlS){
+        const mx = (hullMax.x + hullMin.x)/2, raw = new Float32Array(SHIP_SLICES);
+        for(let s=0;s<SHIP_SLICES;s++) if(wlS.hi[s] >= wlS.lo[s]) raw[s] = Math.max(mx - wlS.lo[s], wlS.hi[s] - mx, 0);
         prof = new Float32Array(SHIP_SLICES);
         for(let s=0;s<SHIP_SLICES;s++){
           if(raw[s] > 0){ prof[s] = raw[s]; continue; }
@@ -2078,8 +2139,6 @@ function preloadSeaShips(){
           for(let k=s+1;k<SHIP_SLICES;k++) if(raw[k] > 0){ r = raw[k]; break; }
           prof[s] = Math.max(l, r, 0);
         }
-        // Und jede Scheibe auf das Maximum mit ihren direkten Nachbarn ziehen: so entsteht keine
-        // Einschnuerung zwischen zwei Stuetzstellen, durch die eine Bootsnase schluepfen koennte.
         const glatt = new Float32Array(SHIP_SLICES);
         for(let s=0;s<SHIP_SLICES;s++)
           glatt[s] = Math.max(prof[Math.max(0,s-1)], prof[s], prof[Math.min(SHIP_SLICES-1,s+1)]);
@@ -2092,11 +2151,11 @@ function preloadSeaShips(){
         hw: (hullMax.x - hullMin.x)/2,
         cz: (hullMax.z + hullMin.z)/2,
         cx: (hullMax.x + hullMin.x)/2,
-        prof,
+        prof, grid,
         top: box4.max.y } : {
         hl: Math.max(Math.abs(box4.min.z), Math.abs(box4.max.z)),
         hw: Math.max(Math.abs(box4.min.x), Math.abs(box4.max.x)),
-        cz: 0, cx: 0,
+        cz: 0, cx: 0, grid,
         top: box4.max.y };
       // Schon fahrende Platzhalter dieses Typs gegen das echte Modell tauschen.
       for(const sh of seaShips) if(sh.key === def.key) refreshSeaShip(sh);
@@ -2140,6 +2199,7 @@ function refreshSeaShip(sh){
   sh.cz = h ? (h.cz || 0) : 0;
   sh.cx = h ? (h.cx || 0) : 0;
   sh.prof = h ? (h.prof || null) : null;      // Halbbreiten-Profil (siehe shipHalf), null = Rechteck
+  sh.grid = h ? (h.grid || null) : null;      // 3D-Rumpfform (siehe shipHalf/hitsSeaShip), null = nur Umriss
   sh.top = h ? h.top : sh.len*0.08;
   // Der Wert bei AUFGETAUCHTEM Boot, von dem der Tauchweg abgezogen wird (siehe updateShipsSea).
   // Muss hier mitgesetzt werden: refreshSeaShip laeuft auch, wenn ein GLB nachtraeglich fertig laedt,
@@ -4238,8 +4298,29 @@ function hitsSeaShip(x, y, z, except){
     const cs = Math.cos(sh.heading), sn = Math.sin(sh.heading);
     // Mittenversatz abziehen: die Huelle sitzt um die RUMPFmitte, nicht um den Modellursprung.
     const lx = rx*cs - rz*sn - sh.cx, lz = rx*sn + rz*cs - sh.cz;
-    // Breite an DIESER Laengsstelle (Rumpfform, nicht Rechteck) — siehe shipHalfWidthAt.
-    if(Math.abs(lz) < sh.hl + 4 && Math.abs(lx) < shipHalfWidthAt(sh, lz) + 4) return true;
+    // Breite an DIESER Laengsstelle (Rumpfform, nicht Rechteck) — siehe shipHalfWidthAt. Das ist der
+    // grobe Vortest; mit vermessener 3D-Form (sh.grid) entscheidet danach die Hoehe.
+    if(!(Math.abs(lz) < sh.hl + 4 && Math.abs(lx) < shipHalfWidthAt(sh, lz) + 4)) continue;
+    if(!sh.grid) return true;
+    if(shipGridHit(sh, x, y, z, 4)) return true;
+  }
+  return false;
+}
+// Liegt (x,y,z) im vermessenen Schiff, mit rand Metern Abstand ringsum? Gerechnet mit der vollen Lage der
+// Schiffsgruppe (Kurs, Nicken mit der Duenung, Hoehe, Tauchen beim U-Boot) – die Rueckdrehung macht
+// three.js (matrixWorld), die Vorzeichenfalle oben kann hier also nicht zuschlagen. Geprueft werden die
+// Zellen in Reichweite des Randes: Baender darueber/darunter (Deck von oben, Kiel von unten) und die
+// Nachbarscheiben (Bug und Heck), je mit der Bordwand dieser Zelle.
+const _sgInv = new THREE.Matrix4(), _sgP = new THREE.Vector3();
+function shipGridHit(sh, x, y, z, rand){
+  const g = sh.grid; sh.group.updateMatrixWorld(true);
+  _sgP.set(x, y, z).applyMatrix4(_sgInv.copy(sh.group.matrixWorld).invert());
+  const L = (g.z1 - g.z0) / SHIP_SLICES;
+  const k0 = Math.max(0, Math.floor((_sgP.z - rand - g.z0) / L)), k1 = Math.min(SHIP_SLICES - 1, Math.floor((_sgP.z + rand - g.z0) / L));
+  const j0 = Math.max(0, Math.floor((_sgP.y - rand - g.y0) / g.dh)), j1 = Math.min(SHIP_BANDS - 1, Math.floor((_sgP.y + rand - g.y0) / g.dh));
+  for(let j = j0; j <= j1; j++) for(let k = k0; k <= k1; k++){
+    const n = j * SHIP_SLICES + k; if(g.hi[n] < g.lo[n]) continue;
+    if(_sgP.x > g.lo[n] - rand && _sgP.x < g.hi[n] + rand) return true;
   }
   return false;
 }
@@ -4304,6 +4385,10 @@ function pushOutOfSeaShip(pos, vel, dt){
     const gx = shipHalfWidthAt(sh, lz) + 4, gz = sh.hl + 4;   // Grenzen: Breite nach der Rumpfform
     // Laengs muss es neben dem Rumpf liegen; quer zaehlt der Saum mit.
     if(Math.abs(lz) >= gz || Math.abs(lx) >= gx + SHIP_WAKE) continue;
+    // In der HOEHE muss es auch am Rumpf sein (3D-Form, shipGridHit): wer tief unter dem Kiel taucht oder
+    // hoch darueber ist, wird nicht beiseite gedrueckt. Der Saum (Bugwelle) gilt in Rumpfhoehe; ohne y
+    // (aeltere Aufrufer) wie bisher.
+    if(sh.grid && pos.y !== undefined && !shipGridHit(sh, pos.x, pos.y, pos.z, 4 + SHIP_WAKE)) continue;
     const drin = Math.abs(lx) < gx;
     // Zur näheren Bordwand hinaus. Genau auf der Mittellinie (lx = 0) gibt es keine Richtung —
     // dann nach Steuerbord, damit es überhaupt eine gibt.
@@ -10365,38 +10450,15 @@ const HULL_GLSL = 'uniform mat4 hullInv; uniform float hullOn; uniform vec2 hull
 function measureOpenHull(obj, opts){
   opts = opts || {};
   const wl = opts.wl || 0, unten = opts.unten !== undefined ? opts.unten : 0.2, dh = opts.dh || 0.1, ein = opts.ein !== undefined ? opts.ein : 0.04, min = opts.min !== undefined ? opts.min : 0.3;
-  const nimm = (o) => o.isMesh && o.geometry && o.geometry.attributes.position && (!opts.meshes || opts.meshes.test(o.name));
-  obj.updateMatrixWorld(true);
-  const inv = obj.matrixWorld.clone().invert(), m = new THREE.Matrix4(), y0 = wl - unten, yTop = y0 + dh * (HULL_NH - 1);
-  // Laengsbereich: vom Rumpf selbst, soweit er nicht hoeher als die oberste Zeile liegt
-  let z0 = Infinity, z1 = -Infinity; const v = new THREE.Vector3();
-  obj.traverse(o => { if(!nimm(o)) return; m.multiplyMatrices(inv, o.matrixWorld); const p = o.geometry.attributes.position;
-    for(let i = 0; i < p.count; i++){ v.fromBufferAttribute(p, i).applyMatrix4(m); if(v.y > yTop) continue; z0 = Math.min(z0, v.z); z1 = Math.max(z1, v.z); } });
-  if(!(z1 > z0)) return null;
-  const lo = new Float32Array(HULL_NS * HULL_NH).fill(Infinity), hi = new Float32Array(HULL_NS * HULL_NH).fill(-Infinity);
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  const y0 = wl - unten;
   // Je Hoehe h zaehlt, was vom Rumpf UNTER h liegt (seine Grundflaeche bis zum Wasserspiegel), nicht nur, was die Ebene
   // schneidet: der Boden des Schlauchboots ist flach (y 0,46) und schneidet keine Ebene, die Wuelste beginnen erst
-  // darueber – nur mit Schnitten blieb das Boot fast ohne Loch (gemessen). Also: jedes Dreieck unter h abschneiden und
-  // jede Kante des Rests in alle Scheiben eintragen, die sie ueberquert (grosse Dreiecke reichen ueber mehrere).
-  const L = (z1 - z0) / HULL_NS, poly = [], rest = [];
-  const trage = (j, k, x) => { const n = j * HULL_NS + Math.min(HULL_NS - 1, Math.max(0, k)); if(x < lo[n]) lo[n] = x; if(x > hi[n]) hi[n] = x; };
-  const strecke = (j, xa, za, xb, zb) => { if(za > zb){ let q = xa; xa = xb; xb = q; q = za; za = zb; zb = q; }
-    const ka = Math.floor((za - z0) / L), kb = Math.floor((zb - z0) / L); trage(j, ka, xa); trage(j, kb, xb);
-    for(let k = ka + 1; k <= kb; k++){ const x = xa + (xb - xa) * (z0 + k * L - za) / (zb - za); trage(j, k - 1, x); trage(j, k, x); } };
-  const unter = (j, h) => { rest.length = 0;
-    for(let e = 0; e < 3; e++){ const p = poly[e], q = poly[(e + 1) % 3];
-      if(p.y <= h) rest.push(p.x, p.z);
-      if((p.y > h) !== (q.y > h)){ const t = (h - p.y) / (q.y - p.y); rest.push(p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t); } }
-    const n = rest.length / 2; if(n === 1) trage(j, Math.floor((rest[1] - z0) / L), rest[0]);
-    for(let e = 0; n > 1 && e < n; e++){ const f = (e + 1) % n; strecke(j, rest[e * 2], rest[e * 2 + 1], rest[f * 2], rest[f * 2 + 1]); } };
-  obj.traverse(o => { if(!nimm(o)) return; m.multiplyMatrices(inv, o.matrixWorld);
-    const p = o.geometry.attributes.position, idx = o.geometry.index, n = idx ? idx.count : p.count;
-    const w = (i, t) => t.fromBufferAttribute(p, idx ? idx.getX(i) : i).applyMatrix4(m);
-    poly[0] = a; poly[1] = b; poly[2] = c;
-    for(let i = 0; i + 2 < n; i += 3){ w(i, a); w(i + 1, b); w(i + 2, c);
-      const ylo = Math.min(a.y, b.y, c.y); if(ylo > yTop) continue;
-      for(let j = 0; j < HULL_NH; j++){ const h = y0 + j * dh; if(h >= ylo) unter(j, h); } } });  // nach oben nie schmaler (folgt schon aus "alles darunter", schadet aber nicht), Rand einruecken; ohne Treffer kein Loch
+  // darueber – nur mit Schnitten blieb das Boot fast ohne Loch (gemessen). Also Baender "alles bis h" (hullSlices).
+  const bands = []; for(let j = 0; j < HULL_NH; j++) bands.push([-Infinity, y0 + j * dh]);
+  const sl = hullSlices(obj, { ns: HULL_NS, bands, meshes: opts.meshes });
+  if(!sl) return null;
+  const { z0, z1, lo, hi } = sl;
+  // nach oben nie schmaler (folgt schon aus "alles darunter", schadet aber nicht), Rand einruecken; ohne Treffer kein Loch
   const lr = new Float32Array(HULL_NS * HULL_NH * 2); let xmax = 0;
   for(let k = 0; k < HULL_NS; k++){ let l = Infinity, r = -Infinity;
     for(let j = 0; j < HULL_NH; j++){ const n = j * HULL_NS + k; l = Math.min(l, lo[n]); r = Math.max(r, hi[n]);
@@ -11786,7 +11848,7 @@ function stepSub(dt, inp){
   // man nicht hindurch.
   const nx = state.pos.x + state.vel.x*dt, nz = state.pos.z + state.vel.z*dt;
   const tief = state.pos.y < -6;        // sicher unter der Duenung und unter dem Kiel der Schiffe
-  const frei = tief ? !subHullBlocked(nx, nz, fwd.x, fwd.z)
+  const frei = tief ? !subHullBlocked(nx, nz, fwd.x, fwd.z, state.pos.y)
                     : boatWaterFree(nx, nz, fwd.x, fwd.z);
   if(frei){ state.pos.x = nx; state.pos.z = nz; }
   else coastSlide(state.pos, state.vel, fwd, dt, SUB_LOOK);
@@ -11834,13 +11896,18 @@ function stepSub(dt, inp){
 }
 // Getaucht sperren nur die Schiffsruempfe (siehe stepSub). Aufgebaut wie boatWaterFree, aber OHNE
 // isOpenWater: unter Wasser ist eine Insel kein Land, sondern ein Hang.
-function subHullBlocked(cx, cz, fx, fz){
+// Geprueft wird in der HOEHE des eigenen Druckkoerpers (cy = Wasserlinie des Modells, wie state.pos.y):
+// Kiel -10 m, Mitte -3,5 m, Deck +3 m (Modell siehe SHIP_TYPES 'sub'). Vorher stand hier fest ISLAND_Y + 2,
+// also die Oberflaeche – tief unter einem Frachter stiess man dann noch an seinen Umriss. Seit die
+// Schiffe in 3D vermessen sind (shipGridHit), taucht man unter dem Kiel durch.
+const SUB_HULL_YS = [-10, -3.5, 3];
+function subHullBlocked(cx, cz, fx, fz, cy){
   if(typeof seaShips === 'undefined' || !seaShips.length) return false;
   const sx = -fz, sz = fx;
   for(let i = -1; i <= 1; i++){
     const lx = cx + fx*SUB_LOOK*i, lz = cz + fz*SUB_LOOK*i;
     for(let j = -1; j <= 1; j++){
-      if(hitsSeaShip(lx + sx*SUB_HALF_W*j, ISLAND_Y + 2, lz + sz*SUB_HALF_W*j)) return true;
+      for(const dy of SUB_HULL_YS) if(hitsSeaShip(lx + sx*SUB_HALF_W*j, (cy === undefined ? ISLAND_Y + 2 : cy + dy), lz + sz*SUB_HALF_W*j)) return true;
     }
   }
   return false;

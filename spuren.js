@@ -223,13 +223,13 @@ function bordBreite(u){
   return b[i] + (b[i + 1] - b[i]) * t;
 }
 function breitenMessen(){
-  const N = 9, b = new Array(N).fill(0), v = new THREE.Vector3();
-  modelHolder.updateMatrixWorld(true); planeGroup.updateMatrixWorld(true); _inv.copy(planeGroup.matrixWorld).invert();
-  modelHolder.traverse(o => { if(!o.isMesh || !o.geometry.attributes.position) return; const p = o.geometry.attributes.position;
-    for(let i = 0; i < p.count; i += 2){ v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld).applyMatrix4(_inv);   // in Boots-Koordinaten (Nase -z)
-      if(v.y > 1.2) continue;                                            // nur bis knapp ueber der Wasserlinie
-      const u = Math.max(-1, Math.min(1, -v.z / gis.lang)), k = Math.round((u + 1) / 2 * (N - 1));
-      b[k] = Math.max(b[k], Math.abs(v.x)); } });
+  // Gemeinsamer Messkern der Engine (hullSlices): Dreiecke statt Punkte, lueckenlos je Scheibe. Boots-Koordinaten
+  // (planeGroup, Nase -z), bis knapp ueber der Wasserlinie; Scheibe k deckt u = -1 (Heck) .. +1 (Bug)
+  // Laengsbereich um eine halbe Scheibe erweitert: so liegen die Scheibenmitten genau auf den 9 Stuetzstellen u = -1 .. +1
+  const N = 9, Lz = gis.lang * (1 + 1 / (N - 1));
+  const sl = hullSlices(modelHolder, { ref: planeGroup, ns: N, bands: [[-Infinity, 1.2]], z0: -Lz, z1: Lz });   // global-ok: Engine
+  const b = new Array(N).fill(0);
+  if(sl) for(let k = 0; k < N; k++) if(sl.hi[k] >= sl.lo[k]) b[N - 1 - k] = Math.max(-sl.lo[k], sl.hi[k]);   // z = -lang ist der Bug (u = +1)
   gis.breiten = b.map(x => Math.max(0.4, x));
 }
 // Liegt ein Punkt (Welt) ueber dem Rumpf? (Boots-Koordinaten: |z| < Laenge/2, |x| < Breite dort, in jeder Hoehe)
