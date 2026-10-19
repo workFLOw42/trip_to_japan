@@ -41,6 +41,21 @@ const HUND_SPRINT = 9.5;                   // m/s, wenn er hinter dem laufenden 
 const VORAUS_MIN = 5, VORAUS_MAX = 10, VORAUS_QUER = 2.5;
 const EINSTIEG_SICHT = 40;                 // m: so weit voraus erkennt er einen Einstieg
 const EINSTIEG_KEGEL = 0.35;               // rad (20 Grad) um die Laufrichtung
+// Schrecksekunde (Live-Wunsch 19.10.2026: "sonst wirkt es, als wuerde man ihn mitsteuern"): Barki folgt beim Vorauslaufen
+// nicht Samus Richtung selbst, sondern seiner Wahrnehmung davon (V.blick). Kleine Aenderungen zieht er gleich weich mit;
+// eine deutliche (ueber SCHRECK_WINKEL) merkt er erst nach SCHRECK_MIN..MAX s und dreht dann zuegig nach (SCHRECK_DREH).
+const SCHRECK_WINKEL = 0.45, SCHRECK_MIN = 0.5, SCHRECK_MAX = 0.8, SCHRECK_DREH = 4.5, KLEIN_DREH = 2.0;
+function barkiBlick(V, dt){
+  if(V.blick === undefined){ V.blick = eva.yaw; V.schreck = 0; }
+  const diff = winkelDiff(V.blick, eva.yaw);
+  if(Math.abs(diff) < SCHRECK_WINKEL && !(V.schreck > 0)){ V.blick += klemme(diff, -KLEIN_DREH * dt, KLEIN_DREH * dt); return V.blick; }
+  // deutliche Aenderung: erst die Schrecksekunde, dann nachdrehen
+  if(!(V.schreck > 0) && !V.dreht){ V.schreck = SCHRECK_MIN + Math.random() * (SCHRECK_MAX - SCHRECK_MIN); }
+  if(V.schreck > 0){ V.schreck -= dt; if(V.schreck <= 0){ V.schreck = 0; V.dreht = true; } return V.blick; }
+  V.blick += klemme(diff, -SCHRECK_DREH * dt, SCHRECK_DREH * dt);
+  if(Math.abs(winkelDiff(V.blick, eva.yaw)) < 0.05) V.dreht = false;
+  return V.blick;
+}
 const STEH_KOMMEN = 1.2;                   // s Samu steht -> Hund kommt und setzt sich
 // Live-Befund 19.10.2026: Barki tollte und bellte schon nach 14 s, Samu ging aber erst nach 25 s in den Leerlauf (Moonwalk,
 // story.js MOON_NACH). Jetzt haengt das Tollen an Samus Leerlauf selbst und nicht an einer eigenen Uhr: es beginnt, wenn
@@ -149,8 +164,8 @@ function schrittFrei(hp, x, z){
 const FUSS_VOR = 0.12, FUSS_LINKS = ABSTAND_MIN + 0.05, FUSS_NAH = 0.6;
 function beiFuss(){ return neben(FUSS_VOR, FUSS_LINKS); }
 function beiFussSetzen(d){ if(d < 0.12 || (hund.blockiert && d < FUSS_NAH)){ setzen(); return true; } return false; }
-function neben(vor, links){
-  const p = eva.group.position, y = eva.yaw;
+function neben(vor, links, blick){
+  const p = eva.group.position, y = blick === undefined ? eva.yaw : blick;
   const fx = -Math.sin(y), fz = -Math.cos(y), lx = -Math.cos(y), lz = Math.sin(y);
   return { x: p.x + fx * vor + lx * links, z: p.z + fz * vor + lz * links };
 }
@@ -437,6 +452,8 @@ function update(dt){
   } else {
     // streifen: frei begleitend
     if(hund.modus !== 'streifen'){ hund.modus = 'streifen'; hund.ziel = null; hund.warte = 0.3; aufstehen(); }
+    // Samu steht: beim naechsten Loslaufen gilt seine Richtung, keine alte (die Schrecksekunde gilt nur fuer Wechsel im Lauf)
+    if(!((T.ausschlag || 0) > 0.05) && hund.voraus) hund.voraus.blick = undefined;
     if(stehtAuf() || laeuft(HA.springen)){ /* fertig aufstehen / springen */ }
     else if((T.ausschlag || 0) > 0.05 && eva.onGround){ voraus(dt, g, hp, T.ausschlag); }
     else if(dSamu > STREIF_MAX){
@@ -476,7 +493,8 @@ function update(dt){
 // dem er schnuppert; liegt ein Einstieg in Laufrichtung, ist das sein Platz, und er setzt sich dort.
 function voraus(dt, g, hp, lauf){
   const V = hund.voraus || (hund.voraus = { vor: 7, quer: VORAUS_QUER, wechsel: 3, schnuppern: 0 });
-  const fx = -Math.sin(eva.yaw), fz = -Math.cos(eva.yaw);
+  const blick = barkiBlick(V, dt);                          // Samus Richtung, wie Barki sie wahrnimmt (Schrecksekunde)
+  const fx = -Math.sin(blick), fz = -Math.cos(blick);
   const evaV = lauf > 0.5 ? EVA_SPEED * lauf : EVA_SPEED * 0.3 * lauf / 0.5;
   // Einstieg in Laufrichtung voraus?
   let ein = null, bestD = EINSTIEG_SICHT;
@@ -502,7 +520,7 @@ function voraus(dt, g, hp, lauf){
   if(stehtAuf()) return;
   // ab und zu die Seite / den Abstand wechseln, damit er nicht starr vorausfaehrt
   if((V.wechsel -= dt) <= 0){ V.wechsel = 3 + Math.random() * 4; V.quer = (Math.random() < 0.5 ? -1 : 1) * VORAUS_QUER * (0.4 + Math.random() * 0.6); V.vor = VORAUS_MIN + Math.random() * (VORAUS_MAX - VORAUS_MIN); }
-  const q = neben(V.vor, V.quer);
+  const q = neben(V.vor, V.quer, blick);
   const vorJetzt = (hp.x - g.x) * fx + (hp.z - g.z) * fz;
   // am Platz (oder schon gut voraus): kurz schnuppern, solange er nicht unter VORAUS_MIN zurueckfaellt
   if(V.schnuppern > 0){
