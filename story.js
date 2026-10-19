@@ -2445,6 +2445,26 @@ const STEIN_R = RING_R;      // m: im Ring -> Y (vorher 4 m um den Stein)
 const STEIN_ROT = 0xff5522;  // Leuchtrot (Pfeilspitze, Ring)
 const mars = story.mars = { phase: null, stein: null, steinObj: null, steinSaeule: null, rede: null };
 
+// Nase auf ein Ziel, die Fluegel waagerecht (Live-Befund 19.10.2026: "kommt der X-Wing im All an, trudelt er immer leicht nach
+// rechts"). setFromUnitVectors dreht auf dem kuerzesten Weg und liess ihn dabei um bis zu 82 Grad auf die Seite gerollt – die
+// Kurvenlogik (Querlage = Kurve) machte daraus eine Dauerdrehung, gemessen 4 Grad/s. Jetzt nur Kurs und Nicken, Rollen 0.
+function nasePlan(ziel){
+  const d = ziel.clone().sub(state.pos); if(d.lengthSq() < 1) return;
+  d.normalize();
+  const yaw = Math.atan2(-d.x, -d.z), pitch = Math.asin(Math.max(-1, Math.min(1, d.y)));
+  state.quat.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+  if(state.angVel) state.angVel.set(0, 0, 0);
+}
+// Beim Abflug von Mond/Mars (Live-Wunsch 19.10.2026): nach dem Uebergang ins All immer die Erde vor sich. Die Engine
+// (leaveGround) behielt die Blickrichtung vom Abflug – meist ins Leere.
+function hookAbflugErde(){
+  const orig = leaveGround;
+  leaveGround = function(){
+    const r = orig.apply(this, arguments);
+    if(typeof earthHome !== 'undefined' && earthHome){ nasePlan(earthHome); planeGroup.quaternion.copy(state.quat); snapCamera(); }
+    return r;
+  };
+}
 function marsStart(){
   story.phase = 'mars';
   mars.phase = 'hin';
@@ -2454,10 +2474,7 @@ function marsStart(){
   enterSpace();
   mars.ort = tripOrt();
   const m = bodyOf(mars.ort);
-  if(m){
-    const d = m.center.clone().sub(state.pos).normalize();
-    state.quat.setFromUnitVectors(new THREE.Vector3(0, 0, -1), d);
-  }
+  if(m) nasePlan(m.center);
   state.vel.set(0, 0, 0); state.throttle = 0.3;
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
   snapCamera();
@@ -3426,6 +3443,7 @@ window.STORY_HOOK = function(){
   hookRumpfachse();
   hookLoop();
   hookUbootNeigen();
+  hookAbflugErde();
 };
 window.STORY_START = function(){
   startStrand();
