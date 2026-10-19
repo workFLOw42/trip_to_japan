@@ -8260,6 +8260,100 @@ function updateMilkyWay(f){
     mwMat.color.copy(_mwC);
   }
 }
+// ---------- Himmel: Tag und Nacht ----------
+// Zwei feste Himmel, global fuer alle Spiele auf dieser Engine (Geheimland, Trip to Japan): setSky('day')
+// ist der Himmel, wie ihn die Engine immer hatte (blau, Wolken, Sonne), setSky('night') die sternklare Nacht
+// aus dem Geheimland: dunkelblauer Himmel, Sternenkuppel und Milchstrasse der Engine (sonst nur im All),
+// ein Mond, gedimmtes Mondlicht aus seiner Richtung – und KEINE Wolken (nachts wirkten sie wie schwebende
+// Steine). Mit der Hoehe blendet beides wie bisher ins All (spaceBlend). Unter Wasser gilt weiter
+// updateUnderwater, das danach laeuft.
+// Sterne, Milchstrasse und Mond liegen bei 1,2 Mio. m bzw. 900 km – ohne Nebel, der Erdnebel endet bei 3 km
+// und haette sie verschluckt.
+const SKY_DAY_COLOR   = 0x87b8e8;
+const SKY_NIGHT_COLOR = 0x0b1633;
+const NIGHT = {
+  hemi: 0.45, sun: 0.35,          // Mondlicht: man soll noch alles gut erkennen (Tag: 1,0 / 0,85)
+  stars: 0.55,                    // Deckkraft der Hintergrundsterne (1 = wie im All)
+  milkyWay: 0.6,                  // Milchstrasse: deutlich, aber nicht grell (im All MW_BRIGHT 1,6)
+  moonColor: 0xc8d6ff,            // Farbe des Mondlichts
+  // Mond: Richtung (rad ab +z), Hoehenwinkel, Radius, Abstand. Nicht zu hoch, sonst sieht ihn die
+  // Verfolgerkamera nicht.
+  moon: { az: Math.PI - 0.95, hoch: 0.24, r: 22000, dist: 900000 },
+};
+let skyMode = 'day';
+const nightMoon = { obj: null, halo: null, laedt: false };
+const _skyDir = new THREE.Vector3();
+function setSky(mode){
+  skyMode = mode === 'night' ? 'night' : 'day';
+  SKY_DAY.set(skyMode === 'night' ? SKY_NIGHT_COLOR : SKY_DAY_COLOR);
+  for(const c of clouds) c.visible = skyMode === 'day' && locale === 'earth';
+  if(skyMode === 'day'){
+    if(nightMoon.obj) nightMoon.obj.visible = nightMoon.halo.visible = false;
+    sun.position.set(200, 400, 100); sun.color.setHex(0xffffff);
+    if(mwMat && mwMat.userData.add){ mwMat.userData.add = false; mwMat.blending = THREE.NormalBlending; mwMat.transparent = false; mwMat.needsUpdate = true; }
+    if(mwDome) mwDome.rotation.set(0, 0, 0);
+  }
+}
+function skyNoFog(obj){
+  obj.traverse(o => { if(!o.material) return; for(const m of (Array.isArray(o.material) ? o.material : [o.material])){ m.fog = false; m.needsUpdate = true; } });
+}
+function buildNightMoon(){
+  if(nightMoon.laedt || !window.MOON_GLB) return;
+  nightMoon.laedt = true;                      // nur EINMAL laden (der Callback kommt erst spaeter)
+  preloadSphereGLB(window.MOON_GLB, NIGHT.moon.r, (g) => {
+    g.traverse(o => { if(!o.isMesh) return;
+      const src = Array.isArray(o.material) ? o.material[0] : o.material;
+      // selbstleuchtend: der Mond soll hell sein, egal wo das Licht der Szene steht (etwas gedaempft)
+      o.material = new THREE.MeshBasicMaterial({ map: src && (src.map || src.emissiveMap), color: 0xcfc8b4, fog: false });
+      o.frustumCulled = false; o.renderOrder = -1; });
+    scene.add(g); nightMoon.obj = g;
+    // weicher Lichthof um den Mond
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 10, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,245,210,.32)'); gr.addColorStop(0.35, 'rgba(200,215,255,.1)'); gr.addColorStop(1, 'rgba(200,215,255,0)');
+    x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+    nightMoon.halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), fog: false, depthWrite: false, transparent: true }));
+    nightMoon.halo.scale.setScalar(NIGHT.moon.r * 3.2); nightMoon.halo.renderOrder = -2;
+    scene.add(nightMoon.halo);
+    const an = skyMode === 'night' && locale === 'earth';
+    g.visible = nightMoon.halo.visible = an;
+  });
+}
+// Mond und Milchstrasse haengen an der Kamera (unendlich weit weg). Fuer eine andere Kamera (Foto) kurz zu deren
+// Position, danach wieder skyFollow(camera.position).
+function skyFollow(pos){
+  const M = NIGHT.moon;
+  _skyDir.set(Math.sin(M.az) * Math.cos(M.hoch), Math.sin(M.hoch), Math.cos(M.az) * Math.cos(M.hoch));
+  if(nightMoon.obj){ nightMoon.obj.position.copy(pos).addScaledVector(_skyDir, M.dist); nightMoon.halo.position.copy(pos).addScaledVector(_skyDir, M.dist * 1.02); }
+  if(mwDome && skyMode === 'night') mwDome.position.copy(pos);
+}
+// je Bild nach dem Weltall-Blend (aus updateSpaceBlend): Nachtwerte ueber die Tageswerte legen
+function updateNightSky(){
+  if(skyMode !== 'night') return;
+  if(locale !== 'earth'){ if(nightMoon.obj) nightMoon.obj.visible = nightMoon.halo.visible = false; sun.color.setHex(0xffffff); return; }
+  const tag = spaceBlend;                      // 0 = am Boden, 1 = im All
+  for(const c of clouds) if(c.visible) c.visible = false;   // die Engine schaltet sie beim Erdwechsel wieder ein
+  hemiLight.intensity = NIGHT.hemi + 0.1 * tag;
+  sun.intensity = NIGHT.sun + 0.5 * tag;
+  if(starDome){ if(!starDome.userData.nacht){ skyNoFog(starDome); starDome.userData.nacht = true; }
+    starDome.visible = true; starDome.position.copy(camera.position); }
+  if(starMat) starMat.opacity = Math.max(starMat.opacity, NIGHT.stars + (1 - NIGHT.stars) * tag);
+  // Panorama additiv: das Foto hat schwarzen Weltraum und deckte den dunkelblauen Nachthimmel ab – addiert
+  // bleibt das Blau, und Band und Nebel leuchten darauf. Im All (tag -> 1) wieder wie die Engine.
+  if(mwMat){ const add = tag < 0.5;
+    if(mwMat.userData.add !== add){ mwMat.userData.add = add; mwMat.blending = add ? THREE.AdditiveBlending : THREE.NormalBlending; mwMat.transparent = add; mwMat.needsUpdate = true; } }
+  if(mwDome){ if(!mwDome.userData.nacht){ skyNoFog(mwDome); mwDome.userData.nacht = true; }
+    mwDome.visible = true;
+    mwDome.rotation.set(0.9, 0.4, 0.35);       // schraeg ueber den Himmel, damit das Band vom Boden aus gut zu sehen ist
+    if(mwMat){ const s = Math.max(NIGHT.milkyWay, tag * MW_BRIGHT); mwMat.color.setRGB(s, s, s); } }
+  buildNightMoon();
+  skyFollow(camera.position);
+  if(nightMoon.obj){
+    nightMoon.obj.visible = nightMoon.halo.visible = true;
+    sun.position.copy(_skyDir).multiplyScalar(400);   // Mondlicht kommt vom Mond
+    sun.color.setHex(NIGHT.moonColor);
+  }
+}
 function preloadSpace(){
   // Sternenkuppel: exakte Kugelschale, von innen sichtbar, lichtunabhängig, blendet mit der Höhe ein
   preloadSphereGLB(window.STARS_GLB, STAR_R, (g)=>{
@@ -9475,6 +9569,7 @@ function updateSpaceBlend(dt){
   // nach wenigen Dutzend Metern. Das laeuft NACH dem Weltall-Blend, damit es dessen Werte
   // ueberschreibt statt mit ihnen zu ringen — im Wasser ist man nie im Weltall, die beiden
   // Zustaende schliessen sich aus.
+  updateNightSky();                         // Nachthimmel (setSky) ueber den Tageswerten, vor dem Wasser
   updateUnderwater(dt);
 }
 // ---------- Unterwasser-Sicht -----------------------------------------------------------------

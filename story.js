@@ -1992,6 +1992,10 @@ function hookLoop(){
     etappenMusik(1, window.MUSIK_SND && window.MUSIK_SND.e1, dt, musik1Pegel);
     if(story.tiereUpdate) story.tiereUpdate(dt);   // tiere.js: Moewen (1, 4, 5), Hunde (1), Pandas (5)
     if(story.etappe >= 2 && locale === 'earth') himmelUpdate(dt); else if(himmel.length) himmelWeg();
+    // Tag- oder Nachthimmel der Engine (setSky, Live-Wunsch 19.10.2026): die Wueste (Etappe 2) liegt in der Nacht wie das
+    // Geheimland – Sterne, Milchstrasse, Mond, keine Wolken. Umgeschaltet nur beim Wechsel, gilt so auch nach Spruengen.
+    const sollHimmel = story.etappe === 2 ? 'night' : 'day';
+    if(skyMode !== sollHimmel) setSky(sollHimmel);                // global-ok: Engine
     introDt(dt);
     updateMarken();
     return loopOrig.apply(this, arguments);
