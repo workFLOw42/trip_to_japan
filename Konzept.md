@@ -123,7 +123,7 @@ Ariane, X-Wing-Parkplatz, U-Boot-Ring, Sonar mit Küste – gebaut 09.10.2026), 
   Mission vorbei; **landen muss man nicht** (erst später mit dem Alpha Jet), aber es wird erklärt:
   30 % Schub, langsam runter, grüner Gyro-Ring.
 - **Samu zu Fuß:** A Sprung, B Aerial Evade, X Silly Dance, Y Butterfly Twirl, L3 + Stick Moonwalk;
-  schwimmen (RT tauchen, LT auf). Auf Mond und Mars springt er dank geringer Schwerkraft höher.
+  schwimmen (rechter Stick vor = tauchen, zurück = auf). Auf Mond und Mars springt er dank geringer Schwerkraft höher.
 - **Ton:** an = Stimme ohne Untertitel, aus = Untertitel; Umschalten setzt am aktuellen Wort fort.
   Alles blendet mit der Schwarzblende zum Globus aus.
 - **Aufgeräumt** gegenüber dem Flugspiel: kein Jetpack, kein Modellwechsel, kein Steg, keine Zufallsfeuer,

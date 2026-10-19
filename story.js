@@ -1204,7 +1204,9 @@ function hookIntro(){
 
 // ---- Schwimmen -------------------------------------------------------------------------------
 // Laeuft Samu ins Meer, schwimmt er (statt im Schlauchboot zu sitzen): linker Stick bewegt und
-// dreht ihn, RT taucht ab, LT taucht auf (Tastatur: E / Q). An Land steht er wieder auf.
+// dreht ihn, rechter Stick vor taucht ab, zurueck taucht auf (Tastatur: E / Q). An Land steht er wieder auf.
+// Live-Wunsch 19.10.2026: wie im Geheimland (vorher RT ab / LT auf). Beim Schwimmen kippt der rechte Stick deshalb die
+// Kamera nicht mehr (hookSchwimmen, readInput); herum schauen (links/rechts) geht weiter.
 const SCHWIMM_V   = 1.8;     // m/s
 const TAUCH_V     = 1.4;     // m/s auf und ab
 const SCHWIMM_TIEF = 0.9;    // m: so tief liegt der Koerper an der Oberflaeche im Wasser
@@ -1225,8 +1227,9 @@ function tauchEingabe(){
   if(gamepadIndex !== null){
     const gp = navigator.getGamepads()[gamepadIndex];
     if(gp){
-      d -= gp.buttons[7] ? gp.buttons[7].value : 0;    // RT = runter
-      d += gp.buttons[6] ? gp.buttons[6].value : 0;    // LT = rauf
+      // rechter Stick wie das U-Boot: nach vorn (negativ) = abtauchen, zurueck = auftauchen
+      const ry = gp.axes[3] || 0;
+      if(Math.abs(ry) > 0.2) d += (ry - Math.sign(ry) * 0.2) / 0.8;
     }
   }
   return Math.max(-1, Math.min(1, d));
@@ -1276,6 +1279,9 @@ function watGrund(x, z){ const d = watAbstand(x, z); if(d === 0 || d === Infinit
 story.watGrund = watGrund;
 function hookSchwimmen(){
   evaEnterDinghy = function(x, z){ if(eva && !eva.boat && !sw.aktiv) schwimmStart(x, z); };
+  // Beim Schwimmen gehoert der rechte Stick (senkrecht) dem Tauchen – die Kamera soll dabei nicht kippen
+  const leseOrig = readInput;
+  readInput = function(){ const r = leseOrig.apply(this, arguments); if(sw.aktiv) lookY = 0; return r; };
   // Etappen mit eigener Wasserwelt (Fluss, Hafen, Wueste) haben eigene Regeln: dort nicht eingreifen
   const eigeneWelt = () => story.etappe >= 2 && story.etappe <= 4;
   const solidOrig = evaSolid, fussOrig = evaFootY, bedOrig = seabedY;
@@ -3106,7 +3112,7 @@ const ANLEITUNG = [
     ['L3 (halten) + L-Stick', 'Moonwalk'],
     ['X', 'Hip Hop Dance (Stick bricht ab)'],
     ['Y', 'Butterfly Twirl · am Fahrzeug: einsteigen'],
-    ['im Wasser', 'L-Stick schwimmen · RT tauchen · LT auftauchen'],
+    ['im Wasser', 'L-Stick schwimmen · R-Stick vor tauchen · zurück auftauchen'],
     ['D-Pad ↑', 'diese Anleitung (Pause)'],
     ['D-Pad ←', 'aktuelle Aufgabe (Pause)'],
     ['D-Pad ↓', 'Ton an (Stimme) / aus (Untertitel)'],
