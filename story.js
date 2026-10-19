@@ -603,8 +603,13 @@ const ZEICHEN_PRO_S = 14;
 // Browser kein Geschlecht melden. Edge bringt zusaetzlich natuerliche Online-Stimmen mit.
 const STIMME_M = /Conrad|Killian|Florian|Stefan|Ralf|Kasper|Bernd|Christoph|male|männlich/i;
 const STIMME_W = /Katja|Amala|Seraphina|Louisa|Hedda|Elke|Klarissa|Tanja|Google Deutsch|female|weiblich/i;
-function stimmeFuer(rolle){
-  const de = window.speechSynthesis.getVoices().filter(v => /^de/i.test(v.lang));
+// nurLokal: nur Stimmen des Rechners (Windows), keine Online-Stimme. Wird gesetzt, wenn eine Online-Stimme nicht anfing (siehe
+// die Wache in sprich) – Live-Befund 19.10.2026: beim Nutzer laedt Chrome die Google-Stimmen uebers Netz, und nach schnellem
+// Neuladen blieb die Sprachausgabe "oft blockiert". Ab dann fuer den Rest des Spiels lokal (sonst wartete jeder Satz erst).
+let nurLokal = false;
+function stimmeFuer(rolle, lokal){
+  const alle = window.speechSynthesis.getVoices().filter(v => /^de/i.test(v.lang));
+  const de = (lokal || nurLokal) && alle.some(v => v.localService) ? alle.filter(v => v.localService) : alle;
   const bevorzugt = (re) => de.filter(v => re.test(v.name)).sort((a, b) => (a.localService ? 1 : 0) - (b.localService ? 1 : 0))[0];
   return (rolle === 'pilot' ? bevorzugt(STIMME_M) : bevorzugt(STIMME_W)) || de[0] || null;
 }      // Sprechtempo bei rate 1.0 (fuer Schaetzung und Untertitel-Takt)
@@ -644,41 +649,45 @@ function sprich(saetze, fertig, rolle, warteMax, beiSatz){
       sprecher = r; wartetSeit = 0;
       // Live-Befund 19.10.2026: die maennliche Stimme (Pilot, z. B. Etappe 4b 'Samu muss mit auf die Wache') sagte "Semu". Nur ihr
       // wird "Sahmu" vorgelesen (wie "Joschi" im Geheimland); Untertitel und Positionen (pos0, bPos) bleiben beim Originaltext.
-      const u = utt = new SpeechSynthesisUtterance(rolle === 'pilot' ? rest.replace(/Samu/g, 'Sahmu') : rest);
-      const stimme = stimmeFuer(rolle);
-      u.lang = 'de-DE'; if(stimme) u.voice = stimme; u.rate = 1.0;
-      // ohne maennliche Stimme klingt der Pilot wenigstens tiefer
-      u.pitch = rolle === 'pilot' && !(stimme && STIMME_M.test(stimme.name)) ? 0.75 : 1.0;
-      u.onboundary = e => { if(utt === u) bPos = p + (e.charIndex || 0); };
-      u.onend = u.onerror = () => { if(utt === u) naechster(); };
-      // Live-Befund 19.10.2026 ("kein Ton, obwohl der Tab ihn anzeigt; Strg-F5 half nicht, nur Browser neu starten"): die
-      // Sprachausgabe ist in Chrome EINE Warteschlange fuer den ganzen Browser. Hat ein anderer Tab (hier: Das Geheimland,
-      // Pause mitten im Satz) sie angehalten, bleibt jeder Satz hier stumm – speaking=true, paused=false, kein onstart
-      // (nachgestellt in echtem Chrome, C:/tmp/jfg/test/tts_tabs2.js). Von uns spricht hier niemand (sprecher ist frei
-      // gewesen): was dann noch laeuft oder wartet, ist fremd (anderer Tab, andere Webseite mit Vorlesefunktion) – verwerfen.
-      // cancel() + resume() loest den Stau, und zwar OHNE Bedingung: diese Seite sieht ihn nicht (speaking, pending und paused
-      // stehen hier alle auf false – nachgemessen, C:/tmp/jfg/test/tts_var.js).
-      synth.cancel();
-      synth.resume();
-      // Wache gegen eine haengende Sprachausgabe (Live-Befund 19.10.2026: nach Strg-F5 und Start mit dem Controller blieb sie
-      // "oft blockiert", die Musik lief; hier nicht nachstellbar, darum unabhaengig von der Ursache): faengt der Satz nach
-      // START_WARTE s nicht an (kein onstart), noch einmal freiraeumen und neu sprechen – hoechstens START_VERSUCHE mal, dann
-      // laeuft er als Untertitel weiter, statt das Spiel bis zur Notfall-Zeitsperre (Satzlaenge x 2,5) stumm haengen zu lassen.
-      u.onstart = () => { if(utt === u) u.lief = true; };
+      const text = rolle === 'pilot' ? rest.replace(/Samu/g, 'Sahmu') : rest;
+      const satzId = {};                                    // dieser Satz (ueber alle Versuche hinweg)
+      // Ein Satzobjekt je Versuch: der Versuch, den die Wache verwirft, darf mit seinem onerror (Folge des cancel) nichts mehr
+      // ausloesen – vorher sprang die Ansage dadurch einen Satz weiter, waehrend derselbe Satz neu gesprochen wurde.
+      const neuU = (lokal) => {
+        const u = new SpeechSynthesisUtterance(text), stimme = stimmeFuer(rolle, lokal);
+        u.lang = 'de-DE'; if(stimme) u.voice = stimme; u.rate = 1.0; u.satz = satzId;
+        // ohne maennliche Stimme klingt der Pilot wenigstens tiefer
+        u.pitch = rolle === 'pilot' && !(stimme && STIMME_M.test(stimme.name)) ? 0.75 : 1.0;
+        u.onboundary = e => { if(utt === u) bPos = p + (e.charIndex || 0); };
+        u.onend = u.onerror = () => { if(utt === u) naechster(); };
+        u.onstart = () => { if(utt === u) u.lief = true; };
+        return u;
+      };
+      // Freigeraeumt wird NUR, wenn ein Satz nachweislich nicht anfaengt (Live-Befund 19.10.2026: das cancel() vor JEDEM Satz,
+      // eingebaut gegen den fremden Stau eines anderen Tabs, war zu grob – seitdem "Probleme, die es vorher nie gab"). Die
+      // Wache: kein onstart nach START_WARTE s -> verwerfen, freiraeumen, neu sprechen (beim zweiten Mal mit einer lokalen
+      // Stimme, falls es eine Online-Stimme war); klappt auch das nicht, laeuft der Satz als Untertitel weiter.
       const START_WARTE = 1500, START_VERSUCHE = 2;
-      const versuch = (n) => {
-        synth.speak(u);
+      const versuch = (n, lokal) => {
+        const u = utt = neuU(lokal);
+        synth.resume(); synth.speak(u);
         setTimeout(() => {
           if(utt !== u || u.lief || done) return;
-          if(n < START_VERSUCHE){ synth.cancel(); synth.resume(); versuch(n + 1); return; }
-          utt = null; if(sprecher === r){ sprecher = null; } laut = false;
+          utt = null;                                       // zuerst: das onerror des verworfenen Versuchs geht ins Leere
+          synth.cancel(); synth.resume();
+          if(n < START_VERSUCHE){
+            const online = u.voice && !u.voice.localService;
+            if(online) nurLokal = true;                     // haengt die Online-Stimme, fuer den Rest des Spiels lokal
+            versuch(n + 1, online); return;
+          }
+          if(sprecher === r) sprecher = null; laut = false;
           untertitel(s); clearTimeout(timer); timer = setTimeout(naechster, satzDauer(s) * (s.length - p) / s.length);
           sprecherFrei(r);
         }, START_WARTE);
       };
-      versuch(1);
-      // falls onend nie kommt
-      timer = setTimeout(() => { if(utt === u) naechster(); }, (rest.length / ZEICHEN_PRO_S * 1000 + 1500) * 2.5);
+      versuch(1, false);
+      // falls onend nie kommt (gilt fuer den Satz, egal welcher Versuch gerade spricht)
+      timer = setTimeout(() => { if(utt && utt.satz === satzId) naechster(); }, (rest.length / ZEICHEN_PRO_S * 1000 + 1500) * 2.5);
     } else {
       untertitel(s);
       timer = setTimeout(naechster, satzDauer(s) * (s.length - p) / s.length);
