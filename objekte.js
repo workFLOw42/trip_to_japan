@@ -48,7 +48,11 @@ let bildNr = 0;
 
 // Setzt ein Objekt des Typs name in die Welt weltN. Rueckgabe sofort: das Ding { typ, welt, obj, bereit }. Bei
 // geladenen Modellen (GLB) kommt obj erst spaeter – bereit ist ein Promise darauf.
-function setze(name, weltN, opt){
+// Live-Befund 19.10.2026 (perfekter 6-Tage-Run, Finale: beim Absprung aus der C-400 fror das Bild ein, der Ton lief weiter):
+// userData.ding zeigt mit d.obj auf das Objekt selbst zurueck – ein Kreis. three.js kopiert userData beim clone() per
+// JSON.stringify, und das lief in "Maximum call stack size exceeded" (finale.js abspringen: planeGroup.clone). Darum steht
+// ding NICHT aufzaehlbar in userData: lesen geht wie bisher (obj.userData.ding), JSON und clone() sehen es nicht.
+function dingSetzen(obj, d){ Object.defineProperty(obj.userData, 'ding', { value: d, writable: true, configurable: true, enumerable: false }); }function setze(name, weltN, opt){
   opt = opt || {};
   const def = katalog.get(name);
   const d = { typ: name, welt: weltN, obj: null, koerper: [], bb: new THREE.Box3(), beweglich: !!(def && def.beweglich), aus: false };
@@ -57,7 +61,7 @@ function setze(name, weltN, opt){
     if(!obj) return d;
     (opt.in || story.welt(weltN)).add(obj);
     obj.rotation.y = opt.dreh || 0;
-    d.obj = obj; obj.userData.ding = d;
+    d.obj = obj; dingSetzen(obj, d);
     d.koerper = koerperAus(obj, def.form);
     platziere(d, def, opt);
     dinge.push(d); aktualisiere(d, true);
@@ -75,7 +79,7 @@ function ding(obj, opt){
   opt = opt || {};
   const d = { typ: opt.typ || obj.name || '?', welt: opt.welt !== undefined ? opt.welt : story.etappe, obj, koerper: koerperAus(obj, opt.form),
     bb: new THREE.Box3(), beweglich: !!opt.beweglich, aus: false, nurZuFuss: !!opt.nurZuFuss };
-  obj.userData.ding = d; dinge.push(d); aktualisiere(d, true);
+  dingSetzen(obj, d); dinge.push(d); aktualisiere(d, true);
   return d;
 }
 story.ding = ding;
@@ -95,7 +99,7 @@ story.instanzen = function(inst, opt){
     koerper.push(neuK(ersatz, art, opt.box || geo.boundingBox));
   }
   const d = { typ: opt.typ || inst.name || 'instanzen', welt: opt.welt !== undefined ? opt.welt : story.etappe, obj: inst, koerper, bb: new THREE.Box3(), beweglich: false, aus: false };
-  inst.userData.ding = d; dinge.push(d); d.stand = undefined;
+  dingSetzen(inst, d); dinge.push(d); d.stand = undefined;
   d.bb.makeEmpty(); for(const k of koerper){ aktualisiereK(k); d.bb.union(k.wb); } d.stand = bildNr;
   rastern(d);
   return d;
