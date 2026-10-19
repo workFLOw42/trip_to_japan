@@ -1519,6 +1519,12 @@ function fadenStueck(a, b, anteil){
   const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xe02020, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
   gl.faden.add(m);
   gl.spitze = pts[n - 1];                                            // Samus Gesicht sitzt dort (globusZeichnen)
+  // Live-Befund 19.10.2026 (Etappe 1 -> 2, "der Faden legt sich etwa in der Mitte ueber das Gesicht"): das Gesicht sass fest
+  // auf 9 % ueber der Kugel, der Bogen steigt bei langen Wegen in der Mitte aber bis 11 % – kurz hinter dem Scheitel lag das
+  // eben gezeichnete Stueck naeher an der Kamera als das Gesicht (nachgemessen: 1,8 bis 2,9 s, C:/tmp/sfg/globus_gesicht.js).
+  // Darum: die hoechste Stelle des Fadens auf dem Stueck, das das Gesicht ueberdeckt (rund 0,15 hinter der Spitze), merken.
+  let hoch = 0; for(let i = n - 1; i >= 0 && pts[i].distanceTo(pts[n - 1]) < 0.15; i--) hoch = Math.max(hoch, pts[i].length());
+  gl.spitzeHoch = hoch;
   return m;
 }
 // Zustand zeichnen: alle bisherigen Fadenstuecke + Punkte, das letzte Stueck bis "anteil"
@@ -1542,7 +1548,8 @@ function globusZeichnen(anteil){
   else morphZeichnen();
   // Samus Gesicht wandert an der Spitze des Fadens mit (das letzte Stueck ist das zuletzt gezeichnete), am Ziel bleibt es
   if(gl.gesicht){ gl.gesicht.visible = !!gl.spitze;
-    if(gl.spitze) gl.gesicht.position.copy(gl.spitze).normalize().multiplyScalar(GLOBUS_R * (gl.morph && anteil >= 1 ? 1.16 : 1.09)); }   // ueber der Welle
+    // mindestens 9 % ueber der Kugel, sonst knapp ueber dem hoechsten Fadenstueck darunter (siehe fadenStueck) – ueber der Welle 16 %
+    if(gl.spitze) gl.gesicht.position.copy(gl.spitze).normalize().multiplyScalar(Math.max(GLOBUS_R * (gl.morph && anteil >= 1 ? 1.16 : 1.09), (gl.spitzeHoch || 0) + 0.03)); }
 }
 // Ende Etappe 6 (Live-Wunsch 09.10.2026): auf dem Globus wird der lila Punkt Japan zum 🌊 (der Strand am Fuji).
 // Punkt schrumpft, die Welle (Sprite mit Emoji, bleibt bestehen) waechst – zwischen 0,8 und 2,4 s.
@@ -1672,6 +1679,7 @@ function globusAnkunft(ortText, tageText, fertig){
 }
 story.globusAnkunft = globusAnkunft;
 story.globusAktiv = () => gl.aktiv;
+story._gl = gl;                                       // fuer Tests (Faden und Gesicht nachmessen)
 
 // ---- Story-Timer (R7) ------------------------------------------------------------------------
 // Laufen ueber die Spielzeit statt setTimeout: sie stehen, solange die Anleitung offen ist (Pause)
