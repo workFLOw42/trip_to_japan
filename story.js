@@ -1659,9 +1659,15 @@ function globusUpdate(dt){
       gl.aktiv = false; gl.ende = false; gl.morph = false; if(gl.welle) gl.welle.visible = false;
       globusText('');
       hudSichtbar(true);
-      masterBlende(1, 1.5);                   // neue Etappe: Ton wieder ein
+      // Live-Befund 19.10.2026 (X-Wing von Etappe 3 nach 4, Ton an): am Anfang der neuen Etappe war kurz noch der Schub zu
+      // hoeren. Vorher ging der Ton HIER wieder auf und erst danach baute f() die Etappe (Samu steigt aus) – in dem Bild
+      // dazwischen stand der Motor-Regler noch auf dem alten Schub (die Engine zieht ihn erst im naechsten Bild auf 0, und
+      // der Hafen braucht fuer seinen Aufbau mehrere Bilder). Jetzt: Motor sofort still, die Etappe aufbauen und den Ton
+      // erst ZWEI Bilder spaeter aufblenden – dann hat die Engine alle Regler (Motor, Ambiente) auf die neue Lage gestellt.
+      if(typeof engineGain !== 'undefined' && engineGain) engineGain.gain.value = 0;
       const f = gl.fertig; gl.fertig = null;
       if(f) f();
+      requestAnimationFrame(() => requestAnimationFrame(() => { if(!gl.aktiv) masterBlende(1, 1.5); }));   // neue Etappe: Ton wieder ein
     });
   }
 }
