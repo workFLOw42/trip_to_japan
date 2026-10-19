@@ -8025,6 +8025,16 @@ const STAR_R    = 1200000;  // Radius der Sternenkuppel (muss hinter allen Himme
 // rutscht in den Hyperraum und wird weiter schneller — bis Warp 10.
 const SPACE_C   = 3000;     // m/s = Warp 1
 const WARP_MAX  = 10;       // Warp 10 als Obergrenze
+// ANZEIGE oben links (Live-Wunsch 19.10.2026): die Spitze zeigt Warp 9.975 statt 10 – gerechnet wird weiter mit WARP_MAX.
+// Bis Warp 1 bestimmt der Schub das Tempo (50 % = Warp 0.5), das bleibt unveraendert. Erst darueber (Vollgas, Warp-Antrieb
+// beschleunigt von 1 bis WARP_MAX) wird umgerechnet: Warp 1..10 echt -> 1..9.975 angezeigt. Oben drei Stellen, sonst gaebe
+// 9.975 gerundet "10.0".
+const WARP_ANZEIGE_MAX = 9.975;
+function warpAnzeige(v){
+  let w = v / SPACE_C;
+  if(w > 1) w = 1 + (w - 1) * (WARP_ANZEIGE_MAX - 1) / (WARP_MAX - 1);
+  return w >= 9.9 ? w.toFixed(3) : w.toFixed(1);
+}
 const WARP_RAMP = 12;       // Sekunden von Warp 1 auf Warp 10
 // Himmelskörper: Radius, Entfernung, Richtung relativ zur Ausflugrichtung (yaw = Drehung um die
 // Hochachse, up = Anteil nach oben), Symbol fürs HUD, landbar?
@@ -12619,7 +12629,7 @@ function updateHUD(){
     // niemandem etwas sagt. Der EVA-Zweig schrieb bisher immer km/h, weil die Warp-Anzeige nur im
     // Flieger-Zweig stand.
     if(eva.jet && locale === 'space'){
-      setTxt(elSpd, 'Warp ' + (eva.jetVel ? (eva.jetVel.length()/SPACE_C).toFixed(1) : '0.0'));
+      setTxt(elSpd, 'Warp ' + (eva.jetVel ? warpAnzeige(eva.jetVel.length()) : '0.0'));
       setTxt(elSpdU, '');
     } else {
       setTxt(elSpd, Math.round(evaSpeedKmh()));
@@ -12650,7 +12660,7 @@ function updateHUD(){
     setTxt(elThrU, ' %');
     setTxt(elThr, Math.round(state.throttle*100));
     if(locale === 'space'){
-      setTxt(elSpd, 'Warp ' + (state.vel.length()/SPACE_C).toFixed(1));
+      setTxt(elSpd, 'Warp ' + warpAnzeige(state.vel.length()));
       setTxt(elSpdU, '');
     } else {
       setTxt(elSpd, Math.round(state.vel.length()*3.6));
