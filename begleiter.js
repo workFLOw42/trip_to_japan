@@ -7,7 +7,7 @@
 //   streifen – laeuft Samu, begleitet er ihn frei: Punkte um Samu herum, bevorzugt vor ihm, schnuppern, mal kurz
 //              sitzen, Freudensprung. Entfernt sich Samu, kommt er hinterher.
 //   kommen   – bleibt Samu stehen, kommt er an und setzt sich neben ihn (links, gleiche Blickrichtung).
-//   tollen   – steht Samu laenger (TOLL_NACH s) oder tanzt Hip Hop, springt er vor ihm hin und her.
+//   tollen   – geht Samu in den Leerlauf (Moonwalk von selbst) oder tanzt Hip Hop, springt er vor ihm hin und her.
 //   knien    – B: Samu kniet, der Hund rennt vor ihn, springt freudig (spielen) und setzt sich dann neben ihn.
 //   strand   – Finale (Fallschirm, Snowboard, Surfen): er bleibt am Fukuoka-Beach sitzen.
 // Der Hund ist ein Koerper: Samu laeuft nicht durch ihn, er laeuft nicht durch Grenzen (story.tiefe), nicht ins Wasser
@@ -28,7 +28,10 @@ const HA = { stehen: 'Dog|Idle', gehen: 'Dog|Walk', rennen: 'Dog|Run', springen:
 const SITZ_AB = 0.9, SITZ_BIS = 2.85;
 const STREIF_R = 8, STREIF_MAX = 15, NACHHOLEN = 60;
 const STEH_KOMMEN = 1.2;                   // s Samu steht -> Hund kommt und setzt sich
-const TOLL_NACH = 14;                      // s Samu steht -> der Hund tollt vor ihm herum
+// Live-Befund 19.10.2026: Barki tollte und bellte schon nach 14 s, Samu ging aber erst nach 25 s in den Leerlauf (Moonwalk,
+// story.js MOON_NACH). Jetzt haengt das Tollen an Samus Leerlauf selbst und nicht an einer eigenen Uhr: es beginnt, wenn
+// sein Moonwalk beginnt. Darf er dort nicht (am Wasser), bleibt er stehen – dann tollt Barki ab TOLL_NACH trotzdem.
+const TOLL_NACH = 30;                      // s Samu steht, ohne in den Leerlauf zu gehen -> der Hund tollt trotzdem
 const TOLL_ABST = 3.2, TOLL_BREIT = 1.6;   // m vor Samu, m zur Seite
 const hund = story.hund = { obj: null, inner: null, mixer: null, acts: {}, cur: null, yaw: 0, aktiv: false,
   modus: 'streifen', ziel: null, warte: 0, t: 0, sitzt: false, tun: null, steht: 0, kniet: false, bellT: 3 };
@@ -372,7 +375,9 @@ function update(dt){
   // Samu: steht er? tanzt er? kniet er?
   const T = story.tricks || {}, S = story.samu || {};
   const tanzt = S.cur === 'dance_hiphop';
+  const leerlauf = S.cur === 'moonwalk' && !T.moon;          // Moonwalk von selbst (gehaltenes M zaehlt nicht)
   const steht = (T.ausschlag || 0) <= 0.05 && eva.onGround && !T.aktiv && !T.moon && !knie.an;
+  const tollen = tanzt || (steht && leerlauf) || hund.stehT > TOLL_NACH;
   hund.stehT = steht ? (hund.stehT || 0) + dt : 0;
   const schwimmt = !!(story.schwimm && story.schwimm.aktiv);
 
@@ -392,7 +397,7 @@ function update(dt){
       hund.yaw += klemme(winkelDiff(hund.yaw, eva.yaw + Math.PI), -3 * dt, 3 * dt);
       if((hund.sitzT += dt) > 9){ hund.spielN = 0; aufstehen(); }          // nach einer Weile wieder spielen
     }
-  } else if((tanzt || hund.stehT > TOLL_NACH) && !schwimmt){
+  } else if(tollen && !schwimmt){
     // Tollen: vor Samu hin und her, immer wieder ein Sprung (beim Hip Hop und wenn Samu lange steht)
     if(hund.modus !== 'tollen'){ hund.modus = 'tollen'; hund.toll = { seite: 1, naechste: 0.8 }; aufstehen(); }
     if(!stehtAuf()){
@@ -404,10 +409,15 @@ function update(dt){
     }
   } else if(steht && hund.stehT > STEH_KOMMEN && !schwimmt && dSamu < STREIF_MAX){
     // Samu bleibt stehen: kommen und links neben ihn setzen
+    // Live-Befund 19.10.2026: sass Barki schon (eine Laune beim Streifen, oder Samu hatte sich gedreht), blieb er sitzen, wo
+    // er war, und drehte sich nur zu Samu. Jetzt zaehlt nur der Platz links neben Samu: sitzt er nicht dort, steht er auf
+    // und laeuft hin (FUSS_NAH Spielraum, damit er nicht bei jedem kleinen Drehen von Samu aufspringt).
     if(hund.modus !== 'kommen'){ hund.modus = 'kommen'; hund.ziel = null; }
+    const l = beiFuss(), weg = Math.hypot(l.x - hp.x, l.z - hp.z);
+    if(hund.sitzt && weg > FUSS_NAH && !hund.blockiert) aufstehen();
     if(stehtAuf()){ /* erst aufstehen */ }
     else if(!hund.sitzt){
-      const l = beiFuss(), d = laufe(dt, l.x, l.z, Math.hypot(l.x - hp.x, l.z - hp.z) > 4 ? 5 : 1.6);
+      const d = laufe(dt, l.x, l.z, weg > 4 ? 5 : 1.6);
       beiFussSetzen(d);
     } else hund.yaw += klemme(winkelDiff(hund.yaw, eva.yaw + Math.PI), -3 * dt, 3 * dt);
   } else {
