@@ -7239,7 +7239,7 @@ const DINGHY_DRAFT = 0.42;
 // 0,55 m: der echte CL-215 hat 0,9 m Tiefgang bei 28,60 m Spannweite, im Modellmassstab
 // (18,50 m) sind das 0,58 m — abgerundet, damit die Schwimmerlinie unter Wasser liegt.
 const CANADAIR_DRAFT = 0.55;
-let dinghyTemplate = null, dinghyFloorY = 0;
+let dinghyTemplate = null, dinghyFloorY = 0, dinghyHull = null;
 function preloadDinghy(){
   if(!window.DINGHY_GLB || !THREE.GLTFLoader) return;
   const gl = new THREE.GLTFLoader();
@@ -7264,6 +7264,10 @@ function preloadDinghy(){
     dinghyFloorY = box3.max.y * DINGHY_FLOOR;         // Innenboden ueber dem Kiel
     const wrap = new THREE.Group(); wrap.add(obj);
     dinghyTemplate = wrap;
+    // offenes Boot: das Meer im Rumpf ausblenden (measureOpenHull). Vermessen so, wie es in makeDinghy
+    // sitzt (gedreht); Wasserlinie = Tiefgang ueber dem Kiel
+    const probe = new THREE.Group(), d = wrap.clone(true); d.rotation.y = Math.PI; probe.add(d);
+    dinghyHull = measureOpenHull(probe, { wl: DINGHY_DRAFT });
   }, (err)=>{ console.warn('Schlauchboot-GLB Ladefehler:', err); });
 }
 // Baut ein Schlauchboot. Der Ursprung liegt am KIEL, damit es wie das Feuerwehrboot auf die
@@ -7278,6 +7282,7 @@ function makeDinghy(){
     d.rotation.y = Math.PI;
     g.add(d);
     g.userData.floorY = dinghyFloorY;
+    g.userData.hull = dinghyHull;
     return g;
   }
   const hull = new THREE.Mesh(new THREE.TorusGeometry(DINGHY_LEN*0.42, 0.22, 8, 16), dinghyMat);
@@ -7285,6 +7290,7 @@ function makeDinghy(){
   const floor = new THREE.Mesh(new THREE.CircleGeometry(DINGHY_LEN*0.36, 14), dinghyMat);
   floor.rotation.x = -Math.PI/2; floor.position.y = 0.18; g.add(floor);
   g.userData.floorY = 0.2;
+  g.userData.hull = measureOpenHull(g, { wl: DINGHY_DRAFT });
   return g;
 }
 
@@ -10300,6 +10306,135 @@ ovalShadow.rotation.x = -Math.PI/2;
 // Schatten ueber alles legte. Jetzt entscheidet der Tiefenpuffer, und der polygonOffset im Material
 // haelt ihn knapp vor der Auflageflaeche, ohne mit ihr zu flimmern.
 ovalShadow.visible = false;
+
+// ---------- Offene Rümpfe: kein Wasser im Boot ----------
+// Bei einem offenen Boot (Schlauchboot, Segelboot, Ruderboot) liegt der Innenboden nur knapp ueber der
+// Wasserlinie. Auf dem Wellenberg, beim Nicken oder in der Kurvenneigung steigt das Meer darueber und
+// stand sichtbar IM Boot (im Geheimland gemeldet: rechts lief Wasser hinein, vorher schon ein dunkler
+// Fleck innen). Deshalb wird das Meer im Umriss des Rumpfs nicht gezeichnet.
+// Ein fester Umriss reicht dafuer nicht: der Rumpf wird nach oben breiter, und das Wasser steht je
+// nach Welle und Neigung an jeder Stelle verschieden hoch am Rumpf. measureOpenHull schneidet den
+// Rumpf deshalb einmal beim Laden in HULL_NH Hoehen (Abstand dh, ab unten unter der Wasserlinie) und
+// HULL_NS Laengsscheiben und merkt sich je Scheibe die Bordwand links/rechts. Nach oben wird der
+// Umriss nie schmaler (Sitzbaenke, Mast und Kanten innen spielen keine Rolle). Der Shader rechnet
+// jeden Meerespunkt in Bootskoordinaten um und nimmt den Umriss IN SEINER HOEHE, so wandert die
+// Ausblendung mit Welle, Nicken und Kraengung mit.
+// Gilt nur fuer offene Boote. Schiffe mit Deck brauchen es nicht: das Deck verdeckt alles darunter.
+// Das Boot muss laengs auf seiner lokalen Z-Achse liegen, quer auf X, oben ist +Y.
+// Benutzung: obj.userData.hull = measureOpenHull(obj, { wl, meshes }). Aktiv ist das Boot aus
+// setOpenHull(obj), sonst eva.boat, falls es ein Profil hat. Weitere Materialien (Schatten, Gischt)
+// bekommen den Ausschnitt mit addHullCutout(material); eigene ShaderMaterials nehmen HULL_GLSL und
+// hullUniforms und verwerfen, wenn hullCut(weltpunkt) wahr ist.
+const HULL_NS = 16, HULL_NH = 7;
+const hullUniforms = {
+  hullInv: { value: new THREE.Matrix4() }, hullOn: { value: 0 },
+  hullZ: { value: new THREE.Vector2() },      // Laengsbereich der Scheiben (lokal z0..z1)
+  hullY: { value: new THREE.Vector2() },      // Hoehe der untersten Zeile (lokal) und Zeilenabstand
+  hullX: { value: 0 },                        // groesste halbe Breite (schneller Vortest)
+  // je Scheibe und Hoehe (links, rechts), zwei davon in einem vec4: ein float[] belegt je Wert einen
+  // ganzen Uniform-Vektor, und davon hat der Fragment-Shader auf manchen Handys nur 256
+  hullLR: { value: Array.from({ length: HULL_NS * HULL_NH / 2 }, () => new THREE.Vector4()) },
+};
+// Die Uniform-Arrays werden in einer Schleife gelesen: WebGL1 erlaubt im Fragment-Shader keinen
+// berechneten Index. Vortest auf das Rechteck um den Rumpf, damit nur Punkte am Boot rechnen.
+const HULL_GLSL = 'uniform mat4 hullInv; uniform float hullOn; uniform vec2 hullZ; uniform vec2 hullY; uniform float hullX;\n'
+  + 'uniform vec4 hullLR[' + (HULL_NS * HULL_NH / 2) + '];\n'
+  + 'vec2 hullPick(vec4 q, float k){ return k - floor(k * 0.5) * 2.0 > 0.5 ? q.zw : q.xy; }\n'
+  + 'bool hullCut(vec3 w){ if(hullOn < 0.5) return false; vec3 bl = (hullInv * vec4(w, 1.0)).xyz;\n'
+  + '  if(abs(bl.x) > hullX || bl.z < hullZ.x || bl.z > hullZ.y) return false;\n'
+  + '  float f = (bl.z - hullZ.x) / (hullZ.y - hullZ.x) * ' + HULL_NS + '.0 - 0.5; float i0 = floor(f), t = f - i0;\n'
+  + '  if(i0 < 0.0){ i0 = 0.0; t = 0.0; } if(i0 > ' + (HULL_NS - 2) + '.0){ i0 = ' + (HULL_NS - 2) + '.0; t = 1.0; }\n'
+  + '  float hf = clamp((bl.y - hullY.x) / hullY.y, 0.0, ' + (HULL_NH - 1) + '.0); float h0 = min(floor(hf), ' + (HULL_NH - 2) + '.0), u = hf - h0;\n'
+  + '  float a = h0 * ' + HULL_NS + '.0 + i0, c = a + ' + HULL_NS + '.0;\n'
+  + '  float ea = floor(a * 0.5), eb = floor((a + 1.0) * 0.5), ec = floor(c * 0.5), ed = floor((c + 1.0) * 0.5);\n'
+  + '  vec2 va = vec2(0.0), vb = vec2(0.0), vc = vec2(0.0), vd = vec2(0.0);\n'
+  + '  for(int j = 0; j < ' + (HULL_NS * HULL_NH / 2) + '; j++){ float fj = float(j); vec4 q = hullLR[j];\n'
+  + '    if(fj == ea) va = hullPick(q, a); if(fj == eb) vb = hullPick(q, a + 1.0); if(fj == ec) vc = hullPick(q, c); if(fj == ed) vd = hullPick(q, c + 1.0); }\n'
+  // neben einer geschlossenen Scheibe (Bug-/Heckspitze, Motorbein) nicht in einen Keil auslaufen: bis zur halben Scheibe
+  // gilt die offene, dahinter ist zu
+  + '  if(va.y <= va.x){ if(t < 0.5) va = vec2(0.0); else va = vb; } if(vb.y <= vb.x){ if(t >= 0.5) vb = vec2(0.0); else vb = va; }\n'
+  + '  if(vc.y <= vc.x){ if(t < 0.5) vc = vec2(0.0); else vc = vd; } if(vd.y <= vd.x){ if(t >= 0.5) vd = vec2(0.0); else vd = vc; }\n'
+  + '  vec2 lr = mix(mix(va, vb, t), mix(vc, vd, t), u);\n'
+  + '  return bl.x > lr.x && bl.x < lr.y; }\n';
+// Rumpf vermessen, in den Koordinaten von obj (obj selbst darf irgendwo stehen und gedreht sein).
+// opts.wl = Wasserlinie (lokales y, Standard 0), opts.unten = unterste Hoehe unter der Wasserlinie
+// (Standard 0,2 m), opts.dh = Zeilenabstand (0,1 m), opts.ein = Rand nach innen (0,04 m: ein Haar
+// Wasser an der Aussenhaut sieht man nicht), opts.meshes = RegExp auf die Mesh-Namen, die zum Rumpf
+// gehoeren (Standard: alle), opts.min = schmalste offene Scheibe (0,3 m: Kiel, Ruder und Motorbein sind kein Bootsinneres). Ergebnis auch fuer Grenzen brauchbar: lr = je Hoehe j und Scheibe k die
+// Bordwand [links, rechts] an Index (j * HULL_NS + k) * 2.
+function measureOpenHull(obj, opts){
+  opts = opts || {};
+  const wl = opts.wl || 0, unten = opts.unten !== undefined ? opts.unten : 0.2, dh = opts.dh || 0.1, ein = opts.ein !== undefined ? opts.ein : 0.04, min = opts.min !== undefined ? opts.min : 0.3;
+  const nimm = (o) => o.isMesh && o.geometry && o.geometry.attributes.position && (!opts.meshes || opts.meshes.test(o.name));
+  obj.updateMatrixWorld(true);
+  const inv = obj.matrixWorld.clone().invert(), m = new THREE.Matrix4(), y0 = wl - unten, yTop = y0 + dh * (HULL_NH - 1);
+  // Laengsbereich: vom Rumpf selbst, soweit er nicht hoeher als die oberste Zeile liegt
+  let z0 = Infinity, z1 = -Infinity; const v = new THREE.Vector3();
+  obj.traverse(o => { if(!nimm(o)) return; m.multiplyMatrices(inv, o.matrixWorld); const p = o.geometry.attributes.position;
+    for(let i = 0; i < p.count; i++){ v.fromBufferAttribute(p, i).applyMatrix4(m); if(v.y > yTop) continue; z0 = Math.min(z0, v.z); z1 = Math.max(z1, v.z); } });
+  if(!(z1 > z0)) return null;
+  const lo = new Float32Array(HULL_NS * HULL_NH).fill(Infinity), hi = new Float32Array(HULL_NS * HULL_NH).fill(-Infinity);
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  // Je Hoehe h zaehlt, was vom Rumpf UNTER h liegt (seine Grundflaeche bis zum Wasserspiegel), nicht nur, was die Ebene
+  // schneidet: der Boden des Schlauchboots ist flach (y 0,46) und schneidet keine Ebene, die Wuelste beginnen erst
+  // darueber – nur mit Schnitten blieb das Boot fast ohne Loch (gemessen). Also: jedes Dreieck unter h abschneiden und
+  // jede Kante des Rests in alle Scheiben eintragen, die sie ueberquert (grosse Dreiecke reichen ueber mehrere).
+  const L = (z1 - z0) / HULL_NS, poly = [], rest = [];
+  const trage = (j, k, x) => { const n = j * HULL_NS + Math.min(HULL_NS - 1, Math.max(0, k)); if(x < lo[n]) lo[n] = x; if(x > hi[n]) hi[n] = x; };
+  const strecke = (j, xa, za, xb, zb) => { if(za > zb){ let q = xa; xa = xb; xb = q; q = za; za = zb; zb = q; }
+    const ka = Math.floor((za - z0) / L), kb = Math.floor((zb - z0) / L); trage(j, ka, xa); trage(j, kb, xb);
+    for(let k = ka + 1; k <= kb; k++){ const x = xa + (xb - xa) * (z0 + k * L - za) / (zb - za); trage(j, k - 1, x); trage(j, k, x); } };
+  const unter = (j, h) => { rest.length = 0;
+    for(let e = 0; e < 3; e++){ const p = poly[e], q = poly[(e + 1) % 3];
+      if(p.y <= h) rest.push(p.x, p.z);
+      if((p.y > h) !== (q.y > h)){ const t = (h - p.y) / (q.y - p.y); rest.push(p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t); } }
+    const n = rest.length / 2; if(n === 1) trage(j, Math.floor((rest[1] - z0) / L), rest[0]);
+    for(let e = 0; n > 1 && e < n; e++){ const f = (e + 1) % n; strecke(j, rest[e * 2], rest[e * 2 + 1], rest[f * 2], rest[f * 2 + 1]); } };
+  obj.traverse(o => { if(!nimm(o)) return; m.multiplyMatrices(inv, o.matrixWorld);
+    const p = o.geometry.attributes.position, idx = o.geometry.index, n = idx ? idx.count : p.count;
+    const w = (i, t) => t.fromBufferAttribute(p, idx ? idx.getX(i) : i).applyMatrix4(m);
+    poly[0] = a; poly[1] = b; poly[2] = c;
+    for(let i = 0; i + 2 < n; i += 3){ w(i, a); w(i + 1, b); w(i + 2, c);
+      const ylo = Math.min(a.y, b.y, c.y); if(ylo > yTop) continue;
+      for(let j = 0; j < HULL_NH; j++){ const h = y0 + j * dh; if(h >= ylo) unter(j, h); } } });  // nach oben nie schmaler (folgt schon aus "alles darunter", schadet aber nicht), Rand einruecken; ohne Treffer kein Loch
+  const lr = new Float32Array(HULL_NS * HULL_NH * 2); let xmax = 0;
+  for(let k = 0; k < HULL_NS; k++){ let l = Infinity, r = -Infinity;
+    for(let j = 0; j < HULL_NH; j++){ const n = j * HULL_NS + k; l = Math.min(l, lo[n]); r = Math.max(r, hi[n]);
+      const li = l + ein, ri = r - ein, offen = r - l >= min && li < ri;
+      lr[n * 2] = offen ? li : 0; lr[n * 2 + 1] = offen ? ri : 0; if(offen) xmax = Math.max(xmax, -li, ri); } }
+  return { z0, z1, y0, dh, xmax: xmax + 0.01, lr };
+}
+let openHullObj = null;
+function setOpenHull(obj){ openHullObj = obj || null; }
+function addHullCutout(mat){
+  const vorher = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    if(vorher) vorher(sh, r);
+    Object.assign(sh.uniforms, hullUniforms);
+    sh.vertexShader = 'varying vec3 vHullW;\n' + sh.vertexShader.replace('#include <project_vertex>',
+      '#include <project_vertex>\n  vHullW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = HULL_GLSL + 'varying vec3 vHullW;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>',
+      '#include <clipping_planes_fragment>\n  if(hullCut(vHullW)) discard;');
+  };
+  mat.needsUpdate = true;
+}
+// je Bild direkt vor dem Zeichnen (nach allen Bewegungen): welches Boot, und wo es liegt
+function updateOpenHull(){
+  let o = openHullObj;
+  if(!o && eva && eva.boat && eva.boat.userData.hull) o = eva.boat;
+  const p = o && o.userData.hull;
+  let an = !!(p && o.parent && locale === 'earth');
+  for(let q = o; an && q; q = q.parent) if(!q.visible) an = false;
+  hullUniforms.hullOn.value = an ? 1 : 0;
+  if(!an) return;
+  o.updateMatrixWorld(true);
+  hullUniforms.hullInv.value.copy(o.matrixWorld).invert();
+  hullUniforms.hullZ.value.set(p.z0, p.z1); hullUniforms.hullY.value.set(p.y0, p.dh); hullUniforms.hullX.value = p.xmax;
+  const L = hullUniforms.hullLR.value;
+  for(let i = 0; i < L.length; i++) L[i].set(p.lr[i * 4], p.lr[i * 4 + 1], p.lr[i * 4 + 2], p.lr[i * 4 + 3]);
+}
+addHullCutout(ground.material);
+addHullCutout(ovalShadowMat);
 scene.add(ovalShadow);
 
 
@@ -13996,6 +14131,7 @@ function loop(now){
   updateCamera();
   updateHUD();
   schubBalken();
+  updateOpenHull();          // offenes Boot: das Meer im Rumpf ausblenden (nach allen Bewegungen)
   renderer.render(scene,camera);
   requestAnimationFrame(loop);
 }
