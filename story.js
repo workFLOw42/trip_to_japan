@@ -332,6 +332,7 @@ story.einstiege = function(){
   const u = typeof ubootRingPlatz === 'function' ? ubootRingPlatz() : null;
   if(u && story.etappe === 1) l.push({ x: u.x, z: u.z, r: RING_R });
   if(eva && eva.planeAt && planeGroup.visible) l.push({ x: eva.planeAt.x, z: eva.planeAt.z, r: EVA_BOARD_R });
+  if(mars.steinObj && mars.stein && mars.stein !== 'geholt') l.push({ x: mars.stein.x, z: mars.stein.z, r: STEIN_R });   // Stein auf Mond/Mars
   return l;
 };
 function ringUnterSamu(){
@@ -2408,7 +2409,11 @@ const MARS_TEXT = [
   'Du schaffst das schon! Wir hören uns in einer Woche wieder… Viel Spaß auf dem Mars!',
 ];
 const zumMond = (t) => t.replace(/zum Mars/g, 'zum Mond').replace(/dem Mars/g, 'dem Mond');
-const STEIN_R = 4;           // m: so nah muss Samu fuer Y heran
+// Live-Wunsch 19.10.2026: der Stein bekommt dieselbe Markierung wie die Einstiege auf der Erde (Saeule, Pfeil, Schild "Stein",
+// gleiche Hoehen) und einen Ring am Boden; steht Samu im Ring, kommt das Y. Saeule und Schild in Weiss (Standard wie "1 Tag"),
+// Pfeilspitze und Ring im Leuchtrot der alten Steinsaeule. Der Stein liegt still auf dem Boden (vorher drehte er sich).
+const STEIN_R = RING_R;      // m: im Ring -> Y (vorher 4 m um den Stein)
+const STEIN_ROT = 0xff5522;  // Leuchtrot (Pfeilspitze, Ring)
 const mars = story.mars = { phase: null, stein: null, steinObj: null, steinSaeule: null, rede: null };
 
 function marsStart(){
@@ -2460,31 +2465,45 @@ function marsStein(){
   const g = new THREE.Group();
   const stein = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3, 0),   // ein Brocken zum Mitnehmen
     new THREE.MeshLambertMaterial({ color: TRIP[mars.ort || 'mars'].farbe, emissive: TRIP[mars.ort || 'mars'].glanz, emissiveIntensity: 0.9 }));
-  stein.position.y = 0.28; stein.rotation.set(0.4, 0.7, 0.2);
+  // liegt auf dem Boden: etwas flacher und halb eingesunken (Dodekaeder r 0,3, mit 0,7 senkrecht gestaucht)
+  stein.scale.set(1, 0.7, 1); stein.position.y = 0.14; stein.rotation.set(0.4, 0.7, 0.2);
   g.add(stein);
-  // Lichtsaeule am Stein auf Mond/Mars: halb so hoch und schmaler (Live-Wunsch 18.10.2026)
-  const saeule = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, SAEULE_H / 2, 10, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xff8844, transparent: true, opacity: 0.2,
-      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  saeule.position.y = SAEULE_H / 4; saeule.renderOrder = 995;
-  g.add(saeule);
+  // Ring am Boden (wie die gelben Einstiegsringe auf der Erde, im Leuchtrot)
+  const ring = new THREE.Mesh(new THREE.RingGeometry(RING_R - 0.7, RING_R, 48),
+    new THREE.MeshBasicMaterial({ color: STEIN_ROT, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
+  // depthTest aus: der Mars- und Mondboden ist uneben, ein flacher Ring stak am Hang halb im Boden (Live-Bild 19.10.2026)
+  ring.material.depthTest = false;
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; ring.renderOrder = 996;
+  g.add(ring);
   g.position.set(x, y, z);
   scene.add(g);                               // global-ok: steht auf Mond/Mars, nicht in einer Erd-Welt
-  mars.steinObj = g; mars.stein = { x, z };
+  // Markierung wie auf der Erde (Saeule + Pfeil + Schild "Stein"), direkt in der Szene
+  const mk = baueMarke(0xffffff, STEIN_ROT, true);
+  mk.schild = baueSchild(TRIP[mars.ort || 'mars'].stein, '#ffffff', true);
+  mars.steinObj = g; mars.steinRing = ring; mars.steinMarke = mk; mars.stein = { x, z };
+}
+// Markierung des Steins wieder weg (aufgehoben, Mond/Mars verlassen)
+function steinMarkeWeg(){
+  const mk = mars.steinMarke; if(!mk) return;
+  for(const o of [mk.saeule, mk.pfeil, mk.schild]) if(o) entsorgen(o);
+  mars.steinMarke = null;
 }
 
 function marsUpdate(dt){
   if(!mars.phase) return;
   if(mars.steinObj){
-    mars.steinObj.children[0].rotation.y += dt * 1.5;
-    mars.steinObj.position.y = steinHoehe(mars.steinObj.position.x, mars.steinObj.position.z);
+    const o = mars.steinObj, y = steinHoehe(o.position.x, o.position.z);
+    o.position.y = y;
+    if(mars.steinRing) mars.steinRing.material.opacity = 0.55 + 0.35 * Math.sin(performance.now() / 1000 * 3);   // pulsiert wie auf der Erde
+    // Markierung nur zu Fuss (wie auf der Erde) – im Flieger sieht man den Stein am Radar; fzg = 0 wie bei einem Ring
+    if(mars.steinMarke) story.setzeMarke(mars.steinMarke, o.position.x, y, o.position.z, 0, !!eva);
   }
   if(locale === (mars.ort || 'mars')){
     if(mars.phase === 'hin'){ mars.phase = 'gelandet'; hinweis('Lande mit 10 % Schub, steig mit Y aus und hol den ' + TRIP[mars.ort || 'mars'].stein); }
     if(state.onGround || eva) marsStein();
     if(eva && mars.phase === 'gelandet' && !mars.hinweisWeg){ mars.hinweisWeg = true; hinweis('Hol den leuchtenden Stein'); spaeter(6, () => { if(mars.phase === 'gelandet') hinweis(''); }); }
   } else if(mars.steinObj && locale !== (mars.ort || 'mars')){
-    entsorgen(mars.steinObj); mars.steinObj = null;
+    entsorgen(mars.steinObj); mars.steinObj = null; mars.steinRing = null; steinMarkeWeg();
   }
 }
 
@@ -2496,7 +2515,8 @@ function marsSteinNah(){
 }
 function marsSteinHolen(){
   mars.stein = 'geholt';
-  if(mars.steinObj){ entsorgen(mars.steinObj); mars.steinObj = null; }
+  if(mars.steinObj){ entsorgen(mars.steinObj); mars.steinObj = null; mars.steinRing = null; }
+  steinMarkeWeg();
   mars.phase = 'zurueck';
   blitz();
   const st = TRIP[mars.ort || 'mars'].stein;
@@ -2804,7 +2824,7 @@ function hookEinsteigen(){
 // Nur zu Fuss sichtbar.
 const marken = [];
 // Schild ueber dem Fahrzeug: was der Weg kostet ("1 Tag" / "4 Tage", wie im Konzept)
-function baueSchild(text, col){
+function baueSchild(text, col, inSzene){
   const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160;
   const g = cv.getContext('2d');
   g.fillStyle = 'rgba(0,0,0,0.55)';
@@ -2819,22 +2839,22 @@ function baueSchild(text, col){
     depthTest: false, transparent: true }));
   sp.scale.set(12, 3.75, 1);
   sp.renderOrder = 999;
-  welt(story.etappe).add(sp);
+  (inSzene ? scene : welt(story.etappe)).add(sp);   // inSzene: Mond/Mars, dort sind die Erd-Welten ausgeblendet
   return sp;
 }
 const SAEULE_H = 30;
-function baueMarke(col){
+function baueMarke(col, spitze, inSzene){
   // Schaft des Pfeils: unten so breit wie der Pfeilkopf und dort angesetzt -> Pfeil und Saeule sind eins.
   // Laenge (bis PFEIL_OBEN ueber dem Boden) setzt stelleMarke ueber scale.y.
   const saeule = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.6, SAEULE_H, 10, 1, true).translate(0, SAEULE_H / 2, 0),
     new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.16,
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   const pfeil = new THREE.Mesh(new THREE.ConeGeometry(1.6, 3.2, 12),
-    new THREE.MeshBasicMaterial({ color: col }));
+    new THREE.MeshBasicMaterial({ color: spitze === undefined ? col : spitze }));
   pfeil.rotation.x = Math.PI;                    // Spitze nach unten
-  saeule.renderOrder = 995; welt(story.etappe).add(saeule, pfeil);
+  saeule.renderOrder = 995; (inSzene ? scene : welt(story.etappe)).add(saeule, pfeil);   // global-ok bei inSzene (Mond/Mars)
   const m = { saeule, pfeil, schild: null, x: 0, y: 0, z: 0, hoehe: 10 };
-  if(story.etappe === 1) marken.push(m);        // Etappe-1-Marken steuert updateMarken
+  if(story.etappe === 1 && !inSzene) marken.push(m);   // Etappe-1-Marken steuert updateMarken
   return m;
 }
 // Fuer spaetere Etappen: eine Marke (Saeule + Pfeil + Schild) bauen und jedes Bild setzen
@@ -2861,7 +2881,9 @@ function stelleMarke(m, x, y, z, fzg){
   }
 }
 // Samu taucht: keine Pfeile/Schilder (sie haben depthTest aus und waeren durchs Wasser zu sehen)
-function taucht(){ return !!eva && eva.group.position.y < (typeof seaYAt === 'function' ? seaYAt(eva.group.position.x, eva.group.position.z) : 0) - 0.4; }
+// nur auf der Erde: auf Mond und Mars gibt es kein Meer (dort liegt der Boden oft tiefer als der Meeresspiegel der Erde, und
+// die Stein-Markierung war deshalb immer aus – Live-Befund 19.10.2026)
+function taucht(){ return !!eva && locale === 'earth' && eva.group.position.y < (typeof seaYAt === 'function' ? seaYAt(eva.group.position.x, eva.group.position.z) : 0) - 0.4; }
 story.setzeMarke = function(m, x, y, z, fzg, zeigen){
   if(taucht()) zeigen = false;
   m.saeule.visible = m.pfeil.visible = zeigen;
@@ -3046,7 +3068,7 @@ function yZeichenZeigen(an){
   // Einstieg ueber einen Kreis am Boden (Live-Wunsch 16.10.): dann ueber der Kreismitte, sonst ueber Samu
   // am Stein auf Mond/Mars: ueber dem Stein (wie ueber der Ringmitte)
   const st = marsSteinNah() && mars.steinObj ? mars.steinObj.position : null;
-  const r = st ? null : ringUnterSamu(), p = st || r || eva.group.position, hoch = st ? 1.4 : r ? 2.2 : SAMU_H + 0.35;
+  const r = st ? null : ringUnterSamu(), p = st || r || eva.group.position, hoch = st ? 2.2 : r ? 2.2 : SAMU_H + 0.35;   // Stein: wie ueber einem Ring
   ySprite.position.set(p.x, p.y + hoch + Math.sin(yT * 3) * 0.07, p.z);
 }
 story.yZeichenZeigen = yZeichenZeigen;
