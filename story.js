@@ -496,6 +496,9 @@ function samuTasten(){
   const neu = n => (k[n] && !pr[n]) || getippt[n];
   const frei = !amFahrzeug();
   if(neu('a') && eva.onGround){ tricks.aktiv = null; evaJumpOrig(); }
+  // Moonwalk und B beenden den (Endlos-)Tanz. B kniet danach mit dem naechsten Druck (begleiter.js laesst waehrend eines
+  // Tricks nicht knien) – sonst waere B beim Tanz mit den Aliens wirkungslos geblieben.
+  if((neu('moon') || neu('b')) && tricks.aktiv === 'tanz'){ tricks.aktiv = null; samuAnim(STAND, TRICK_AUSBLENDEN); }
   tricks.moon = frei && k.moon && !tricks.aktiv;
   // B = knien (begleiter.js, Live-Wunsch 18.10.2026: der Hund kommt) – Aerial Evade liegt nicht mehr auf B
   if(frei && neu('x')) trickStart('tanz');
@@ -514,6 +517,12 @@ function updateSamu(dt){
     const a = samu.acts[TRICK_CLIP[tricks.aktiv]];
     tricks.t += dt;
     trickSchieben();
+    // Live-Wunsch 19.10.2026: tanzt die Alien-Gruppe mit (aliens.js), hoert Samu nicht nach dem einen Durchgang auf, sondern
+    // tanzt immer weiter – bis der Stick ihn bewegt oder eine andere Taste kommt (A springt, B kniet, Y Twirl, Moonwalk;
+    // alle setzen tricks.aktiv selbst um). Der Clip faengt dann einfach von vorn an, die Hueftkurve mit ihm (tricks.w).
+    if(a && tricks.aktiv === 'tanz' && story.aliens && story.aliens.gruppe && tricks.t >= a.getClip().duration - TRICK_AUSBLENDEN){
+      a.reset(); a.play(); tricks.t = 0; tricks.w = null; return;
+    }
     if(a && tricks.t < a.getClip().duration - TRICK_AUSBLENDEN) return;   // kurz vor Schluss schon zurueckblenden
     tricks.aktiv = null;
     samuAnim(tricks.ausschlag > 0.5 ? 'run' : tricks.ausschlag > 0.05 ? 'walk' : STAND, TRICK_AUSBLENDEN);
@@ -628,6 +637,13 @@ function sprich(saetze, fertig, rolle, warteMax, beiSatz){
       u.pitch = rolle === 'pilot' && !(stimme && STIMME_M.test(stimme.name)) ? 0.75 : 1.0;
       u.onboundary = e => { if(utt === u) bPos = p + (e.charIndex || 0); };
       u.onend = u.onerror = () => { if(utt === u) naechster(); };
+      // Live-Befund 19.10.2026 ("kein Ton, obwohl der Tab ihn anzeigt; Strg-F5 half nicht, nur Browser neu starten"): die
+      // Sprachausgabe ist in Chrome EINE Warteschlange fuer den ganzen Browser. Hat ein anderer Tab (hier: Das Geheimland,
+      // Pause mitten im Satz) sie angehalten, bleibt jeder Satz hier stumm – speaking=true, paused=false, kein onstart
+      // (nachgestellt in echtem Chrome, C:/tmp/jfg/test/tts_tabs2.js). Von uns spricht hier niemand (sprecher ist frei
+      // gewesen): was dann noch laeuft oder wartet, ist fremd – verwerfen. cancel() + resume() loest den Stau.
+      if(synth.speaking || synth.pending || synth.paused) synth.cancel();
+      synth.resume();
       synth.speak(u);
       // falls onend nie kommt
       timer = setTimeout(() => { if(utt === u) naechster(); }, (rest.length / ZEICHEN_PRO_S * 1000 + 1500) * 2.5);
@@ -685,6 +701,23 @@ story.skipTick = skipTick;
 // die Stimme. Kommen die Stimmen nach, schaltet jede laufende Ansage an der aktuellen Stelle um.
 if(window.speechSynthesis){
   window.speechSynthesis.addEventListener('voiceschanged', () => { for(const rd of [...reden]) rd.tonGeaendert(); });
+}
+// Controller nachfuehren (Live-Befund 19.10.2026: D-Pad runter schaltete nichts, auch keine Untertitel – das Menue lief).
+// Die Engine kennt ihren Controller nur aus gamepadconnected (gamepadIndex). Kommt das nicht oder fuer einen anderen
+// Eintrag (Chrome listet manche Controller doppelt), liest sie nie ein D-Pad, waehrend das Startmenue alle Controller
+// selbst abfragt. Darum: wer gerade gedrueckt wird, ist der Controller der Engine.
+function hookPad(){
+  setInterval(() => {
+    const alle = navigator.getGamepads ? navigator.getGamepads() : [];
+    const aktiv = (gp) => !!gp && gp.connected !== false && (gp.buttons.some(b => b && b.pressed) || gp.axes.some(a => Math.abs(a) > 0.5));
+    const jetzt = gamepadIndex !== null ? alle[gamepadIndex] : null;
+    if(jetzt && aktiv(jetzt)) return;
+    for(const gp of alle) if(gp && gp.index !== gamepadIndex && (aktiv(gp) || !jetzt)){
+      gamepadIndex = gp.index;
+      const el = document.getElementById('pad'); if(el) el.textContent = 'Controller: ' + gp.id;
+      if(aktiv(gp)) break;
+    }
+  }, 250);
 }
 function hookTon(){
   // Das grosse Ton-Symbol nicht ueber Filmszene/Globus zeigen (z. B. beim automatischen Einschalten
@@ -820,6 +853,8 @@ function startbildschirm(weiter){
     // versteckt – samuWache blendete ihn dann jedes Bild aus. Jetzt bei jedem Start sichtbar.
     intro.versteckt = false; if(eva) eva.group.visible = true;
     if(!soundOn) toggleSound();      // die Geste erlaubt jetzt Audio: Ton an (D-Pad runter / N schaltet um)
+    // Sprachausgabe freiraeumen: ein anderer Tab kann sie angehalten haben (siehe sprich, weiterAb)
+    if(window.speechSynthesis){ window.speechSynthesis.cancel(); window.speechSynthesis.resume(); }
     const n = o.n;
     if(o.hoehle){ story.hoehleDirekt = true; springeZu(n); return; }
     if(o.strand){ story.freiesSpiel = true; finaleDirekt(1); return; }   // nach dem Pro-Run: am Strand, alles frei
@@ -3212,6 +3247,7 @@ window.STORY_HOOK = function(){
   hookHud();
   hookHilfe();
   hookTon();
+  hookPad();
   hookSchwimmen();
   hookMaster();
   hookSchatten();
