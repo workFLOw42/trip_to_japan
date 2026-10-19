@@ -641,8 +641,10 @@ function sprich(saetze, fertig, rolle, warteMax, beiSatz){
       // Sprachausgabe ist in Chrome EINE Warteschlange fuer den ganzen Browser. Hat ein anderer Tab (hier: Das Geheimland,
       // Pause mitten im Satz) sie angehalten, bleibt jeder Satz hier stumm – speaking=true, paused=false, kein onstart
       // (nachgestellt in echtem Chrome, C:/tmp/jfg/test/tts_tabs2.js). Von uns spricht hier niemand (sprecher ist frei
-      // gewesen): was dann noch laeuft oder wartet, ist fremd – verwerfen. cancel() + resume() loest den Stau.
-      if(synth.speaking || synth.pending || synth.paused) synth.cancel();
+      // gewesen): was dann noch laeuft oder wartet, ist fremd (anderer Tab, andere Webseite mit Vorlesefunktion) – verwerfen.
+      // cancel() + resume() loest den Stau, und zwar OHNE Bedingung: diese Seite sieht ihn nicht (speaking, pending und paused
+      // stehen hier alle auf false – nachgemessen, C:/tmp/jfg/test/tts_var.js).
+      synth.cancel();
       synth.resume();
       synth.speak(u);
       // falls onend nie kommt
