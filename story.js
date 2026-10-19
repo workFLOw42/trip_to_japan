@@ -1101,12 +1101,16 @@ function hudZuFuss(){
     const st = document.createElement('style'); st.id = 'zufuss-css';
     // Live-Wunsch 18.10.2026: im Fahrzeug links nur noch Hoehe, Speed, Schub – die Zeile 'Modell:' oben und die Statuszeile
     // unten (Symbol, ggf. Pfeil) entfallen. Sie bleiben im DOM (die Engine schreibt weiter hinein), sind nur unsichtbar.
-    st.textContent = 'body.zufuss #hud, body.zufuss #radar, body.zufuss #gyro, body.zufuss #pad { visibility: hidden; }'
+    // Im All (Live-Wunsch 19.10.2026) kein Gyroskop: dort gibt es kein Oben und Unten. visibility statt display, damit der
+    // Schubbalken (schubWieJFG) sich dann unter das Radar setzt.
+    st.textContent = 'body.zufuss #hud, body.zufuss #radar, body.zufuss #gyro, body.zufuss #pad, body.imall #gyro { visibility: hidden; }'
       + ' #hud > div:first-child, #hud #status { display: none; }';
     document.head.appendChild(st);
   }
   const an = !!(eva && !eva.boat && !eva.rover);
   if(document.body.classList.contains('zufuss') !== an) document.body.classList.toggle('zufuss', an);
+  const all = locale === 'space';
+  if(document.body.classList.contains('imall') !== all) document.body.classList.toggle('imall', all);
 }
 function introVorbereiten(){
   if(!document.getElementById('filmszene-css')){
@@ -2454,6 +2458,10 @@ function steinPlatz(){
 }
 function steinHoehe(x, z){
   const pl = typeof basePlatformNear === 'function' ? basePlatformNear(x, z) : null;
+  // Zu Fuss gilt der SICHTBARE Boden (evaFootY, da stehen Samus Fuesse): auf dem Mars weicht surfaceY bis mehrere Meter davon
+  // ab (der Stein schwebte), auf dem Mond liegt der gezeichnete Boden an der Basis bis 1 m ueber basePlatformNear (Stein und
+  // Ring steckten darin) – Live-Befund 19.10.2026. Auf der Plattform nie darunter.
+  if(eva) return pl !== null ? Math.max(pl, evaFootY(x, z)) : evaFootY(x, z);
   return pl !== null ? pl : surfaceY(x, z);
 }
 function marsStein(){
@@ -2468,12 +2476,14 @@ function marsStein(){
   // liegt auf dem Boden: etwas flacher und halb eingesunken (Dodekaeder r 0,3, mit 0,7 senkrecht gestaucht)
   stein.scale.set(1, 0.7, 1); stein.position.y = 0.14; stein.rotation.set(0.4, 0.7, 0.2);
   g.add(stein);
-  // Ring am Boden (wie die gelben Einstiegsringe auf der Erde, im Leuchtrot)
-  const ring = new THREE.Mesh(new THREE.RingGeometry(RING_R - 0.7, RING_R, 48),
-    new THREE.MeshBasicMaterial({ color: STEIN_ROT, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
-  // depthTest aus: der Mars- und Mondboden ist uneben, ein flacher Ring stak am Hang halb im Boden (Live-Bild 19.10.2026)
-  ring.material.depthTest = false;
-  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; ring.renderOrder = 996;
+  // Ring am Boden (wie die gelben Einstiegsringe auf der Erde, im Leuchtrot). Er liegt AUF dem Boden: jeder Punkt bekommt die
+  // Bodenhoehe an seiner Stelle (steinRingAnlegen). Live-Befund 19.10.2026: flach stak er am Hang halb im Boden, und mit
+  // abgeschalteter Tiefenpruefung (oder polygonOffset, das bei flachem Blick nahe der Kamera zu stark wird) lag er ueber
+  // Samu und Barki. Normale Tiefenpruefung wie die Erd-Ringe, er liegt ja jetzt auf dem Boden.
+  const rg = new THREE.RingGeometry(RING_R - 0.7, RING_R, 64, 1); rg.rotateX(-Math.PI / 2);
+  const ring = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: STEIN_ROT, transparent: true, opacity: 0.8,
+    side: THREE.DoubleSide, depthWrite: false }));
+  ring.renderOrder = 996;
   g.add(ring);
   g.position.set(x, y, z);
   scene.add(g);                               // global-ok: steht auf Mond/Mars, nicht in einer Erd-Welt
@@ -2481,6 +2491,24 @@ function marsStein(){
   const mk = baueMarke(0xffffff, STEIN_ROT, true);
   mk.schild = baueSchild(TRIP[mars.ort || 'mars'].stein, '#ffffff', true);
   mars.steinObj = g; mars.steinRing = ring; mars.steinMarke = mk; mars.stein = { x, z };
+  steinRingAnlegen();
+}
+// Den Ring auf den Boden legen: jeder Punkt auf die SICHTBARE Bodenhoehe, relativ zur Gruppe (die auf der Hoehe der Steinmitte
+// steht). Sichtbar = evaFootY, wo auch Samus Fuesse stehen: auf dem Mond liegt der gezeichnete Boden an der Basis bis 1 m
+// ueber basePlatformNear (gemessen 19.10.2026, C:/tmp/sfg/stein_mond4.js) – mit steinHoehe steckte der Ring dort im Boden.
+// Laeuft beim Bau und danach alle STEIN_RING_T s (der Boden kann nachladen; marsUpdate setzt die Gruppe jedes Bild neu).
+const STEIN_RING_T = 0.5, STEIN_RING_LUFT = 0.08;
+function steinRingAnlegen(){
+  const ring = mars.steinRing, o = mars.steinObj; if(!ring || !o) return;
+  const pos = ring.geometry.attributes.position, y0 = o.position.y;
+  for(let i = 0; i < pos.count; i++){
+    const wx = o.position.x + pos.getX(i), wz = o.position.z + pos.getZ(i);
+    // NUR der sichtbare Boden (evaFootY): surfaceY weicht auf dem Mars bis 2 m davon ab, mit steinHoehe (max) stand der Ring
+    // am Hang dann in der Luft und lag vor Samu (gemessen 19.10.2026, C:/tmp/sfg/stein_marke4.js)
+    pos.setY(i, (eva ? evaFootY(wx, wz) : steinHoehe(wx, wz)) - y0 + STEIN_RING_LUFT);
+  }
+  pos.needsUpdate = true; ring.geometry.computeBoundingSphere();
+  mars.steinRingT = STEIN_RING_T;
 }
 // Markierung des Steins wieder weg (aufgehoben, Mond/Mars verlassen)
 function steinMarkeWeg(){
@@ -2493,7 +2521,8 @@ function marsUpdate(dt){
   if(!mars.phase) return;
   if(mars.steinObj){
     const o = mars.steinObj, y = steinHoehe(o.position.x, o.position.z);
-    o.position.y = y;
+    const yAlt = o.position.y; o.position.y = y;
+    if(Math.abs(y - yAlt) > 0.01 || (mars.steinRingT -= dt) <= 0) steinRingAnlegen();
     if(mars.steinRing) mars.steinRing.material.opacity = 0.55 + 0.35 * Math.sin(performance.now() / 1000 * 3);   // pulsiert wie auf der Erde
     // Markierung nur zu Fuss (wie auf der Erde) – im Flieger sieht man den Stein am Radar; fzg = 0 wie bei einem Ring
     if(mars.steinMarke) story.setzeMarke(mars.steinMarke, o.position.x, y, o.position.z, 0, !!eva);
@@ -3305,6 +3334,33 @@ function startStrand(){
   setzeMarken();
 }
 
+// ---- U-Boot legt sich in die Kurve (Live-Wunsch 19.10.2026) ---------------------------------------------------
+// Die Engine neigt es schon (SUB_ROLL 0,18: hoechstens 10 Grad, und nur nach dem Ruderausschlag) – beim 95-m-Rumpf von hinten
+// sah man das kaum. Hier wird die Schraeglage aus der ECHTEN Drehrate gesetzt: im Stand (das Ruder dreht kaum) bleibt es
+// gerade, in voller Fahrt durch die Kurve liegt es bis U_ROLL_MAX schraeg, und zwar zur Kurveninnenseite wie ein Schiff, das
+// nach innen kraengt. Weich nachgefuehrt (U_ROLL_FOLGT). Nur Optik: Fahrt, Tiefe und Kollision rechnet stepSub ohne die
+// Querlage (waagerechte Nasenrichtung, Bug/Mitte/Heck laengs).
+const U_ROLL_MAX = 0.26;      // rad (~15 Grad)
+const U_ROLL_PRO = 0.55;      // rad Querlage je rad/s Drehrate (SUB_YAW 0,55 rad/s volle Fahrt -> 0,30, gekappt auf U_ROLL_MAX)
+const U_ROLL_FOLGT = 2.2;     // 1/s
+function hookUbootNeigen(){
+  const orig = stepSub;
+  let yawVor = null, roll = 0;
+  stepSub = function(dt, inp){
+    const r = orig.apply(this, arguments);
+    const e = new THREE.Euler().setFromQuaternion(state.quat, 'YXZ');
+    if(yawVor === null || dt <= 0){ yawVor = e.y; return r; }
+    let dy = e.y - yawVor; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); yawVor = e.y;
+    const rate = dy / dt;                                         // rad/s, + = nach links
+    const ziel = Math.max(-U_ROLL_MAX, Math.min(U_ROLL_MAX, rate * U_ROLL_PRO));
+    roll += (ziel - roll) * Math.min(1, U_ROLL_FOLGT * dt);
+    // Vorzeichen: Linkskurve (yaw waechst) -> linke Seite runter. Bei 'YXZ' ist das ein positives z (wie die Engine:
+    // roll = -inp.yaw * SUB_ROLL, und inp.yaw < 0 ist links).
+    state.quat.setFromEuler(new THREE.Euler(e.x, e.y, roll, 'YXZ'));
+    return r;
+  };
+}
+
 window.STORY_HOOK = function(){
   // Live-Wunsch (08.10.2026): Alpha Jet bis 3000 m (Engine: 2200) – der Fuji ist 2 km hoch, der Lavaschacht endet darueber
   if(PLANE_SPECS.AlphaJet) PLANE_SPECS.AlphaJet.maxAlt = 3000;
@@ -3330,6 +3386,7 @@ window.STORY_HOOK = function(){
   hookJetLandung();
   hookRumpfachse();
   hookLoop();
+  hookUbootNeigen();
 };
 window.STORY_START = function(){
   startStrand();

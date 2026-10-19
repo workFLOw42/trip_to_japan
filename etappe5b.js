@@ -351,7 +351,7 @@ function hud(){
 // ---- Sonar-Karte der Schlucht -----------------------------------------------------------------------------
 // Live-Wunsch: Schlucht und Hindernisse per Ping sehen. Das Periskop der Engine zeigt Land in 1.400 m Reichweite – der
 // 60-m-Kanal waere dort 3 Pixel breit. In der Schlucht malt diese Karte darueber: SONAR_R m Reichweite, gedreht in
-// Fahrtrichtung (oben = vorne, wie das Periskop), Waende als Linien, Bogen gelb, Rippe orange. Nach jedem Ping (B)
+// Fahrtrichtung (oben = vorne, wie das Periskop), Waende als Linien, Bogen blau, Rippe orange. Nach jedem Ping (B)
 // voll sichtbar, dann blendet sie aus (wie in Etappe 1).
 const SONAR_R = 300, SONAR_HALT = 3, SONAR_ZEIT = 12;
 let sonarT = -1;
@@ -388,7 +388,9 @@ function sonarKarte(dt){
     const [qa0, qb0] = hindQuer(luecke), [li, re] = grenzen(uh), qa = Math.max(qa0, li), qb = Math.min(qb0, re);
     const [x1, z1] = punkt(uh, mitteV(uh) + qa), [x2, z2] = punkt(uh, mitteV(uh) + qb);
     const [a1, b1] = bild(x1, z1), [a2, b2] = bild(x2, z2);
-    g.strokeStyle = art === 'bogen' ? '#ffd23f' : '#ff8a3c'; g.lineWidth = 5;
+    // Live-Wunsch 19.10.2026: Hindernis OBEN (Bogen, darunter durch) blau, unten (Rippe, darueber hinweg) bleibt orange.
+    // Vorher war der Bogen gelb wie das Ziel und kaum vom Orange der Rippe zu unterscheiden.
+    g.strokeStyle = art === 'bogen' ? '#3d8bff' : '#ff8a3c'; g.lineWidth = 5;
     g.beginPath(); g.moveTo(a1, b1); g.lineTo(a2, b2); g.stroke();
   }
   // Ziel
