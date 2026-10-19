@@ -210,13 +210,23 @@ function hookWelt3(){
     if(hier()) bodenRaster();
     return r;
   };
-  // Keine Moewen/Meeresrauschen am Fluss (das Meer ist weit weg)
+  // Keine Moewen am Fluss, das Meeresrauschen leise (= Fluss). Live-Wunsch 19.10.2026 ("zurueckbauen"): vorher ersetzte diese
+  // Huelle updateAmbient ganz und hielt das Rauschen fest auf 0,04 – ohne die Pruefungen der Engine (Ton aus, Hoehe, unter
+  // Wasser): es rauschte bei Ton aus weiter und im X-Wing hoch in der Luft so laut wie am Ufer. Jetzt rechnet die Engine wie
+  // ueberall, und erst ihr Ergebnis wird hier umgestellt: die Moewen auf 0, das Meer auf FLUSS_RAUSCHEN seines Pegels.
+  // Mit der Hoehe blendet es so von selbst aus (AMB_MAX_Y), und bei Ton aus ist es wie dort 0. Gleich bleibt das Ziel am
+  // Ufer: Fluss ohne Inseln = offenes Meer fuer die Engine, also AMB_OCEAN_VOL 0,13 * 0,3 = 0,039 (vorher 0,04).
+  const FLUSS_RAUSCHEN = 0.3;
   const updateAmbientOrig = updateAmbient;
   updateAmbient = function(dt){
-    if(!hier()) return updateAmbientOrig(dt);
-    const k = Math.min(1, AMB_RATE * dt);
-    if(ambGullGain)  ambGullGain.gain.value  += (0 - ambGullGain.gain.value) * k;
-    if(ambOceanGain) ambOceanGain.gain.value += (0.04 - ambOceanGain.gain.value) * k;   // leises Rauschen = Fluss
+    if(!hier() || !ambGullGain || !ambOceanGain) return updateAmbientOrig(dt);
+    // Die Engine fuehrt beide Regler gleitend nach (aktuell -> Ziel). Darum vorher auf "ihre" Werte zurueckrechnen, damit
+    // sie vom selben Stand aus gleitet wie ohne diese Huelle, und danach wieder umstellen.
+    ambOceanGain.gain.value /= FLUSS_RAUSCHEN;
+    const r = updateAmbientOrig(dt);
+    ambOceanGain.gain.value *= FLUSS_RAUSCHEN;
+    ambGullGain.gain.value = 0;
+    return r;
   };
 }
 
