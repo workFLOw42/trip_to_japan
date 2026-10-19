@@ -143,7 +143,17 @@ function baueKulisse(){
     story.setze('zelt', 2, { x, z, y: 0, dreh: Math.atan2(OASE.x - x, OASE.z - z), seed: 20 + i, fest: true });
   }
   for(const [x, z, i] of [[-75, 430, 0], [-95, 395, 1], [70, 455, 2], [95, 418, 3], [-40, 470, 4]])
-    story.setze('zelt', 2, { x, z, y: 0, dreh: Math.atan2(ANKUNFT.x - x, ANKUNFT.z - z) + (i - 2) * 0.15, seed: 40 + i, fest: true });
+    story.setze('zelt', 2, { x, z, y: duene(x, z), dreh: Math.atan2(ANKUNFT.x - x, ANKUNFT.z - z) + (i - 2) * 0.15, seed: 40 + i, fest: true });   // y: z 455/470 liegen schon am Duenenrand (steckten 0,4 / 1,1 m im Sand)
+  // Live-Wunsch 19.10.2026 (Screenshot vom Startplatz: "hier fehlen noch ein paar Beduinenzelte – neben dem Tower und links
+  // neben der Piste ab hinter dem X-Wing"). Tower: x 130, z 120 (8 x 8 m) – drei Zelte im Halbkreis darum, je >= 16 m weg,
+  // Eingang zum Tower. Piste: x -2..38; links davon eine lockere Reihe ab hinter dem X-Wing (x -18, z 320) nach Norden,
+  // 45-70 m von der Pistenmitte, Eingang zur Piste. Beides abseits von Bahn, Transall (x 18, z 320) und X-Wing.
+  for(const [dx, dz, i] of [[22, -6, 0], [16, 18, 1], [-6, 24, 2]]){
+    const x = 130 + dx, z = 120 + dz;
+    story.setze('zelt', 2, { x, z, y: duene(x, z), dreh: Math.atan2(130 - x, 120 - z), seed: 60 + i, fest: true });
+  }
+  for(const [x, z, i] of [[-48, 285, 0], [-62, 252, 1], [-46, 218, 2], [-66, 186, 3], [-50, 150, 4]])
+    story.setze('zelt', 2, { x, z, y: duene(x, z), dreh: Math.atan2(18 - x, 0) + (i % 2 ? 0.18 : -0.12), seed: 70 + i, fest: true });
   kulisse.gruppe = g;
   ladeKamele(g);
 }
