@@ -204,6 +204,12 @@ function flugUpdate(){
       state.quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler((Math.random() - 0.5) * 0.02, 0, (Math.random() - 0.5) * 0.03))); }
   } else sprungFlugUpdate();
 }
+const AUSSTIEG_SPAET = 8;    // s nach der Landung: spaetestens dann wird ausgestiegen
+// Nach der Runde gelandet (oder irgendwo am Boden zum Stehen gekommen, nachdem alle Ringe geschafft sind): Y steigt aus
+function rundflugAussteigbar(){
+  return fin.aktiv && fin.art === 'rundflug' && hier() && !eva && fin.abgehoben && state.onGround && state.vel.length() < 3
+    && (fin.schritt === 'fertig' || fin.ringNr >= fin.ringe.length);
+}
 function rundflugUpdate(){
   if(fin.ringNr < fin.ringe.length){
     const r = fin.ringe[fin.ringNr];
@@ -218,7 +224,11 @@ function rundflugUpdate(){
   const FL = L().FLUGFELD;
   if(fin.abgehoben && state.onGround && state.vel.length() < 3 && Math.hypot(state.pos.x - FL.x, state.pos.z - FL.z) < FL.laenge){
     fin.schritt = 'fertig'; story.ziel = null; state.throttle = 0;
+    // Live-Befund 19.10.2026: "nach dem Rundflug kann man nicht mehr aus der C-400 aussteigen". Ausgestiegen wurde NUR im
+    // fertig()-Rueckruf der Ansage – blieb die haengen, sass man bis zur Notfall-Zeitsperre fest. Jetzt spaetestens nach
+    // AUSSTIEG_SPAET s auch ohne fertig(), und Y steigt nach der Landung jederzeit aus (siehe buttonY).
     story.sprich(['Und jetzt ab an den Strand: Die Wellen sind heute richtig hoch!'], () => zurueck('', 'Surfen auf hohen Wellen kommt bald!'), 'pilot');
+    story.spaeter(AUSSTIEG_SPAET, () => { if(fin.aktiv && fin.art === 'rundflug' && fin.schritt === 'fertig') zurueck('', 'Surfen auf hohen Wellen kommt bald!'); });
   }
 }
 // Vulkan beim Rundflug (Live-Wunsch): bricht immer wieder aus (20-30 s Ruhe, 18-25 s Ausbruch) und sicher, sobald man auf den
@@ -1676,7 +1686,9 @@ function hookFinale(){
   const yOrig = buttonY;
   // Live-Befund 14.10.: Y auf der Welle stieg ins Schlauchboot der Engine (Samu ist fuer sie "in der Luft"), B sprang nicht
   // (dropCrate nur mit dem Transall-Modell) – im Finale mit Figur fangen beide Tasten hier ab, vor der Engine
-  buttonY = function(){ if(fin.aktiv && hier() && fin.k){ if(fin.schritt === 'welle') surfenAussteigen(); return; } return yOrig.apply(this, arguments); };
+  buttonY = function(){ if(fin.aktiv && hier() && fin.k){ if(fin.schritt === 'welle') surfenAussteigen(); return; }
+    if(rundflugAussteigbar()){ zurueck('', 'Surfen auf hohen Wellen kommt bald!'); return; }   // nach dem Rundflug am Boden: aussteigen
+    return yOrig.apply(this, arguments); };
   const bOrig = buttonB;
   buttonB = function(){ if(fin.aktiv && hier() && fin.k){ aktionB(); return; } if(story.freiesSpiel && c400Nah() && !fin.aktiv){ einsteigen('rundflug'); return; } return bOrig.apply(this, arguments); };
   // Y an der C-400 (am Strand, nach Etappe 6)
