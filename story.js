@@ -843,7 +843,10 @@ function startbildschirm(weiter){
         + '<div style="font-size:14px;margin-top:18px;opacity:.7">↑ ↓ wählen · A / Enter · B / Esc zurück</div>';
     } else {                                               // Statistiken
       OPT = [];
-      const zeile = (k, v) => '<div style="display:flex;justify-content:space-between;gap:28px"><span style="opacity:.8">' + k + '</span><b>' + v + '</b></div>';
+      // rekord: undefined = keine Rekord-Spalte, '' = leer (Wert bleibt buendig), Text = in der Spalte rechts (wie im Abspann)
+      const zeile = (k, v, gross, rekord) => rekord === undefined
+        ? '<div style="display:flex;justify-content:space-between;gap:28px"><span style="opacity:.8">' + k + '</span><b>' + v + '</b></div>'
+        : '<div style="display:grid;grid-template-columns:1fr auto 130px;gap:0 18px;align-items:baseline"><span style="opacity:.8">' + k + '</span><b style="text-align:right;font-variant-numeric:tabular-nums">' + v + '</b><span style="color:#ffd23f;font-weight:700;font-size:.9em">' + (rekord || '') + '</span></div>';
       el.innerHTML = titel + '<div style="font-size:24px;font-weight:700;margin-top:18px">Statistiken</div>'
         + '<div id="statliste" style="min-width:min(460px,90vw);max-height:62vh;overflow:auto;text-align:left;margin-top:6px;padding:0 10px">'
         + (story.statistikHtml ? story.statistikHtml('gesamt', zeile) : '') + '</div>'

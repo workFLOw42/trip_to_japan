@@ -34,7 +34,15 @@ function proMerken(){ try { localStorage.setItem(PRO_KEY, String(Date.now())); }
 
 // ---- Abspann -------------------------------------------------------------------------------------------------------
 let ab = null;
-function zeile(k, v, gross){ return '<div style="display:flex;justify-content:space-between;gap:28px;' + (gross ? 'font-size:22px;font-weight:700;margin-top:10px' : '') + '"><span style="opacity:.8">' + k + '</span><b>' + v + '</b></div>'; }
+// rekord: undefined = keine Rekord-Spalte; '' = Spalte leer (damit der Wert trotzdem buendig steht); Text = in der Spalte.
+// Live-Wunsch 19.10.2026: alle Zeiten rechtsbuendig untereinander, "Neuer Rekord!" rechts daneben (vorher hing er am Wert).
+function zeile(k, v, gross, rekord){
+  const st = gross ? 'font-size:22px;font-weight:700;margin-top:10px;' : '';
+  if(rekord === undefined) return '<div style="display:flex;justify-content:space-between;gap:28px;' + st + '"><span style="opacity:.8">' + k + '</span><b>' + v + '</b></div>';
+  return '<div style="display:grid;grid-template-columns:1fr auto ' + REKORD_B + 'px;gap:0 18px;align-items:baseline;' + st + '"><span style="opacity:.8">' + k
+    + '</span><b style="text-align:right;font-variant-numeric:tabular-nums">' + v + '</b><span style="color:#ffd23f;font-weight:700;font-size:.9em">' + (rekord || '') + '</span></div>';
+}
+const REKORD_B = 130;   // px fuer "Neuer Rekord!"
 // Sicherheitsnetz: fehlt eine Etappe im Log, nicht stillschweigend alle Resttage Etappe 6 zuschlagen (Live-Befund 14.10.: E2/E3
 // fehlten, E6 hatte "3 Tage") – nur wenn genau Etappe 6 fehlt, bekommt sie den Rest
 function e6Nachtrag(){
@@ -65,7 +73,7 @@ function abspannText(){
   }
   h += '<div style="font-size:40px;font-weight:800;margin-top:90px;color:#ffd23f">Für Samu!</div>'
     + '<div style="font-size:30px;font-weight:700;margin-top:6px">Hab dich lieb!</div>'
-    + '<div style="height:60vh"></div>';
+    + '<div id="abspann-ende" style="height:1px"></div>';
   return h;
 }
 story.abspann = function(){
@@ -86,6 +94,8 @@ story.abspann = function(){
   el.appendChild(roll); el.appendChild(sig); document.body.appendChild(el);
   const F = story.e6, mitte = { x: F.STRANDPLATZ.x - 120, z: F.STRANDPLATZ.z };
   ab = { el, roll, t: 0, h: 0, mitte, dauer: 0 };
+  // Live-Wunsch 19.10.2026: das Menue sofort, wenn der Abspann durch ist – vorher rollten nach der Widmung noch 60 % Bildhoehe
+  // Leerraum durch (gut 5 s nichts). Jetzt endet er, wenn die Widmung oben aus dem Bild ist: Rollhoehe + Bildhoehe, mehr nicht.
   ab.h = roll.offsetHeight; ab.dauer = story.abspannTestDauer || (innerHeight + ab.h) / 42;   // ~42 px/s (Testdauer fuer den Browser-Test)
   if(story.hudSichtbar) story.hudSichtbar(false);
   story.abspannLaeuft = true;

@@ -32,6 +32,7 @@ function etappeErfasst(wie){
   if(wie === 'mit dem Kran' && story.kran4) story.neueZeit('fracht', story.kran4.t);
   else if(wie === 'mit dem Feuerwehrboot' && story.boot3) story.neueZeit('loeschen', story.boot3.t);
   else if(wie === 'mit dem Schnellboot' && story.flucht) story.neueZeit('schnellboot', story.flucht.t);
+  else if(wie === 'U-Boot-Schlucht' && story.schlucht) story.neueZeit('schlucht', story.schlucht.t);   // Live-Wunsch 19.10.2026
   else if(/^mit dem (Mond|Mars)-Trip$/.test(wie || '')){ const z = /Mond/.test(wie) ? 'mond' : 'mars'; spiel[z]++;
     if(echt()){ const g = laden(); g[z] = (g[z] || 0) + 1; sichern(g); } }
 }
@@ -58,7 +59,11 @@ story.spielZiehen = function(){
 // ---- Anzeige ------------------------------------------------------------------------------------------------------
 const GOLD = '#ffd23f';
 const ZEITNAME = [['startsequenz', 'Schnellste Startsequenz'], ['startsequenzKurzschluss', 'Schnellste Startsequenz mit Kurzschluss'],
-  ['fracht', 'Schnellste Frachtverladung'], ['loeschen', 'Schnellste Löschaktion'], ['schnellboot', 'Schnellste Schnellbootfahrt'], ['airrace', 'Schnellstes Air Race']];
+  ['fracht', 'Schnellste Frachtverladung'], ['loeschen', 'Schnellste Löschaktion'], ['schnellboot', 'Schnellste Schnellbootfahrt'],
+  ['schlucht', 'Schnellste U-Boot-Fahrt durch die Schlucht'], ['airrace', 'Schnellstes Air Race']];
+// "Neuer Rekord!" steht in einer eigenen Spalte rechts neben dem Wert (Live-Wunsch 19.10.2026: alle Zeiten rechtsbuendig
+// untereinander, der Rekord daneben). Werte mit Rekord sind deshalb [Text, true]; zeile() bekommt das als drittes Feld.
+const REKORD = 'Neuer Rekord!';
 const SPORT = [['fall', 'Fallschirmspringen'], ['snow', 'Snowboarden'], ['surf', 'Surfen']];
 function sek(s){ return s < 60 ? s.toFixed(2).replace('.', ',') + ' s' : Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0') + ' min'; }
 function tage(t){ return t === 1 ? '1 Tag' : t + ' Tage'; }
@@ -66,13 +71,13 @@ function tage(t){ return t === 1 ? '1 Tag' : t + ' Tage'; }
 function bloecke(d){
   const B = [];
   const reise = []; if(d.spiele) reise.push(['Reisen nach Japan', String(d.spiele)]);
-  if(d.kuerzeste !== undefined) reise.push([d.einSpiel ? 'Reisezeit' : 'Kürzeste Reisezeit', tage(d.kuerzeste) + (d.rekordKurz ? ' · Neuer Rekord!' : '')]);
+  if(d.kuerzeste !== undefined) reise.push([d.einSpiel ? 'Reisezeit' : 'Kürzeste Reisezeit', tage(d.kuerzeste), !!d.rekordKurz]);
   if(d.laengste !== undefined && !d.einSpiel) reise.push(['Längste Reisezeit', tage(d.laengste)]);
   if(d.mond) reise.push(['Reisen zum Mond', String(d.mond)]);
   if(d.mars) reise.push(['Reisen zum Mars', String(d.mars)]);
   if(reise.length) B.push(['Die Reise', reise]);
-  const z = []; for(const [k, n] of ZEITNAME) if(d.zeiten && d.zeiten[k] !== undefined) z.push([d.einSpiel ? n.replace('Schnellste ', '').replace('Schnellstes ', '') : n, sek(d.zeiten[k]) + (d.rekorde && d.rekorde[k] ? ' · Neuer Rekord!' : '')]);
-  if(z.length) B.push([d.einSpiel ? 'Zeiten' : 'Bestzeiten', z.map(([a, b]) => [a.charAt(0).toUpperCase() + a.slice(1), b])]);
+  const z = []; for(const [k, n] of ZEITNAME) if(d.zeiten && d.zeiten[k] !== undefined) z.push([d.einSpiel ? n.replace('Schnellste ', '').replace('Schnellstes ', '') : n, sek(d.zeiten[k]), !!(d.rekorde && d.rekorde[k])]);
+  if(z.length) B.push([d.einSpiel ? 'Zeiten' : 'Bestzeiten', z.map(([a, b, r]) => [a.charAt(0).toUpperCase() + a.slice(1), b, r])]);
   const w = []; for(const h of [15, 20, 30]) if(d.monster && d.monster[h]) w.push([h + '-m-Welle geritten', d.monster[h] + '×']);
   if(w.length) B.push(['Monsterwellen', w]);
   for(const [s, titel] of SPORT){ const t = d.tricks && d.tricks[s]; if(!t) continue;
@@ -93,7 +98,10 @@ story.statistikHtml = function(welche, zeile, ohneReise){
   let h = '';
   for(const [titel, liste] of B){
     h += '<div style="font-size:21px;font-weight:700;margin:22px 0 6px;color:' + GOLD + '">' + titel + '</div>';
-    for(const [k, v] of liste) h += zeile(k, v);
+    // Rekord-Spalte nur in Bloecken, die einen Rekord haben koennen (Zeiten, Reise) – dort fuer ALLE Zeilen, damit die Werte
+    // rechtsbuendig untereinander stehen (auch die ohne Rekord)
+    const spalte = liste.some(z => z.length > 2);
+    for(const [k, v, r] of liste) h += zeile(k, v, false, spalte ? (r ? REKORD : '') : undefined);
   }
   return h;
 };
