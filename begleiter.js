@@ -41,22 +41,28 @@ const HUND_SPRINT = 9.5;                   // m/s, wenn er hinter dem laufenden 
 const VORAUS_MIN = 5, VORAUS_MAX = 10, VORAUS_QUER = 2.5;
 const EINSTIEG_SICHT = 40;                 // m: so weit voraus erkennt er einen Einstieg
 const EINSTIEG_KEGEL = 0.35;               // rad (20 Grad) um die Laufrichtung
-// Schrecksekunde (Live-Wunsch 19.10.2026: "sonst wirkt es, als wuerde man ihn mitsteuern"): Barki folgt beim Vorauslaufen
-// nicht Samus Richtung selbst, sondern seiner Wahrnehmung davon (V.blick). Kleine Aenderungen zieht er gleich weich mit;
-// eine deutliche (ueber SCHRECK_WINKEL) merkt er erst nach SCHRECK_MIN..MAX s und dreht dann zuegig nach (SCHRECK_DREH).
-const SCHRECK_WINKEL = 0.45, SCHRECK_MIN = 0.5, SCHRECK_MAX = 0.8, SCHRECK_DREH = 4.5, KLEIN_DREH = 2.0;
+// Schrecksekunde (Live-Wunsch 19.10.2026: "sonst wirkt es, als wuerde man ihn mitsteuern ... als braeuchte er eine
+// Schrecksekunde, um zu merken, dass sich was geaendert hat"). Barki folgt beim Vorauslaufen nicht Samus Richtung selbst,
+// sondern der Richtung, die er zuletzt WAHRGENOMMEN hat (V.blick). Weicht Samu davon ab (ueber SCHRECK_MERK), merkt Barki das
+// erst nach SCHRECK_MIN..MAX s – dann dreht er zuegig nach (SCHRECK_DREH), und die neue Richtung gilt als bekannt. Waehrend
+// er nachdreht, zaehlt eine weitere Aenderung gleich mit (keine neue Schrecksekunde mitten im Drehen).
+// Erste Fassung (heute Mittag) zog Aenderungen unter 25 Grad sofort mit – beim normalen Lenken ist jede Aenderung pro Bild
+// klein, also folgte er praktisch sofort (Live-Befund: "reagiert immer noch sofort auf Stick-Eingaben").
+const SCHRECK_MERK = 0.12, SCHRECK_MIN = 0.4, SCHRECK_MAX = 0.7, SCHRECK_DREH = 3.0;
 function barkiBlick(V, dt){
-  if(V.blick === undefined){ V.blick = eva.yaw; V.schreck = 0; }
+  if(V.blick === undefined){ V.blick = eva.yaw; V.schreck = 0; V.dreht = false; }
   const diff = winkelDiff(V.blick, eva.yaw);
-  if(Math.abs(diff) < SCHRECK_WINKEL && !(V.schreck > 0)){ V.blick += klemme(diff, -KLEIN_DREH * dt, KLEIN_DREH * dt); return V.blick; }
-  // deutliche Aenderung: erst die Schrecksekunde, dann nachdrehen
-  if(!(V.schreck > 0) && !V.dreht){ V.schreck = SCHRECK_MIN + Math.random() * (SCHRECK_MAX - SCHRECK_MIN); }
-  if(V.schreck > 0){ V.schreck -= dt; if(V.schreck <= 0){ V.schreck = 0; V.dreht = true; } return V.blick; }
-  V.blick += klemme(diff, -SCHRECK_DREH * dt, SCHRECK_DREH * dt);
-  if(Math.abs(winkelDiff(V.blick, eva.yaw)) < 0.05) V.dreht = false;
+  if(V.dreht){                                            // dreht gerade nach: bis zur aktuellen Richtung
+    V.blick += klemme(diff, -SCHRECK_DREH * dt, SCHRECK_DREH * dt);
+    if(Math.abs(winkelDiff(V.blick, eva.yaw)) < 0.03) V.dreht = false;
+    return V.blick;
+  }
+  if(Math.abs(diff) < SCHRECK_MERK){ V.schreck = 0; return V.blick; }   // (noch) nichts gemerkt
+  if(!(V.schreck > 0)) V.schreck = SCHRECK_MIN + Math.random() * (SCHRECK_MAX - SCHRECK_MIN);   // Aenderung: Schrecksekunde
+  V.schreck -= dt;
+  if(V.schreck <= 0){ V.schreck = 0; V.dreht = true; }
   return V.blick;
-}
-const STEH_KOMMEN = 1.2;                   // s Samu steht -> Hund kommt und setzt sich
+}const STEH_KOMMEN = 1.2;                   // s Samu steht -> Hund kommt und setzt sich
 // Live-Befund 19.10.2026: Barki tollte und bellte schon nach 14 s, Samu ging aber erst nach 25 s in den Leerlauf (Moonwalk,
 // story.js MOON_NACH). Jetzt haengt das Tollen an Samus Leerlauf selbst und nicht an einer eigenen Uhr: es beginnt, wenn
 // sein Moonwalk beginnt. Darf er dort nicht (am Wasser), bleibt er stehen – dann tollt Barki ab TOLL_NACH trotzdem.

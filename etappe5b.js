@@ -240,7 +240,7 @@ function ubootEinsteigen5(){
   story.phase = 'schlucht';
   // Live-Test: das U-Boot war unsichtbar – etappe5Start blendet den Flieger aus (die geparkte Mustang ist Kulisse)
   planeGroup.visible = true;
-  Object.assign(sb, { aktiv: true, laeuft: false, fertig: false, t: 0, kontakte: 0, cool: 0 }); sonarT = -1;
+  Object.assign(sb, { aktiv: true, laeuft: false, fertig: false, durch: false, t: 0, kontakte: 0, cool: 0 }); sonarT = -1;
   state.vel.set(0, 0, 0); state.throttle = 0;
   story.hinweis('');
   // Wie in Etappe 1: jemand hilft per Funk – aber den Code sagt diesmal niemand
@@ -324,7 +324,10 @@ function schluchtUpdate(dt){
 }
 function ende(ok, wie){
   if(sb.fertig) return;
-  sb.fertig = true; sb.laeuft = false; story.ziel = null; state.throttle = 0;
+  sb.fertig = true; sb.laeuft = false; story.ziel = null; sb.durch = !!ok;
+  // geschafft: mit Vollgas geradeaus weiter, nicht mehr steuerbar (Live-Wunsch 19.10.2026, wie das Schnellboot E4b);
+  // sonst (leck, Zeit um) wie bisher Schub weg
+  if(!ok) state.throttle = 0;
   hud();
   const txt = ok ? ['Geschafft! Durch die ganze Schlucht – das war Maßarbeit!']
     : wie === 'zerschellt' ? ['Krach! Der Rumpf ist leck, das U-Boot muss auftauchen.', 'Bis es repariert ist, vergeht eine Woche.']
@@ -423,7 +426,9 @@ function hookE5b(){
   const physOrig = stepPhysics;
   stepPhysics = function(dt, inp){
     if(hier() && sb.aktiv && (pad.offen || (!sb.laeuft && !sb.fertig))){ state.vel.set(0, 0, 0); state.throttle = 0; schluchtUpdate(dt); return; }
-    const r = physOrig.apply(this, arguments);
+    // nach dem geschafften Ziel: Vollgas, Ruder und Tiefenruder 0 – das U-Boot faehrt geradeaus weiter, waehrend die Ansage kommt
+    if(hier() && sb.aktiv && sb.fertig && sb.durch){ state.throttle = 1; inp = Object.assign({}, inp, { yaw: 0, pitch: 0, roll: 0 }); }
+    const r = physOrig.call(this, dt, inp);
     if(hier() && sb.aktiv) schluchtUpdate(dt);
     return r;
   };
