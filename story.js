@@ -3400,7 +3400,7 @@ const U_ROLL_FOLGT = 2.2;     // 1/s
 // Motorboote (Feuerwehrboot, Schnellboot E4b – stepBoat; Live-Wunsch 19.10.2026: "auch leicht neigen, dann wirkt es realistischer").
 // Die Engine neigt sie schon mit BOAT_ROLL 0,25 (14 Grad) nach dem RUDERAUSSCHLAG – also auch im Stand voll. Hier wie beim
 // U-Boot aus der echten Drehrate, aber nur leicht: hoechstens B_ROLL_MAX.
-const B_ROLL_MAX = 0.10;      // rad (~6 Grad)
+const B_ROLL_MAX = 0.16;      // rad (~9 Grad; Live-Wunsch 19.10.2026: bei 6 Grad sah man es kaum – nur wenig mehr)
 const NEIG_FAHRT_VOLL = 0.6;  // ab 60 % der Hoechstfahrt die volle Neigung (darunter weniger, im Stand keine)
 const B_ROLL_PRO = 0.16;      // rad je rad/s (BOAT_YAW 0,9 rad/s volle Fahrt -> 0,14, gekappt)
 // Die Huelle um stepSub/stepBoat: das Original rechnet Kurs, Nicken (Duenung) und Fahrt, danach wird nur die Querlage ersetzt.

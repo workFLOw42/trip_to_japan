@@ -301,7 +301,7 @@ story.flucht4.POL = POL;                             // fuer den Bot (C:\tmp\sfg
 function polizeiTempo(z, vMax){ let v = vMax; for(let l = 0; l <= 40; l += 5) v = Math.min(v, Math.sqrt(POL.aq * kanalRadius(z - l)) + l * 0.3); return v; }
 const FANG_R = 15, KONTAKT_MAX = 2;                  // Fang-Abstand 15 m (vorher 20) – mehr Toleranz
 // Kurvenneigung (story.js neigenWieDrehrate): das Schnellboot dreht mit gedrosseltem Ruder langsam, darum staerker gewichtet
-story.neigFaktor = (name) => name === 'stepBoat' && hier() && fl.aktiv ? 2.2 : 1;
+story.neigFaktor = (name) => name === 'stepBoat' && hier() && fl.aktiv ? 3.4 : 1;   // bis B_ROLL_MAX (~9 Grad)
 const MOTOR_ANSAGE = 0.35;   // Motor waehrend der Ansage nach dem Ziel auf 35 %
 function ruderFaktor(){ const v = Math.hypot(state.vel.x, state.vel.z), k = Math.min(1, v / RB.vRef); return RB.ruderMax - (RB.ruderMax - RB.ruderMin) * k; }
 

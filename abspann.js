@@ -99,6 +99,17 @@ story.abspann = function(){
   ab.h = roll.offsetHeight; ab.dauer = story.abspannTestDauer || (innerHeight + ab.h) / 42;   // ~42 px/s (Testdauer fuer den Browser-Test)
   if(story.hudSichtbar) story.hudSichtbar(false);
   story.abspannLaeuft = true;
+  // Eigene Uhr (Live-Befund 19.10.2026: "das Weiterspielen-Menue kam immer erst, wenn man 3 s X gedrueckt hat, nie
+  // automatisch" – auf allen Wegen gleich). Vorher lief der Abspann nur in updateHUD; die Engine ruft das nicht, solange sie
+  // steht (#hint/Pause, Inventar) – und was dort eine Ansage oder ein Menue offen hielt, hielt den Abspann mit an. Jetzt laeuft
+  // er auf requestAnimationFrame, unabhaengig von der Bildschleife der Engine.
+  let vor = performance.now();
+  (function uhr(){
+    if(!ab) return;
+    const jetzt = performance.now(), dt = Math.min(0.1, (jetzt - vor) / 1000); vor = jetzt;
+    abspannSchritt(dt);
+    if(ab) requestAnimationFrame(uhr);
+  })();
 };
 function abspannSchritt(dt){
   if(!ab) return;
@@ -174,7 +185,7 @@ function hookAbspann(){
   const hudOrig = updateHUD;
   updateHUD = function(){
     const r = hudOrig.apply(this, arguments);
-    const jetzt = performance.now(), dt = Math.min(0.1, (jetzt - (hookAbspann.t || jetzt)) / 1000); hookAbspann.t = jetzt; abspannSchritt(dt);
+    // (der Abspann laeuft auf eigener Uhr, siehe story.abspann)
     e1Nachtrag();
     if(story.etappe === 6 && story.phase === 'ankunft' && story.finaleStufe && story.finaleStufe() >= 5 && eva) stufe5();
     return r;
