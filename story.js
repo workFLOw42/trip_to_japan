@@ -721,6 +721,13 @@ function hookPad(){
     }
   }, 250);
 }
+// Ton aus/an fuer ALLES (siehe master): kurz blenden statt hart schalten, sonst knackt es
+function stummStellen(){
+  if(!master.stumm || !audioCtx) return;
+  const g = master.stumm.gain, t = audioCtx.currentTime;
+  g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(soundOn ? 1 : 0, t + 0.15);
+}
+story.stummStellen = stummStellen;
 function hookTon(){
   // Das grosse Ton-Symbol nicht ueber Filmszene/Globus zeigen (z. B. beim automatischen Einschalten
   // am Startbildschirm)
@@ -732,6 +739,7 @@ function hookTon(){
   const orig = toggleSound;
   toggleSound = function(){
     const r = orig.apply(this, arguments);
+    stummStellen();
     for(const rd of [...reden]) rd.tonGeaendert();
     return r;
   };
@@ -1392,7 +1400,13 @@ function hookSchatten(){
 // ein eigener Gain dazwischengeschaltet und destination auf ihn umgebogen – so landet alles (Motor,
 // Meer, Wind, Crash, Ping ...) im Master, ohne die Engine anzufassen. Der Master blendet mit der
 // Schwarzblende zum Globus aus und mit der neuen Etappe wieder ein.
-const master = { gain: null, ziel: 1 };
+// Live-Befund 19.10.2026 ("Ton aus im Intro: Etappe 1 und 2 still, in Etappe 3 war das Ambiente zu hoeren – stumm soll global
+// stumm heissen"): die Engine schaltet bei Ton aus jedes Geraeusch einzeln ab (soundOn), und jede Etappe, die selbst
+// Ton macht, muss das ebenso pruefen – etappe3.js hielt das Flussrauschen fest auf 0,04 und vergass es. Darum sitzt hinter
+// dem Master eine zweite Stufe, stumm, die NUR soundOn folgt: aus = alles still, egal wer den Ton macht. Die Globus-Blende
+// (masterBlende) bleibt davor und kann sie nicht wieder aufdrehen. Die Stimme laeuft nicht hier (speechSynthesis) –
+// sie wird bei Ton aus zum Untertitel (sprich, tonAn).
+const master = { gain: null, ziel: 1, stumm: null };
 function hookMaster(){
   const initOrig = initAudio;
   initAudio = function(){
@@ -1401,7 +1415,8 @@ function hookMaster(){
     if(neu && audioCtx && !master.gain){
       const echt = audioCtx.destination;
       master.gain = audioCtx.createGain();
-      master.gain.connect(echt);
+      master.stumm = audioCtx.createGain(); master.stumm.gain.value = soundOn ? 1 : 0;
+      master.gain.connect(master.stumm).connect(echt);
       Object.defineProperty(audioCtx, 'destination', { get: () => master.gain, configurable: true });
     }
     return r;
