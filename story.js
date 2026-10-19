@@ -3413,7 +3413,10 @@ function neigenWieDrehrate(name, max, pro){
     // Kraengung kommt von der Fliehkraft, also von Fahrt UND Drehung: auf der Stelle drehen (die Schraube drueckt aufs Ruder)
     // legt kein Boot schief. Darum mit dem Anteil an der Hoechstfahrt gewichtet (gemessen: ohne das 5 Grad im Stand).
     const fahrt = Math.min(1, Math.hypot(state.vel.x, state.vel.z) / Math.max(1, spec.vMax || 1));
-    const ziel = Math.max(-max, Math.min(max, rate * pro * fahrt / NEIG_FAHRT_VOLL));
+    // Das Schnellboot (Etappe 4b) lenkt in voller Fahrt nur mit 22 % Ruder (etappe4b.js ruderFaktor) – seine Drehrate bleibt
+    // klein, gemessen nur 3 Grad. Dafuer ein eigener Faktor (story.neigFaktor, sonst 1).
+    const k = (typeof story.neigFaktor === 'function' ? story.neigFaktor(name) : 1) || 1;
+    const ziel = Math.max(-max, Math.min(max, rate * pro * k * fahrt / NEIG_FAHRT_VOLL));
     roll += (ziel - roll) * Math.min(1, U_ROLL_FOLGT * dt);
     // Vorzeichen: Linkskurve (yaw waechst) -> linke Seite runter. Bei 'YXZ' ist das ein positives z (wie die Engine:
     // roll = -inp.yaw * SUB_ROLL, und inp.yaw < 0 ist links).

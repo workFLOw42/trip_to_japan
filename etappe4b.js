@@ -300,6 +300,9 @@ function kanalRadius(z){ const d1 = (mitteX(z - 2) - mitteX(z + 2)) / 4, d2 = (m
 story.flucht4.POL = POL;                             // fuer den Bot (C:\tmp\sfg\test_e4bot2.js)
 function polizeiTempo(z, vMax){ let v = vMax; for(let l = 0; l <= 40; l += 5) v = Math.min(v, Math.sqrt(POL.aq * kanalRadius(z - l)) + l * 0.3); return v; }
 const FANG_R = 15, KONTAKT_MAX = 2;                  // Fang-Abstand 15 m (vorher 20) – mehr Toleranz
+// Kurvenneigung (story.js neigenWieDrehrate): das Schnellboot dreht mit gedrosseltem Ruder langsam, darum staerker gewichtet
+story.neigFaktor = (name) => name === 'stepBoat' && hier() && fl.aktiv ? 2.2 : 1;
+const MOTOR_ANSAGE = 0.35;   // Motor waehrend der Ansage nach dem Ziel auf 35 %
 function ruderFaktor(){ const v = Math.hypot(state.vel.x, state.vel.z), k = Math.min(1, v / RB.vRef); return RB.ruderMax - (RB.ruderMax - RB.ruderMin) * k; }
 
 // Risiko-Variante: keine Erklaerung, wie man faehrt (Live-Wunsch). Nur der Ruf der Polizei.
@@ -503,7 +506,7 @@ function fluchtEnde(ok, wie){
   // Sirenen: entkommen -> ueber 2 s ausblenden; eingeholt -> bleiben bis zum Globus (die Polizei ist ja da)
   for(const p of fl.polizei) if(p.sirene && audioCtx){ const g = p.sirene.gain.gain, t = audioCtx.currentTime;
     g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(ok ? 0 : SIRENE_MAX * 0.8, t + (ok ? 2 : 0.5)); }
-  if(!ok) state.throttle = 0;          // entkommen: weiterfahren (Live-Wunsch 19.10.2026), Schub bleibt
+  if(!ok) state.throttle = 0;          // entkommen: mit Vollgas geradeaus weiter (Live-Wunsch 19.10.2026, siehe stepPhysics)
   if(fl.rede) fl.rede.abbrechen();
   const weiter = () => story.spaeter(1, () => {
     sirenenStopp();
@@ -543,12 +546,23 @@ function hookFlucht(){
     if(!(hier() && fl.aktiv)) return physOrig.apply(this, arguments);
     if(!fl.laeuft && !fl.fertig){ state.vel.set(0, 0, 0); state.throttle = 0; planeGroup.position.copy(state.pos); return; }
     // Live-Feedback: nach dem Stopp durch die Polizei glitt das Boot weiter und liess sich lenken -> steht sofort.
-    // Live-Wunsch 19.10.2026: ENTKOMMEN ist anders – durch das Ziel faehrt man weiter, waehrend die Ansage kommt (vorher
-    // stoppte das Boot abrupt und liess sich nicht mehr steuern). fluchtUpdate laeuft mit: Felsen, Stroemung, Sirenen
-    // blenden aus (sirenenUpdate: an = false), die Polizei steht (fl.laeuft ist aus).
+    // Live-Wunsch 19.10.2026: ENTKOMMEN ist anders – durch das Ziel faehrt das Boot mit Vollgas geradeaus weiter, waehrend
+    // die Ansage kommt (vorher stoppte es abrupt), nicht mehr steuerbar: Schub voll, Ruder 0. fluchtUpdate laeuft mit (Felsen,
+    // Stroemung), die Sirenen blenden aus (sirenenUpdate: an = false), die Polizei steht (fl.laeuft ist aus).
     if(fl.fertig && !fl.entkommen){ state.vel.set(0, 0, 0); state.throttle = 0; planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat); return; }
+    if(fl.fertig && fl.entkommen){ state.throttle = 1; inp = Object.assign({}, inp, { yaw: 0, pitch: 0, roll: 0 }); }
     const r = fluchtPhysik(dt, inp, (d, i) => physOrig.call(this, d, i));
     fluchtUpdate(dt);
+    return r;
+  };
+  // Motor waehrend der Ansage nach dem Ziel leiser (Live-Wunsch 19.10.2026): die Engine setzt engineGain jedes Bild neu,
+  // darum danach gedaempft (MOTOR_ANSAGE), sanft ueber fl.daempf
+  const tonOrig = updateEngineSound;
+  updateEngineSound = function(){
+    const r = tonOrig.apply(this, arguments);
+    const soll = hier() && fl.aktiv && fl.fertig && fl.entkommen ? MOTOR_ANSAGE : 1;
+    fl.daempf = (fl.daempf === undefined ? 1 : fl.daempf) + (soll - (fl.daempf === undefined ? 1 : fl.daempf)) * 0.05;
+    if(fl.daempf < 0.999 && typeof engineGain !== 'undefined' && engineGain) engineGain.gain.value *= fl.daempf;
     return r;
   };
   const buttonYOrig = buttonY;
