@@ -4362,7 +4362,10 @@ function orcaPose(o, dt, swimY){
 const strandleben = { an: false, forellen: [], loewen: [], tpl: {}, laedt: {}, t: 0 };
 const FORELLE_LEN = 0.45;      // m – echte Forellen sind 30 bis 60 cm; mit 25 cm sah man sie im Wasser kaum
 const FORELLE_GRUPPEN = 3, FORELLE_JE = 4;
-const FORELLE_TIEF_MIN = 0.8, FORELLE_TIEF_MAX = 6;   // m Wassertiefe, in der sie stehen (Flachwasser)
+// Nicht zu flach: vom Strand aus sah man sie schwimmen (Live-Befund 20.10.2026). Ab 1,8 m Wassertiefe und mindestens
+// FORELLE_UNTER unter der Oberflaeche – beim Schwimmen und Tauchen sieht man sie, vom Ufer aus nicht.
+const FORELLE_TIEF_MIN = 1.8, FORELLE_TIEF_MAX = 7;   // m Wassertiefe, in der sie stehen
+const FORELLE_UNTER = 0.9;     // m: so weit bleibt der Ruecken mindestens unter der Wasseroberflaeche
 const FORELLE_ABST_MIN = 6, FORELLE_ABST_MAX = 35, FORELLE_WEG = 70;   // m um den Spieler
 const FORELLE_SPD = 0.9, FORELLE_FLUCHT = 4.5, FORELLE_SCHEU = 2.5;   // m/s, m/s, m
 const LOEWE_SICHT = 260;       // m: weiter weg vom Spieler werden die Seeloewen nicht bewegt (spart Rechenzeit)
@@ -4449,7 +4452,7 @@ function updateForellen(dt, F, P){
     else { g.x += fx * v * dt; g.z += fz * v * dt; }
     if(Math.hypot(F.x - g.x, F.z - g.z) > FORELLE_WEG){ g.da = false; for(const f of g.fische) f.obj.visible = false; g.warte = 1 + Math.random() * 3; continue; }
     const ober = seaYAt(g.x, g.z), grund = seabedY(g.x, g.z);
-    const mitteY = Math.max(grund + 0.35, Math.min(ober - 0.45, grund + (ober - grund) * 0.45));
+    const mitteY = Math.max(grund + 0.35, Math.min(ober - FORELLE_UNTER, grund + (ober - grund) * 0.45));
     for(const f of g.fische){
       f.mixer.timeScale = g.flucht > 0 ? 2.5 : 1;
       f.mixer.update(dt);

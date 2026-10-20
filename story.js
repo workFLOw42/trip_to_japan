@@ -892,6 +892,9 @@ function startbildschirm(weiter){
   }
   function waehlen(){
     if(!bereit) return;
+    // Ton freischalten: die Knoepfe fangen Klick und Taste ab (stopPropagation), die Engine bekam sie nie – mit der Maus auf
+    // "Neues Spiel" blieb es still (Live-Befund 20.10.2026). Jede Auswahl im Menue ist eine Nutzer-Geste, das reicht dem Browser.
+    if(typeof armAudio === 'function'){ armAudio(); if(typeof audioArmed !== 'undefined') audioArmed = true; }
     const o = OPT[wahl]; if(!o) return;
     if(o.stat){ seite = 'stat'; wahl = 0; zeichnen(); return; }
     if(o.test){ seite = 'test'; wahl = 0; zeichnen(); return; }
@@ -1270,7 +1273,10 @@ function hookIntro(){
 // Kamera nicht mehr (hookSchwimmen, readInput); herum schauen (links/rechts) geht weiter.
 const SCHWIMM_V   = 1.8;     // m/s
 const TAUCH_V     = 1.4;     // m/s auf und ab
-const SCHWIMM_TIEF = 0.9;    // m: so tief liegt der Koerper an der Oberflaeche im Wasser
+// Live-Befund 20.10.2026: "beim Schwimmen ist Samu oft genau unter der Wasserlinie, ueber Wasser unsichtbar". Gemessen liegt sein
+// Koerper in der Schwimm-Haltung 0,2 bis 0,9 m ueber dem Ursprung (Mitte 0,6) – mit 0,9 m Tiefe reichte selbst der hoechste Punkt
+// nur bis an die Oberflaeche. 0,65: Koerpermitte knapp unter Wasser, Ruecken und Kopf (obere 20 %) 0,1 bis 0,25 m darueber.
+const SCHWIMM_TIEF = 0.65;   // m: so tief liegt der Ursprung an der Oberflaeche im Wasser
 const sw = story.schwimm = { aktiv: false };
 
 function schwimmStart(x, z){
@@ -1315,8 +1321,9 @@ function schwimmUpdate(dt, inp){
   const oben = seaYAt(nx, nz, dt) - SCHWIMM_TIEF;
   const unten = seabedY(nx, nz) + 1.0;
   let y = g.position.y + tauchEingabe() * TAUCH_V * dt;
-  // ohne Tauch-Eingabe treibt er langsam nach oben
-  if(tauchEingabe() === 0 && y < oben) y = Math.min(oben, y + 0.4 * dt);
+  // ohne Tauch-Eingabe treibt er langsam nach oben – an der Oberflaeche (bis 0,4 m darunter) liegt er aber FEST auf der Sollhoehe:
+  // die Duenung hebt und senkt das Wasser schneller als 0,4 m/s, er hing sonst staendig unter der Linie (Live-Befund 20.10.2026)
+  if(tauchEingabe() === 0 && y < oben) y = (oben - y < 0.4) ? oben : Math.min(oben, y + 0.4 * dt);
   g.position.y = Math.max(unten, Math.min(oben, y));
   eva.onGround = true;
   state.pos.copy(eva.planeAt);
