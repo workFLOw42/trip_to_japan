@@ -9455,12 +9455,16 @@ function frameLerp(k, dt){
   const d = Math.max(0.0001, Math.min(0.1, dt || 1/60));
   return 1 - Math.pow(1 - k, d*60);
 }
+// Kamera-Zuschlag des X-Wings T-65 ab Warp 1 (3000 m/s * 0,025 = 75 m, darueber fest): Abstand 28,8 + 71 = 100 m, gut
+// halb so weit wie frueher bei Warp max (154 m Soll, gemessen sogar 278 m durch das Nachhaengen der Kamera).
+const XW_CAM_WARP = 71;
 function camBackExtra(){
-  // Beim X-Wing T-65 nur 38 %: bei Warp max (125 m Zuschlag) war er viel zu klein (live gemeldet: "beim Warp max darf er
-  // ruhig doppelt so gross sein"). Gerechnet: Grundabstand 24 * 1,2 = 28,8 m; mit vollem Zuschlag 153,8 m, mit 38 %
-  // 76,3 m – also genau halb so weit, doppelt so gross im Bild.
-  const k = (typeof xw !== 'undefined' && xw.m && xw.m._clips && xw.m._clips.length && isXWing()) ? 0.38 : 1;
-  return Math.min(125, state.vel.length() * 0.025) * k;
+  // X-Wing T-65: ab Warp 1 FESTER Zuschlag XW_CAM_WARP, darunter wie bisher mit dem Tempo bis dorthin. Mit dem Tempo
+  // wachsend war er auf dem Rueckweg vom Mond (mehr Strecke, hoeherer Warp) kleiner als auf dem Hinweg – live gefiel
+  // der Rueckweg besser, und "er kann gerne ein wenig kleiner werden". Fest heisst: auf Hin- und Rueckweg gleich gross.
+  if(typeof xw !== 'undefined' && xw.m && xw.m._clips && xw.m._clips.length && isXWing())
+    return Math.min(XW_CAM_WARP, state.vel.length() * 0.025);
+  return Math.min(125, state.vel.length() * 0.025);
 }
 function snapCamera(){
   if(typeof camera === 'undefined') return;

@@ -1408,10 +1408,14 @@ function updateWarpStreifen(dt){
   const v = WS_V_MIN + (WS_V_MAX - WS_V_MIN) * k;
   const L = WS_L_MIN + (WS_L_MAX - WS_L_MIN) * k;
   ws.mat.opacity = 0.35 + 0.6 * k;
-  // Achsen: vorn = Flugrichtung, dazu zwei Querachsen
-  _wsF.set(0, 0, -1).applyQuaternion(state.quat);
+  // Achsen: vorn = von der Kamera zum Flieger, dazu zwei Querachsen. Nicht die Nasenrichtung: die Kamera steht ueber
+  // dem Flieger, die Streifen liefen dann parallel zur Nase auf einen Punkt UEBER ihm zu, und er sass sichtbar unter dem
+  // Fluchtpunkt – seit die Kamera bei Warp nah dran ist (Live-Befund 20.10.2026: "nicht mehr exakt in der Mitte").
+  _wsF.copy(state.pos).sub(camera.position);
+  if(_wsF.lengthSq() < 1) _wsF.set(0, 0, -1).applyQuaternion(state.quat); else _wsF.normalize();
   _wsU.set(0, 1, 0).applyQuaternion(state.quat);
-  _wsR.crossVectors(_wsF, _wsU);
+  _wsR.crossVectors(_wsF, _wsU).normalize();
+  _wsU.crossVectors(_wsR, _wsF).normalize();       // Oben senkrecht zur neuen Achse
   _wsQ.setFromUnitVectors(_wsX, _wsF);           // Streifen (Ebene in X) entlang der Flugrichtung
   _wsS.set(L, 1.1 + 1.4 * k, 1);
   const c = camera.position;
