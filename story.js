@@ -1442,7 +1442,7 @@ function hookSchatten(){
     if(eva && !eva.boat){
       const px = eva.group.position.x, pz = eva.group.position.z;
       // Boden unter Samu (auf Wasser/Strand bleibt die Engine-Hoehe)
-      if(locale === 'earth' && isOnLand(px, pz)) ovalShadow.position.y = evaFootY(px, pz) + 0.08;
+      if(locale === 'earth' && isOnLand(px, pz)) ovalShadow.position.y = evaFootY(px, pz) + SHADOW_LIFT;   // knapp drueber, wie die Engine (hoeher wirkt er versetzt, tiefer verschwindet er unter Wiesen)
     }
     return r;
   };

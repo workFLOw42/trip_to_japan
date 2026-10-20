@@ -36,13 +36,14 @@ function hookSchatten(){
 // Geometrie und eigenes Material (16 Dreiecke) – story.entsorgen gibt beim Etappenwechsel alles frei, auch Geteiltes.
 story.tierSchatten = function(obj, laenge, breite, deck){
   if(!obj || obj.userData.schatten || typeof ovalShadowMat === 'undefined') return null;
-  const mat = ovalShadowMat.clone(); mat.opacity = deck || 0.24; mat.depthWrite = false;
+  const mat = ovalShadowMat.clone(); mat.opacity = (deck || 0.24) * SHADOW_DECK; mat.depthWrite = false;
   const s = new THREE.Mesh(new THREE.CircleGeometry(1, 16), mat);
   obj.updateMatrixWorld(true);
   const sc = obj.getWorldScale(new THREE.Vector3()), k = 1 / (sc.x || 1);
-  s.rotation.x = -Math.PI / 2; s.scale.set(breite / 2 * k, laenge / 2 * k, 1); s.position.y = 0.04 * k;
+  s.rotation.x = -Math.PI / 2; s.scale.set(breite / 2 * k, laenge / 2 * k, 1); s.position.y = SHADOW_LIFT * k;
   s.renderOrder = 1; s.userData.deko = true; s.frustumCulled = false;
   obj.add(s); obj.userData.schatten = s;
+  if(typeof shadowFollowFeet === 'function') shadowFollowFeet(s, obj);   // folgt den Fuessen (Engine; flache Tiere bleiben starr)
   tierSpuren.push({ o: obj, l: laenge, x: NaN, z: NaN, t: Math.random() * 0.3 });   // Staub beim Laufen (updateTierSpuren)
   return s;
 };

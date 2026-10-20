@@ -5628,6 +5628,9 @@ function updatePax(dt){
 // Höhen-Schatten: sichtbar ab <=20 m. Folgt X/Z, dreht mit dem Kurs mit,
 // wird mit sinkender Höhe kleiner+dunkler (nah am Flieger = klein/scharf).
 const SHADOW_MAXALT = 20;
+const SHADOW_LIFT = 0.045;     // m ueber festem Boden (siehe updateOvalShadow); Spiele legen eigene Schatten genauso hoch
+// Gesamtstaerke der weichen Schatten (Live-Wunsch 20.10.2026: "dezenter"): 70 % der frueheren Deckkraft
+const SHADOW_DECK = 0.7;
 // Der ovale Schatten fuer Boote und den Astronauten. Getrennt von updateShadow, weil die Bezugsgroessen
 // andere sind: nicht state.pos und der Flugzeugkurs, sondern die Position des Boots bzw. der Figur.
 // Beim Astronauten ist die Hoehe interessant (er huepft, auf dem Mond sechsmal so hoch) — der
@@ -5692,7 +5695,13 @@ function updateOvalShadow(){
     }
   }
   ovalShadow.visible = true;
-  ovalShadow.position.set(px, surf + 0.08, pz);
+  // Abstand zur Auflage: auf dem Wasser 8 cm (Wellen, siehe oben), auf festem Boden 4,5 cm. Mit 8 cm schwebte der Schatten
+  // dort ueber dem Boden, auf dem die Fuesse stehen, und wirkte von schraeg oben (Kamera 3-4 m hoch) um ~16 cm von der Kamera
+  // weg verschoben: "von hinten steht die Figur am hinteren Rand, von der Seite in der Mitte" (so gemeldet). Gegen das
+  // Flimmern auf dem Boden reicht der polygonOffset im Material. Nicht tiefer als 4,5 cm: Bodenauflagen (Parkplatz, Wiesen,
+  // Teppich) liegen bis 3 cm ueber dem Grund, mit 1,5 cm verschwand der Schatten darunter (gemeldet: Parkplatz, Wiese).
+  const fest = locale !== 'earth' || onCar || onLand;
+  ovalShadow.position.set(px, surf + (fest ? SHADOW_LIFT : 0.08), pz);
   // Nach rotation.x = -PI/2 dreht rotation.z IN der Bodenebene, und zwar mit +yaw. Vorzeichen und
   // Achse mit echtem three.js nachgemessen (C:/tmp/rot.js) — mit -yaw stand das Boot quer zur Fahrt.
   ovalShadow.rotation.z = yawS;
@@ -5700,7 +5709,7 @@ function updateOvalShadow(){
   const grow = 1 + f*0.8;
   // Die LOKALE Y-Achse ist nach der X-Drehung die Laengsrichtung am Boden -> lang auf scale.y.
   ovalShadow.scale.set(rx*grow, rz*grow, 1);
-  ovalShadowMat.opacity = 0.18 + 0.22*(1-f);
+  ovalShadowMat.opacity = (0.18 + 0.22*(1-f)) * SHADOW_DECK;
 }
 function updateShadow(){
   // Im WELTALL gibt es keinen Boden, auf den ein Schatten fallen koennte -> aus. Ueberall sonst gibt
@@ -5784,7 +5793,7 @@ function updateShadow(){
   const scale = 1 + f * 0.8;
   planeShadow.scale.set(scale, 1, scale);
   // nah = dunkel, hoch = blasser, aber Mindest-Deckkraft, damit er auf Wasser sichtbar bleibt
-  shadowMat.opacity = 0.18 + 0.22 * (1 - f);
+  shadowMat.opacity = (0.18 + 0.22 * (1 - f)) * SHADOW_DECK;
 }
 
 // ---------- Schleudersitz + Fallschirm (nur AlphaJet) ----------
@@ -10450,7 +10459,22 @@ function updateAsteroids(dt){
 // Gegen das Flackern im animierten Wasser (z-fighting) hilft polygonOffset, nicht das Abschalten des
 // Tiefentests: dieselbe Kombination, mit der der ovale Schatten seit laengerem sauber im Wasser liegt.
 // depthWrite bleibt aus — der Schatten ist ein Aufkleber und soll nichts anderes verdecken.
-const shadowMat = new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.3,
+// Weicher Rand: die Schattenscheiben sind Kreise (CircleGeometry, UV 0..1 mit Mitte 0,5). Diese Textur traegt nur
+// die Deckkraft — in der Mitte voll, nach aussen auslaufend bis ganz durchsichtig. Vorher war die Scheibe ueberall
+// gleich dunkel und hatte einen harten Rand, das wirkte unnatuerlich. Die Farbe bleibt Schwarz (color x weiss),
+// opacity regelt weiter die Staerke in der Mitte. Kopien (ovalShadowMat.clone()) nehmen die Textur mit.
+const shadowSoftTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  // Innen gleichmaessig voll, nur der aeussere Ring laeuft aus: laeuft schon die Mitte aus, verdeckt die Figur den dunklen
+  // Kern, sichtbar bleibt nur der Teil zur Kamera hin, und der Schatten wirkt versetzt (so gemeldet).
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.78, 'rgba(255,255,255,.55)'); gr.addColorStop(0.92, 'rgba(255,255,255,.15)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+})();
+const shadowMat = new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.3, map:shadowSoftTex,
   depthWrite:false, depthTest:true, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2 });
 const planeShadow = new THREE.Group();
 planeShadow.renderOrder = 999;
@@ -10474,7 +10498,7 @@ scene.add(planeShadow);
 // depthWrite bleibt aus: der Schatten ist ein Aufkleber und soll nichts anderes verdecken.
 // Damit er nicht im Wasser flackert, liegt er parallel zur Wellenflaeche (siehe updateOvalShadow) —
 // eine waagerechte Scheibe wuerde am Rand eintauchen, gemessen bis 0,54 m (C:/tmp/dt.js).
-const ovalShadowMat = new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.3,
+const ovalShadowMat = new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.3, map:shadowSoftTex,
   depthWrite:false, depthTest:true, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2 });
 // Wieder ein VOLLER Kreis. Vorher fehlte das vordere Stueck, damit der Schatten nicht ueber dem
 // eigenen Rumpf liegt — das war aber nur ein Pflaster gegen depthTest:false und sah als V-Kerbe
@@ -10486,7 +10510,69 @@ ovalShadow.rotation.x = -Math.PI/2;
 // Schatten ueber alles legte. Jetzt entscheidet der Tiefenpuffer, und der polygonOffset im Material
 // haelt ihn knapp vor der Auflageflaeche, ohne mit ihr zu flimmern.
 ovalShadow.visible = false;
-
+// ---------- Schatten folgt den Fuessen ----------
+// Ein starrer Kreis unter der Mitte passt nur im Stand: beim Laufen setzten die Fuesse am Rand auf und schwangen
+// nach hinten aus dem Schatten heraus (gemeldet fuer Joshi, Samu und die Tiere; beim alten grossen Kreis fiel es nicht
+// auf). shadowFollowFeet(mesh, root) haengt sich in onBeforeRender des Schattens: direkt vor dem Zeichnen, nach allen
+// Bewegungen, Animationen und Spiel-Anpassungen an Groesse und Hoehe. Dort werden die Fusspunkte in die Ebene des
+// Schattens gelegt, seine Mitte rueckt zwischen die Fuesse (hoechstens um 35 % des Radius) und er streckt sich, bis
+// jeder Fuss im dunklen Teil steht (hoechstens 1,5-fach). Im Stand bleibt er so gross, wie das Spiel ihn gesetzt hat.
+// Fuesse = die Knochen, die nach den ersten Bildern ganz unten liegen (unterste 20 % der Knochenhoehe, ohne Schwanz/Haende/IK;
+// "Fingers" bleibt drin: so heissen beim Kamel die Vorderfuesse – ohne sie lag sein Schatten unter den Hinterlaeufen) – das
+// klappt fuer Mixamo (Foot/ToeBase), den Fuchs (Ankle/Digit) und die Tiere, ohne Namen zu kennen. Liegt mehr als die
+// Haelfte der Knochen so tief (flaches Tier, Krokodil), bleibt der Schatten starr. root darf eine Funktion sein
+// (ovalShadow: wechselnde Figur). three.js r128 rechnet modelViewMatrix erst NACH onBeforeRender aus matrixWorld,
+// und matrixWorld wird jedes Bild neu aus position/scale gebaut – die Aenderung gilt also genau fuer dieses Bild.
+const _ffV = new THREE.Vector3();
+function shadowFeet(root){
+  const u = root.userData;
+  // erst nach ein paar Bildern waehlen (vorher steht das Modell evtl. noch in der Grundpose), ohne Knochen weiter alle 60 Bilder neu
+  u._feetN = (u._feetN || 0) + 1;
+  if(u._feet || u._feetN < 10 || (u._feet === null && u._feetN % 60)) return u._feet || null;
+  // ohne Wurzel- und Rumpfknochen: die liegen bei manchen Tieren am Boden in der Mitte (rootJoint, Body, main, neutral_bone)
+  const bones = []; root.traverse(o => { if(o.isBone && o.parent && o.parent.isBone && !/tail|schwanz|hand|thumb|index|^ik|_ik|root|body|main|neutral|pelvis|hips|spine/i.test(o.name)) bones.push(o); });
+  let feet = null;
+  if(bones.length >= 4){
+    const ys = bones.map(b => _ffV.setFromMatrixPosition(b.matrixWorld).y);
+    const lo = Math.min(...ys), hi = Math.max(...ys), lim = lo + (hi - lo) * 0.2;
+    const sel = bones.filter((b, i) => ys[i] <= lim);
+    if(hi - lo > 0.05 && sel.length && sel.length <= bones.length * 0.5) feet = sel;
+  }
+  u._feet = feet; return feet;              // noch kein Modell geladen: in 60 Bildern noch einmal schauen
+}
+function shadowFollowFeet(mesh, root){
+  const base = new Float32Array(16), out = new Float32Array(16);
+  let hat = false;
+  mesh.onBeforeRender = function(){
+    const e = this.matrixWorld.elements;
+    // mehrere Durchgaenge im selben Bild (z. B. Foto fuers Notizbuch): vom unveraenderten Stand ausgehen
+    let gleich = hat; for(let i = 0; gleich && i < 16; i++) if(e[i] !== out[i]) gleich = false;
+    if(gleich) for(let i = 0; i < 16; i++) e[i] = base[i]; else for(let i = 0; i < 16; i++) base[i] = e[i];
+    hat = false;
+    const r = typeof root === 'function' ? root() : root; if(!r) return;
+    const feet = shadowFeet(r); if(!feet) return;
+    const sx = Math.hypot(e[0], e[1], e[2]), sy = Math.hypot(e[4], e[5], e[6]); if(!sx || !sy) return;
+    const ux = e[0] / sx, uy = e[1] / sx, uz = e[2] / sx, wx = e[4] / sy, wy = e[5] / sy, wz = e[6] / sy;
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for(const b of feet){
+      const m = b.matrixWorld.elements, dx = m[12] - e[12], dy = m[13] - e[13], dz = m[14] - e[14];
+      const a = dx * ux + dy * uy + dz * uz, c = dx * wx + dy * wy + dz * wz;
+      if(a < x0) x0 = a; if(a > x1) x1 = a; if(c < y0) y0 = c; if(c > y1) y1 = c;
+    }
+    // etwas ruhiger (Live-Wunsch 20.10.2026: "die Bewegung ein klein wenig weniger"): hoechstens 35 % des Radius verschieben,
+    // hoechstens 1,5-fach strecken, die Fuesse duerfen bis 85 % des Radius gehen
+    const mx = Math.max(-sx * 0.35, Math.min(sx * 0.35, (x0 + x1) / 2)), my = Math.max(-sy * 0.35, Math.min(sy * 0.35, (y0 + y1) / 2));
+    const rand = 0.12 * Math.min(sx, sy);   // Ferse hinter dem Knoechel, Zehen vor dem Zehenknochen
+    const nx = Math.min(sx * 1.5, Math.max(sx, (Math.max(x1 - mx, mx - x0) + rand) / 0.85));
+    const ny = Math.min(sy * 1.5, Math.max(sy, (Math.max(y1 - my, my - y0) + rand) / 0.85));
+    e[12] += ux * mx + wx * my; e[13] += uy * mx + wy * my; e[14] += uz * mx + wz * my;
+    e[0] = ux * nx; e[1] = uy * nx; e[2] = uz * nx; e[4] = wx * ny; e[5] = wy * ny; e[6] = wz * ny;
+    for(let i = 0; i < 16; i++) out[i] = e[i];
+    hat = true;
+  };
+}
+// zu Fuss die Figur, im Boot/Rover nichts (dort ist es der Rumpf-Umriss)
+shadowFollowFeet(ovalShadow, () => (eva && !eva.boat && !eva.rover) ? eva.group : null);
 // ---------- Offene Rümpfe: kein Wasser im Boot ----------
 // Bei einem offenen Boot (Schlauchboot, Segelboot, Ruderboot) liegt der Innenboden nur knapp ueber der
 // Wasserlinie. Auf dem Wellenberg, beim Nicken oder in der Kurvenneigung steigt das Meer darueber und

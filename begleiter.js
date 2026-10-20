@@ -97,8 +97,9 @@ function ladeHund(){
     // eigener weicher Bodenschatten (wie Samus Ovalschatten, blasser)
     if(typeof ovalShadowMat !== 'undefined'){
       const s = new THREE.Mesh(new THREE.CircleGeometry(1, 24), ovalShadowMat.clone());
-      s.material.opacity = 0.22; s.rotation.x = -Math.PI / 2; s.scale.set(0.2, 0.42, 1); s.position.y = 0.05; s.userData.deko = true;
+      s.material.opacity = 0.22 * SHADOW_DECK; s.rotation.x = -Math.PI / 2; s.scale.set(0.2, 0.42, 1); s.position.y = SHADOW_LIFT; s.userData.deko = true;
       wrap.add(s); hund.schatten = s;
+      if(typeof shadowFollowFeet === 'function') shadowFollowFeet(s, wrap);   // folgt den Pfoten (Engine)
     }
     hund.obj = wrap; hund.inner = inner; hund.mixer = mx; hund.cur = HA.stehen;
   }, (e) => console.warn('Hund-GLB:', e));

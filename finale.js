@@ -1487,6 +1487,9 @@ function gischtWeg(){ if(gisch.g){ scene.remove(gisch.g); gisch.g.traverse(o => 
 // Waschgang: Samu faellt ins Wasser, kurz unter (gedreht), taucht auf dem Brett auf, naechste Welle
 function waschgangStart(){
   welle.wasch = 1.8; ab.luft = false; ab.spin = 0; ab.flip = 0; ab.hh = 0; ab.qv = 0;
+  // Landering + Schatten sofort weg (Live-Befund 20.10.2026: blieben stehen, Samu trieb davon – sah aus, als fahre der rote
+  // Kreis nach vorne weg). landeSchatten blendet sie zwar aus, wird im Waschgang aber gar nicht mehr erreicht
+  if(lande.g) lande.g.visible = false;
   zeige('🌊 Waschgang!', 1.5); if(typeof rumble === 'function') rumble(500, 0.9, 0.7);
   if(fx) fx.puff(state.pos, 2);
   kAnim('swim');
