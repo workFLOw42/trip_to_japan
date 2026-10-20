@@ -1363,7 +1363,8 @@ function buildIsland(cx, cz) {
   // geparkt und einmal unter dem Spieler.
   const xl = xwingLocal(cx, cz);
   if(xl && xwingParkTpl && MODEL_NAMES[currentModel] !== 'XWing'){
-    const xw = xwingParkTpl.clone(true);
+    const xw = cloneSkinned(xwingParkTpl);
+    xw._clips = xwingParkTpl._clips; xwHaltung(xw, 'unten');   // steht auf seinem Fahrwerk
     xw.position.set(xl.x, ISLAND_Y, xl.z);
     xw.rotation.y = xl.yaw;
     g.add(xw);
@@ -7424,6 +7425,9 @@ const GLB_CONFIG = {
   // X-Wing: im Modell liegt die Nase auf +Z und die Spannweite auf X — die längere Achse (Z)
   // ist also die LÄNGE. 12,5 m Rumpflänge normiert ergibt ~10 m Spannweite (echt: 12,5 / 11 m).
   XWing:    { data: () => window.XWING_GLB,    span: 12.5, yOff: 0 },
+  // Die KI-X-Wings im Weltall fliegen weiter mit dem alten Modell (GaryPhelps, ohne Fahrwerk) – im All sieht man
+  // weder Fahrwerk noch Landung, und so bleibt ihr Aussehen wie gewohnt. Gleiche Normierung wie bisher.
+  XWingKI:  { data: () => window.XWING_ALT_GLB, span: 12.5, yOff: 0 },
 };
 function preloadGLB(name){
   const cfg = GLB_CONFIG[name];
@@ -7434,17 +7438,25 @@ function preloadGLB(name){
   for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
   gl.parse(bytes.buffer, '', (gltf)=>{
     const obj = gltf.scene;
+    // Animierte Modelle (X-Wing T-65) erst in die Landehaltung (Fahrwerk aus) und DARIN messen: ohne Animation liegt
+    // der T-65 um 90 Grad gekippt (Ruhepose 2,6 x 2,9 x 0,7, Laenge in y), Box3.setFromObject haette ihn hochkant
+    // gestellt. orcaPunkte rechnet das Skinning mit. Bei den Modellen ohne Clips bleibt alles wie bisher.
+    // (_clips statt userData.clips: three.js kopiert userData beim Klonen per JSON, siehe xwHaltung)
+    obj._clips = gltf.animations || [];
+    const haltung = xwHaltung(obj, 'unten');
+    const mess = () => haltung ? new THREE.Box3().setFromPoints(orcaPunkte(obj)) : new THREE.Box3().setFromObject(obj);
     // auf Ziel-Spannweite normieren (größere Horizontalachse = Spannweite)
-    const box = new THREE.Box3().setFromObject(obj);
+    const box = mess();
     const size = new THREE.Vector3(); box.getSize(size);
     obj.scale.setScalar(cfg.span / Math.max(size.x, size.z));
     // X/Z zentrieren, Unterseite auf y=0 (+ manueller Offset pro Modell)
-    const box2 = new THREE.Box3().setFromObject(obj);
+    const box2 = mess();
     const c = new THREE.Vector3(); box2.getCenter(c);
     obj.position.x -= c.x; obj.position.z -= c.z;
     obj.position.y -= box2.min.y - (cfg.yOff || 0);
     if(cfg.recolor === 'wbr') recolorWBR(obj);   // zivile weiß-blau-rot Lackierung
     const wrap = new THREE.Group(); wrap.add(obj);
+    wrap._clips = obj._clips;
     glbTemplates[name] = wrap;
     if(MODEL_NAMES[currentModel] === name) buildModel(name);  // sofort ersetzen wenn aktiv
     // Die Inseln neu bauen, damit das Modell auch auf den PARKPLAETZEN erscheint. Die GLBs laden
@@ -7937,16 +7949,19 @@ function preloadXwingPark(){
   for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
   gl.parse(bytes.buffer, '', (gltf)=>{
     const obj = gltf.scene;
-    obj.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(obj);
+    // wie preloadGLB: in der Landehaltung (Fahrwerk aus) messen, die Ruhepose des T-65 liegt hochkant
+    obj._clips = gltf.animations || [];
+    const haltung = xwHaltung(obj, 'unten');
+    const mess = () => haltung ? new THREE.Box3().setFromPoints(orcaPunkte(obj)) : (obj.updateMatrixWorld(true), new THREE.Box3().setFromObject(obj));
+    const box = mess();
     const size = new THREE.Vector3(); box.getSize(size);
     // auf 12,5 m Spannweite bringen (wie das Flugmodell) und den Fuss auf y = 0 setzen
     obj.scale.setScalar(12.5 / Math.max(size.x, size.z));
-    obj.updateMatrixWorld(true);
-    const box2 = new THREE.Box3().setFromObject(obj);
+    const box2 = mess();
     const c = new THREE.Vector3(); box2.getCenter(c);
     obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= box2.min.y;
     const wrap = new THREE.Group(); wrap.add(obj);
+    wrap._clips = obj._clips;
     xwingParkTpl = wrap;
     refreshIslands();   // schon gebaute Inseln bekommen ihren X-Wing sofort
   }, (err)=>{ console.warn('X-Wing-Park-GLB Ladefehler:', err); });
@@ -10532,6 +10547,9 @@ let asteroidTemplate = null, astHits = 0;
 const asteroids = [], bolts = [], flashes = [];
 const laserMat = new THREE.MeshBasicMaterial({ color:0xff7a10, transparent:true, opacity:0.95,
   blending:THREE.AdditiveBlending, depthWrite:false });
+// Eigene Schuesse (fireLaser, mine) blau – so erkennt man sie zwischen den orangen der KI-X-Wings
+const laserMatBlau = new THREE.MeshBasicMaterial({ color:0x3aa8ff, transparent:true, opacity:0.95,
+  blending:THREE.AdditiveBlending, depthWrite:false });
 const boltGeo = new THREE.CylinderGeometry(0.6, 0.6, 26, 6, 1, true);
 boltGeo.rotateX(Math.PI/2);        // Zylinderachse auf die Flugrichtung (-Z) legen
 const flashGeo = new THREE.SphereGeometry(1, 12, 8);
@@ -10586,9 +10604,11 @@ function clearAsteroids(){
 // Ziel. Ihre Treffer zählen NICHT auf den eigenen Zähler.
 const aiXwings = [];
 function spawnAiXwing(){
-  if(!glbTemplates['XWing']) return;
+  const ki = glbTemplates['XWingKI'] || glbTemplates['XWing'];   // altes Modell, sonst das neue
+  if(!ki) return;
   const holder = new THREE.Group();
-  const m = glbTemplates['XWing'].clone(true);
+  const m = ki === glbTemplates['XWing'] ? cloneSkinned(ki) : ki.clone(true);
+  if(ki === glbTemplates['XWing']){ m._clips = ki._clips; xwHaltung(m, 'oben'); }
   m.rotation.y = Math.PI;                 // Nase auf -Z, wie beim Spieler
   m.scale.setScalar(6);                   // ~70 m — mit 36 m war auf 3 km Entfernung nichts zu sehen
   holder.add(m);
@@ -10600,7 +10620,7 @@ function spawnAiXwing(){
     vel: new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize() });
 }
 function updateAiXwings(dt){
-  while(aiXwings.length < AI_XW_COUNT && glbTemplates['XWing']) spawnAiXwing();
+  while(aiXwings.length < AI_XW_COUNT && (glbTemplates['XWingKI'] || glbTemplates['XWing'])) spawnAiXwing();
   for(let i=aiXwings.length-1;i>=0;i--){
     const w = aiXwings[i];
     // Ziel suchen/nachziehen: der nächstgelegene Asteroid
@@ -10653,7 +10673,7 @@ function fireBolt(pos, fwd, mine, baseVel, ahead){
   const v = dir.clone().multiplyScalar(LASER_SPEED);
   if(baseVel) v.add(baseVel);
   for(const side of [-1, 1]){
-    const m = new THREE.Mesh(boltGeo, laserMat);
+    const m = new THREE.Mesh(boltGeo, mine ? laserMatBlau : laserMat);
     m.position.copy(pos).addScaledVector(right, side*5).addScaledVector(dir, ahead || 10);
     m.quaternion.copy(q);
     m.renderOrder = 997;
@@ -10977,9 +10997,12 @@ function buildModel(name) {
                     Mustang: -Math.PI, Transall: 0, XWing: Math.PI };
   const GLB_SPAN = { Canadair: 20, AlphaJet: 9, Airbus: 30, Mustang: 11, Transall: 20, XWing: 11 };
   if(glbTemplates[name]){
-    const m = glbTemplates[name].clone(true);
+    // Skelett-Modelle (X-Wing T-65) brauchen cloneSkinned: clone(true) teilt das Skelett mit der Vorlage, dann
+    // fuehren alle Klone (geparkt, KI) das Fahrwerk des eigenen mit aus.
+    const m = name === 'XWing' ? cloneSkinned(glbTemplates[name]) : glbTemplates[name].clone(true);
     m.rotation.y = GLB_ROT[name] || 0;
     modelHolder.add(m);
+    if(name === 'XWing') xwModellNeu(m);
     return { span: GLB_SPAN[name] || 11, scale: 1 };
   }
   // GLB noch nicht geladen -> leer lassen (wird nachgezogen, sobald preloadGLB fertig ist)
@@ -11049,7 +11072,36 @@ const VTOL_SINK  = -10;    // m/s Sinkrate bei VTOL_LAND (zügig, damit man nich
 // unabhängig von der Rate immer als saubere Landung gewertet (siehe vtolLand in stepPhysics).
 const VTOL_DROP  = -20;
 const VTOL_CLIMB = 10;     // m/s Steigrate bei VTOL_HOVER
-const VTOL_HOVER_ALT = 20; // m über Grund: Schwebehöhe bei VTOL_HOVER (Boden, Deck oder Mondkrater)
+const VTOL_HOVER_ALT = 20; // m über Grund: Schwebehöhe bei VTOL_HOVER – gilt fuer das JETPACK (siehe XW_HOVER_ALT)
+// ---------- X-Wing mit Fahrwerk (seit 20.10.2026: T-65 von Quiznos323, CC-BY-NC-SA-4.0) ----------
+// Das Modell hat zwei Clips: "Takeoff" (2,46 s: Fahrwerk ein, Klappen zu, Fluegel in die X-Stellung) und "Land"
+// (2,67 s: genau zurueck). Beides muss VOLLSTAENDIG zu sehen sein – ein Fahrwerk, das im Boden steckt oder noch
+// ausfaehrt, waehrend er schon steht, sieht kaputt aus (Live-Wunsch 20.10.2026):
+//   - Start (X / Shift, A beim Kurzschluss, oder Schub ab 20 %): erst senkrecht auf XW_HOVER_ALT steigen und dabei
+//     das Fahrwerk einfahren – erst wenn beides fertig ist, wirkt der Vorwaertsschub (xw.start, siehe xwSchub).
+//   - Landung (unter XW_HOVER_ALT auf 0 oder 10 %): die Sinkrate wird so begrenzt, dass bis zum Aufsetzen genau die
+//     Restzeit des Land-Clips vergeht (xwSinkGrenze).
+// XW_HOVER_ALT ist so gerechnet, dass schon die schnellste Landung aus der Schwebe (0 %, VTOL_DROP -20 m/s) den
+// ganzen Clip braucht: 2,67 s * 20 m/s = 53,4 m, dazu der Anlauf auf die Sinkrate (sie wird mit 4/s angeregelt,
+// gut 0,5 s) – 55 m. Dann bremst die Landebremse aus der Schwebe nie; erst wer tiefer auf 0 % geht, sinkt langsamer.
+const XW_LAND_T    = 2.67;   // s – Dauer des Land-Clips (gemessen am Modell)
+const XW_START_T   = 2.46;   // s – Dauer des Takeoff-Clips
+const XW_HOVER_ALT = 55;     // m ueber Grund: Schwebehoehe des X-Wings bei VTOL_HOVER (siehe oben)
+// Haltung eines X-Wing-Klons setzen: 'unten' = Fahrwerk aus, Fluegel zu (Ende von Land) · 'oben' = Fahrwerk ein, Fluegel
+// in X-Stellung (Ende von Takeoff). Ohne Clips (altes Modell) passiert nichts.
+function xwHaltung(obj, haltung){
+  const clips = obj._clips || [];
+  const c = clips.find(a => a.name === (haltung === 'oben' ? 'Takeoff' : 'Land'));
+  if(!c) return null;
+  // eigener Mixer am Objekt (_mixer), NICHT in userData: clone(true) kopiert userData per JSON, und der Mixer verweist
+  // aufs Objekt zurueck -> Endlosschleife in toJSON ("Maximum call stack size exceeded")
+  const mx = obj._mixer || (obj._mixer = new THREE.AnimationMixer(obj));
+  mx.stopAllAction();
+  const a = mx.clipAction(c); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+  mx.setTime(Math.max(0, c.duration - 0.001));
+  obj.updateMatrixWorld(true);
+  return mx;
+}
 // ---------- Selbst-Aufrichten der Querlage (Rollen loslassen) ----------
 // Lässt man LT/RT (bzw. Q/E) los, dreht sich die Schräglage von allein wieder auf null. Das Fenster
 // ist bewusst begrenzt: bis 60° Querlage hilft er mit, darüber (Richtung Rückenflug) bleibt er
@@ -11223,6 +11275,7 @@ function placeAtStart(name){
   state.vel.set(0,0,0); state.throttle=0; state.onGround=true;
   state.crashed=false; state.crashTimer=0; state.ejected=false; state.falling=false; state.stalling=false; boosting=false;
   xwingLaunch=false;   // eine laufende Startsequenz endet mit dem Reset (siehe boostDruck)
+  xw.start = false; xw.clip = null; xw.unten = true; if(xw.m) xwHaltung(xw.m, 'unten');
   wasSupersonic=false; if(vaporCone) vaporCone.visible=false; vaporT=0;
   clearRescue(); clearParachute(); clearBoatSpray(); clearEva();
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
@@ -11821,6 +11874,87 @@ let boosting = false;   // Boost aktiv -> extra Beschleunigung (Physik liest das
 // Ein eigener Zustand, kein Rechnen im Eingabe-Zweig: der laeuft jeden Frame, und ohne Merker
 // begaenne die Sequenz bei jedem Bild neu.
 let xwingLaunch = false;
+// Fahrwerk des eigenen X-Wings: m = Modell-Klon (modelHolder), unten = Fahrwerk draussen (am Boden, nach Land),
+// clip = laeuft gerade ('Takeoff' / 'Land' / null), t = Zeit im laufenden Clip, start = Startsequenz aktiv.
+const xw = { m: null, unten: true, clip: null, t: 0, start: false };
+function xwModellNeu(m){
+  xw.m = m; m._clips = glbTemplates['XWing']._clips || [];
+  xw.clip = null; xw.t = 0;
+  xwHaltung(m, state.onGround ? 'unten' : 'oben'); xw.unten = !!state.onGround;
+}
+function xwSpiele(name){
+  if(!xw.m || !xw.m._clips.length) return;
+  const c = xw.m._clips.find(a => a.name === name); if(!c) return;
+  const mx = xw.m._mixer || (xw.m._mixer = new THREE.AnimationMixer(xw.m));
+  mx.stopAllAction();
+  const a = mx.clipAction(c); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+  xw.clip = name; xw.t = 0;
+}
+// Hoehe ueber dem Boden, auf dem der X-Wing landen wuerde (wie in boostDruck)
+function xwGrund(){
+  return (locale === 'earth')
+    ? (isOnCarrier(state.pos.x, state.pos.z) ? fordDeckY : (isOnLand(state.pos.x, state.pos.z) ? ISLAND_Y : 0))
+    : surfaceY(state.pos.x, state.pos.z);
+}
+function xwAgl(){ return state.pos.y - xwGrund(); }
+// Jedes Bild (stepPhysics, vor dem Schub): Startsequenz und Fahrwerk.
+//   - am Boden und Schub >= VTOL_HOVER gewuenscht -> Startsequenz: Takeoff, wirksamer Schub = Schwebestufe, bis
+//     XW_HOVER_ALT (80 %) erreicht UND der Clip fertig ist; danach gilt der gewuenschte Schub.
+//   - unter XW_HOVER_ALT, Schub <= VTOL_LAND, Fahrwerk drin -> Land-Clip.
+// Rueckgabe: der wirksame Schub fuer dieses Bild.
+function xwSchub(dt){
+  const wunsch = state.throttle;
+  xwSchubZuletzt = xwSchubKern(dt, wunsch);
+  return xwSchubZuletzt;
+}
+function xwSchubKern(dt, wunsch){
+  if(!isXWing() || locale === 'space' || !xw.m){ xw.start = false; return wunsch; }
+  const mx = xw.m._mixer;
+  if(xw.clip){ xw.t += dt; if(mx) mx.update(dt); }
+  const fertig = !xw.clip || xw.t >= (xw.clip === 'Land' ? XW_LAND_T : XW_START_T);
+  if(fertig && xw.clip){ xw.unten = xw.clip === 'Land'; xw.clip = null; }
+  // Startsequenz beginnt am Boden, sobald mehr als Sinken gewuenscht ist
+  if(state.onGround && wunsch >= VTOL_HOVER && !xw.start){ xw.start = true; if(xw.unten && xw.clip !== 'Takeoff') xwSpiele('Takeoff'); }
+  if(xw.start){
+    if(wunsch < VTOL_HOVER && wunsch >= 0){ xw.start = false; }           // abgebrochen (zurueck auf 0/10 %)
+    else {
+      if(xw.unten && xw.clip !== 'Takeoff') xwSpiele('Takeoff');
+      const hoch = xwAgl() >= XW_HOVER_ALT * 0.8, eingefahren = !xw.unten && !xw.clip;
+      if(hoch && eingefahren){ xw.start = false; return wunsch; }
+      return VTOL_HOVER;                                                   // bis dahin nur steigen
+    }
+  }
+  // Landung: tief genug und auf Sinken -> Fahrwerk raus (auch aus dem Flug, wenn er tief genug ist)
+  if(wunsch >= 0 && wunsch <= VTOL_LAND && !state.onGround && xwAgl() < XW_HOVER_ALT + 1 && !xw.unten && xw.clip !== 'Land') xwSpiele('Land');
+  // Steigt er wieder (>= 20 %), waehrend das Fahrwerk noch draussen ist: wieder einfahren
+  // (nur wenn Takeoff nicht schon laeuft: xw.unten bleibt bis zum Ende des Clips gesetzt – sonst begann er jedes Bild neu)
+  if(wunsch >= VTOL_HOVER && !state.onGround && xw.clip !== 'Takeoff' && (xw.unten || xw.clip === 'Land')) xwSpiele('Takeoff');
+  return wunsch;
+}
+// Fuer geskriptete Starts (die Spiele bewegen den X-Wing dort selbst, ohne stepPhysics – z. B. der Autostart ins All in
+// Trip to Japan): xwStartAnim() faehrt das Fahrwerk ein, xwAnimSchritt(dt) laesst den Clip weiterlaufen, xwBereit(agl)
+// ist wahr, sobald das Fahrwerk drin ist UND er auf der Schwebehoehe ist (80 % wie beim Startknopf). Erst dann
+// soll er losfliegen. Ohne Fahrwerk-Modell ist er sofort bereit.
+function xwHatFahrwerk(){ return !!(isXWing() && xw.m && xw.m._clips && xw.m._clips.length); }
+function xwStartAnim(){ if(xwHatFahrwerk() && (xw.unten || xw.clip === 'Land')) xwSpiele('Takeoff'); }
+function xwAnimSchritt(dt){
+  if(!xwHatFahrwerk() || !xw.clip) return;
+  xw.t += dt; if(xw.m._mixer) xw.m._mixer.update(dt);
+  if(xw.t >= (xw.clip === 'Land' ? XW_LAND_T : XW_START_T)){ xw.unten = xw.clip === 'Land'; xw.clip = null; }
+}
+function xwBereit(agl){
+  if(!xwHatFahrwerk()) return true;
+  return !xw.unten && !xw.clip && (agl === undefined || agl >= XW_HOVER_ALT * 0.8);
+}
+// Hoechste Sinkrate (negativ), mit der er noch rechtzeitig aufsetzt: bis zum Boden soll mindestens die Restzeit des
+// Land-Clips vergehen. Ist das Fahrwerk schon draussen, gibt es keine Grenze.
+function xwSinkGrenze(){
+  if(!isXWing() || !xw.m || !xw.m._clips.length) return -Infinity;
+  if(xw.unten && !xw.clip) return -Infinity;
+  const rest = xw.clip === 'Land' ? Math.max(0, XW_LAND_T - xw.t) : XW_LAND_T;
+  if(rest <= 0.05) return -Infinity;
+  return -Math.max(0.5, xwAgl() / rest);
+}
 // X bzw. Shift gedrueckt. Beim X-WING am Boden beginnt damit die Startsequenz: erst senkrecht auf die
 // Schwebehoehe (Schub auf VTOL_HOVER, der VTOL-Block regelt das Steigen), und sobald die erreicht ist,
 // Vollgas vorwaerts. Jedes andere Modell und der fliegende X-Wing bekommen wie bisher direkt 100 %.
@@ -11838,6 +11972,9 @@ function boostDruck(){
       : surfaceY(state.pos.x, state.pos.z);
     // Etwas unter der Sollhoehe umschalten (80 %): die Steigrate wird angeregelt und laeuft die
     // letzten Meter langsam aus — wer auf die volle Hoehe wartet, wartet lange.
+    // Mit dem Fahrwerk-Modell regelt xwSchub die ganze Sequenz (steigen bis XW_HOVER_ALT, Fahrwerk ein): hier nur
+    // Vollgas wuenschen. Ohne Clips (altes Modell) wie bisher ueber die Schwebehoehe.
+    if(xw.m && xw.m._clips.length){ xwingLaunch = false; state.throttle = 1; return; }
     if(state.pos.y - grund >= VTOL_HOVER_ALT*0.8){ xwingLaunch = false; state.throttle = 1; }
     else state.throttle = VTOL_HOVER;
     return;
@@ -12364,6 +12501,14 @@ function subHullBlocked(cx, cz, fx, fz, cy){
   return false;
 }
 function stepPhysics(dt, inp){
+  // X-Wing: bis er oben ist und das Fahrwerk drin, wirkt nur die Schwebestufe (xwSchub); gewuenscht bleibt, was gewaehlt ist
+  const thrWunsch = state.throttle;
+  state.throttle = xwSchub(dt);
+  try { return stepPhysicsKern(dt, inp); }
+  finally { if(state.throttle === xwSchubZuletzt) state.throttle = thrWunsch; }
+}
+let xwSchubZuletzt = 0;
+function stepPhysicsKern(dt, inp){
   // Wenn abgestürzt: Feuerwehr löscht, dann Reset (Reset erst wenn Pilot gelandet)
   if(state.crashed){
     state.crashTimer -= dt;
@@ -12576,7 +12721,8 @@ function stepPhysics(dt, inp){
       tv = VTOL_DROP + (VTOL_SINK - VTOL_DROP) * kL;
     } else {
       const agl = state.pos.y - surfaceY(state.pos.x, state.pos.z);          // Höhe über Grund
-      const hov = Math.max(0, Math.min(VTOL_CLIMB, (VTOL_HOVER_ALT - agl) * 0.5));
+      const hovAlt = (isXWing() && xw.m && xw.m._clips.length) ? XW_HOVER_ALT : VTOL_HOVER_ALT;
+      const hov = Math.max(0, Math.min(VTOL_CLIMB, (hovAlt - agl) * 0.5));
       const kH  = Math.min(1, (state.throttle - VTOL_LAND) / (VTOL_HOVER - VTOL_LAND));
       tv = VTOL_SINK + (hov - VTOL_SINK) * kH;                               // 10 % -> sinken, 20 % -> schweben
     }
@@ -12585,6 +12731,8 @@ function stepPhysics(dt, inp){
       const over = (state.pos.y - ISLAND_Y) - (spec.maxAlt - 120);
       if(over > 0) tv *= Math.max(0, 1 - over/120);
     }
+    // Landebremse: nicht schneller sinken, als das Fahrwerk bis zum Boden ausfaehrt (xwSinkGrenze)
+    if(tv < 0) tv = Math.max(tv, xwSinkGrenze());
     // Senkrechtrate anregeln (ersetzt Schwerkraft/Auftrieb), Horizontalfahrt austrudeln lassen
     state.vel.y += (tv - state.vel.y) * Math.min(1, 4*dt) * vtolMix;
     const vDamp = 1 - (1 - Math.exp(-1.2*dt)) * vtolMix;

@@ -2299,6 +2299,9 @@ const auto = story.autostart = { aktiv: false, t: 0, camPos: null };
 function autostart(){
   story.phase = 'autostart';
   auto.aktiv = true; auto.t = 0; auto.blende = false;     // blende hing nach dem Mars-Trip auf true -> Autostart endlos
+  // erst senkrecht steigen und dabei das Fahrwerk einfahren (Engine: xwStartAnim / xwBereit), dann davon
+  auto.weg = 0; auto.boden = state.pos.y;
+  if(typeof xwStartAnim === 'function') xwStartAnim();
   auto.camPos = camera.position.clone();
   // ein Stueck zurueck und hoeher, damit man den Start sieht
   const back = new THREE.Vector3(0, 0, 1).applyQuaternion(state.quat);
@@ -2307,24 +2310,31 @@ function autostart(){
 function autoUpdate(dt){
   auto.t += dt;
   const q = state.quat;
-  if(auto.t < 3.5){
-    // Senkrecht abheben
+  if(typeof xwAnimSchritt === 'function') xwAnimSchritt(dt);
+  // Senkrecht abheben, bis das Fahrwerk drin ist und er auf der Schwebehoehe steht (xwBereit) – vorher wie die Engine
+  // beim Startknopf: bis 10 m/s, oben ausrollend. Ohne Fahrwerk-Modell wie frueher nach 3,5 s.
+  const agl = state.pos.y - auto.boden;
+  const bereit = typeof xwBereit === 'function' ? xwBereit(agl) : auto.t >= 3.5;
+  if(!auto.weg && !bereit){
     state.onGround = false;
-    state.vel.set(0, Math.min(14, auto.t * 6), 0);
+    const ziel = typeof XW_HOVER_ALT === 'number' ? XW_HOVER_ALT : 20;
+    const vy = Math.max(1.5, Math.min(10, auto.t * 6, (ziel - agl) * 0.5));
+    state.vel.set(0, vy, 0);
     state.pos.addScaledVector(state.vel, dt);
   } else {
-    // Nase hoch und davon
-    const k = Math.min(1, (auto.t - 3.5) / 2.5);
+    // Nase hoch und davon (auto.weg: Zeit seit dem Losfliegen – die Blende kommt 5,5 s danach, wie vorher)
+    auto.weg += dt;
+    const k = Math.min(1, auto.weg / 2.5);
     const yaw = new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
     q.setFromEuler(new THREE.Euler(k * 1.2, yaw, 0, 'YXZ'));
     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-    const v = 20 + (auto.t - 3.5) * 60;
+    const v = 20 + auto.weg * 60;
     state.vel.copy(fwd).multiplyScalar(v);
     state.pos.addScaledVector(state.vel, dt);
   }
   state.throttle = 1;
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(q);
-  if(auto.t > 9 && !auto.blende){
+  if(auto.weg > 5.5 && !auto.blende){
     auto.blende = true;
     schwarz('', 2.5, () => {
       auto.aktiv = false;
