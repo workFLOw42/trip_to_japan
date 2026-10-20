@@ -1364,7 +1364,8 @@ function buildIsland(cx, cz) {
   const xl = xwingLocal(cx, cz);
   if(xl && xwingParkTpl && MODEL_NAMES[currentModel] !== 'XWing'){
     const xw = cloneSkinned(xwingParkTpl);
-    xw._clips = xwingParkTpl._clips; xwHaltung(xw, 'unten');   // steht auf seinem Fahrwerk
+    xw._clips = xwingParkTpl._clips; xw._grenzen = xwingParkTpl._grenzen; xwHaltung(xw, 'unten');   // steht auf seinem Fahrwerk
+    xwOhneCulling(xw);
     xw.position.set(xl.x, ISLAND_Y, xl.z);
     xw.rotation.y = xl.yaw;
     g.add(xw);
@@ -7444,6 +7445,7 @@ function preloadGLB(name){
     // (_clips statt userData.clips: three.js kopiert userData beim Klonen per JSON, siehe xwHaltung)
     obj._clips = gltf.animations || [];
     const haltung = xwHaltung(obj, 'unten');
+    if(haltung) xwMaterial(obj);
     const mess = () => haltung ? new THREE.Box3().setFromPoints(orcaPunkte(obj)) : new THREE.Box3().setFromObject(obj);
     // auf Ziel-Spannweite normieren (größere Horizontalachse = Spannweite)
     const box = mess();
@@ -7457,6 +7459,7 @@ function preloadGLB(name){
     if(cfg.recolor === 'wbr') recolorWBR(obj);   // zivile weiß-blau-rot Lackierung
     const wrap = new THREE.Group(); wrap.add(obj);
     wrap._clips = obj._clips;
+    if(wrap._clips && wrap._clips.length) wrap._grenzen = xwGrenzenMessen(wrap);
     glbTemplates[name] = wrap;
     if(MODEL_NAMES[currentModel] === name) buildModel(name);  // sofort ersetzen wenn aktiv
     // Die Inseln neu bauen, damit das Modell auch auf den PARKPLAETZEN erscheint. Die GLBs laden
@@ -7952,6 +7955,7 @@ function preloadXwingPark(){
     // wie preloadGLB: in der Landehaltung (Fahrwerk aus) messen, die Ruhepose des T-65 liegt hochkant
     obj._clips = gltf.animations || [];
     const haltung = xwHaltung(obj, 'unten');
+    if(haltung) xwMaterial(obj);
     const mess = () => haltung ? new THREE.Box3().setFromPoints(orcaPunkte(obj)) : (obj.updateMatrixWorld(true), new THREE.Box3().setFromObject(obj));
     const box = mess();
     const size = new THREE.Vector3(); box.getSize(size);
@@ -7962,6 +7966,7 @@ function preloadXwingPark(){
     obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= box2.min.y;
     const wrap = new THREE.Group(); wrap.add(obj);
     wrap._clips = obj._clips;
+    if(wrap._clips && wrap._clips.length) wrap._grenzen = xwGrenzenMessen(wrap);
     xwingParkTpl = wrap;
     refreshIslands();   // schon gebaute Inseln bekommen ihren X-Wing sofort
   }, (err)=>{ console.warn('X-Wing-Park-GLB Ladefehler:', err); });
@@ -9451,10 +9456,15 @@ function frameLerp(k, dt){
   return 1 - Math.pow(1 - k, d*60);
 }
 function camBackExtra(){
-  return Math.min(125, state.vel.length() * 0.025);
+  // Beim X-Wing T-65 nur 38 %: bei Warp max (125 m Zuschlag) war er viel zu klein (live gemeldet: "beim Warp max darf er
+  // ruhig doppelt so gross sein"). Gerechnet: Grundabstand 24 * 1,2 = 28,8 m; mit vollem Zuschlag 153,8 m, mit 38 %
+  // 76,3 m – also genau halb so weit, doppelt so gross im Bild.
+  const k = (typeof xw !== 'undefined' && xw.m && xw.m._clips && xw.m._clips.length && isXWing()) ? 0.38 : 1;
+  return Math.min(125, state.vel.length() * 0.025) * k;
 }
 function snapCamera(){
   if(typeof camera === 'undefined') return;
+  camOffGueltig = false;
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
   // Genau die Stelle einnehmen, die updateCamera() im nächsten Frame anstrebt — mit einem anderen
   // Abstand zieht die Kamera nach dem Ortswechsel noch sichtbar nach (mit lerp 0,06 rund eine halbe
@@ -9823,6 +9833,7 @@ function updateWarp(dt){
 }
 // Sanfter Übergang Himmel -> Weltall: Farben, Nebel, Licht, Sterne, Erdkugel.
 function updateSpaceBlend(dt){
+  if(typeof xwGlanzUpdate === 'function') xwGlanzUpdate();
   const target = (locale === 'earth')
     ? Math.max(0, Math.min(1, (state.pos.y - ATMO_TOP)/(SPACE_Y - ATMO_TOP))) : 1;
   placeBodies();
@@ -11087,6 +11098,75 @@ const VTOL_HOVER_ALT = 20; // m über Grund: Schwebehöhe bei VTOL_HOVER – gil
 const XW_LAND_T    = 2.67;   // s – Dauer des Land-Clips (gemessen am Modell)
 const XW_START_T   = 2.46;   // s – Dauer des Takeoff-Clips
 const XW_HOVER_ALT = 55;     // m ueber Grund: Schwebehoehe des X-Wings bei VTOL_HOVER (siehe oben)
+// Der T-65 ist "verwittert" gemalt: im selben Licht genau halb so hell wie das alte Modell (gemessen bei Tag, Nacht und
+// im All: 57 zu 113, 11,5 zu 22, 49 zu 98 – live gemeldet "auch bei Tag sehr dunkel", "in der Wueste bei Nacht praktisch
+// schwarz"). Die Grundfarbe mal XW_HELL gleicht das aus (gemessen 2,2 -> 114 / 22 / 100). Die Leuchtduesen tragen im
+// Modell emissiveStrength 5,6 (KHR_materials_emissive_strength), die three.js r128 nicht kennt – deshalb hier gesetzt.
+const XW_HELL = 2.2;
+// Im All mit dem Tempo etwas heller (live gewuenscht: "gerade bei hoeheren Geschwindigkeiten muesste er etwas heller
+// sein"): bis Warp 1 ein Anteil der eigenen Farbe obendrauf – wie ein leichtes Selbstleuchten, ohne neues Licht. Die
+// Duesen (emissiveMap) bleiben, wie sie sind. xwGlanz wird je Bild gesetzt (xwGlanzUpdate).
+const xwGlanz = { value: 0 };
+// gemessen: 0,35 machte ihn nur 18 % heller (die verwitterte Textur ist selbst dunkel), 1,0 gut 40 %
+const XW_GLANZ_MAX = 1.0;      // Anteil der Grundfarbe bei Warp 1 und darueber
+function xwGlanzUpdate(){
+  const ziel = (locale === 'space' && isXWing()) ? XW_GLANZ_MAX * Math.min(1, state.vel.length() / SPACE_C) : 0;
+  xwGlanz.value += (ziel - xwGlanz.value) * 0.05;
+  // Leuchten der Duesen folgt dem Schub (Wunsch 20.10.2026): am Boden mit Motor aus kaum (0,6), mit Schub heller, bei
+  // Vollgas 5,5 (der Wert aus dem Modell), im Warp bis 9. Weich nachgefuehrt, damit es nicht flackert.
+  if(xw.m && isXWing()){
+    const s = Math.max(0, state.throttle), warp = locale === 'space' ? Math.min(1, state.vel.length() / SPACE_C) : 0;
+    const zielD = (state.onGround && s === 0) ? 0.6 : 1.5 + 4 * s + 3.5 * warp;
+    xw.duese = (xw.duese === undefined ? zielD : xw.duese + (zielD - xw.duese) * 0.08);
+    if(!xw.duesenMat){ xw.duesenMat = []; xw.m.traverse(o => { if(o.isMesh && o.material && o.material.emissiveMap && !xw.duesenMat.includes(o.material)) xw.duesenMat.push(o.material); }); }
+    for(const m of xw.duesenMat) m.emissiveIntensity = xw.duese;
+  }
+}
+function xwMaterial(obj){
+  // Jedes MATERIAL nur einmal: die rund 20 Teile des T-65 teilen sich zwei Materialien – pro Teil verdoppelt, stand die
+  // Farbe bei 2,2 hoch 20 (7 Millionen, alles weiss ueberstrahlt; im Test gesehen)
+  const fertig = new Set();
+  obj.traverse(o => {
+    if(!o.isMesh || !o.material || fertig.has(o.material) || o.material.userData.xwHell) return;
+    const m = o.material; fertig.add(m); m.userData.xwHell = true;
+    m.color.multiplyScalar(XW_HELL);
+    if(m.emissiveMap) m.emissiveIntensity = 5.5;
+    // Selbstleuchten: Anteil xwGlanz der (texturierten) Grundfarbe zum Licht dazu
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.xwGlanz = xwGlanz;
+      sh.fragmentShader = 'uniform float xwGlanz;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * xwGlanz;');
+    };
+    m.needsUpdate = true;
+  });
+}
+// Das Modell ist ein SkinnedMesh: three.js schneidet es nach der Bounding-Box der RUHEPOSE ab, und die liegt beim T-65
+// hochkant. Je nach Blickwinkel verschwanden Schnauze und Bugfahrwerk (live gemeldet, zwei Screenshots).
+function xwOhneCulling(obj){ obj.traverse(o => { if(o.isMesh) o.frustumCulled = false; }); }
+// Grenzen fuer die Spiele (objekte.js, koerperAus): ihre Grenze stammt aus der Rohgeometrie, und die ist beim T-65 die
+// hochkant liegende Ruhepose – man lief durch ihn hindurch. Hier aus der SICHTBAREN Landehaltung (mit Skinning)
+// gemessen, im Raum der Vorlage: Laengs in 12 Scheiben, je Scheibe getrennt der Rumpf (Mitte) und die beiden Fluegel-
+// seiten, jede so gross wie das, was darin liegt. Das Ergebnis: eine Liste Box3 im lokalen Raum der Vorlage.
+function xwGrenzenMessen(wrap){
+  wrap.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(wrap.matrixWorld).invert();
+  const P = orcaPunkte(wrap).map(p => p.applyMatrix4(inv));
+  const bb = new THREE.Box3().setFromPoints(P), sz = bb.getSize(new THREE.Vector3());
+  const lang = sz.x > sz.z ? 'x' : 'z', quer = lang === 'x' ? 'z' : 'x', NS = 12, rumpf = sz[quer] * 0.12;
+  const boxen = [];
+  for(let k = 0; k < NS; k++){
+    const a0 = bb.min[lang] + sz[lang] * k / NS, a1 = a0 + sz[lang] / NS;
+    const teile = [new THREE.Box3(), new THREE.Box3(), new THREE.Box3()];   // links, Mitte, rechts
+    for(const p of P){
+      if(p[lang] < a0 || p[lang] > a1) continue;
+      const q = p[quer], i = q < -rumpf ? 0 : (q > rumpf ? 2 : 1);
+      teile[i].expandByPoint(p);
+    }
+    for(const b of teile) if(!b.isEmpty()) boxen.push(b);
+  }
+  return boxen;
+}
+
 // Haltung eines X-Wing-Klons setzen: 'unten' = Fahrwerk aus, Fluegel zu (Ende von Land) · 'oben' = Fahrwerk ein, Fluegel
 // in X-Stellung (Ende von Takeoff). Ohne Clips (altes Modell) passiert nichts.
 function xwHaltung(obj, haltung){
@@ -11129,6 +11209,10 @@ const state = {
 
 let currentModel = 0;
 document.getElementById('mdl').textContent = MODEL_NAMES[0];
+// Fahrwerk des eigenen X-Wings: m = Modell-Klon (modelHolder), unten = Fahrwerk draussen (am Boden, nach Land),
+// clip = laeuft gerade ('Takeoff' / 'Land' / null), t = Zeit im laufenden Clip, start = Startsequenz aktiv.
+// Steht VOR dem ersten buildModel: das ruft fuer den X-Wing xwModellNeu, und const wird nicht gehoisted.
+const xw = { m: null, unten: true, clip: null, t: 0, start: false };
 buildModel(MODEL_NAMES[0]);
 spec = PLANE_SPECS[MODEL_NAMES[0]] || DEFAULT_SPEC;
 
@@ -11874,11 +11958,15 @@ let boosting = false;   // Boost aktiv -> extra Beschleunigung (Physik liest das
 // Ein eigener Zustand, kein Rechnen im Eingabe-Zweig: der laeuft jeden Frame, und ohne Merker
 // begaenne die Sequenz bei jedem Bild neu.
 let xwingLaunch = false;
-// Fahrwerk des eigenen X-Wings: m = Modell-Klon (modelHolder), unten = Fahrwerk draussen (am Boden, nach Land),
-// clip = laeuft gerade ('Takeoff' / 'Land' / null), t = Zeit im laufenden Clip, start = Startsequenz aktiv.
-const xw = { m: null, unten: true, clip: null, t: 0, start: false };
+// (const xw steht weiter oben, vor dem ersten buildModel – siehe dort)
 function xwModellNeu(m){
-  xw.m = m; m._clips = glbTemplates['XWing']._clips || [];
+  xw.m = m; m._clips = glbTemplates['XWing']._clips || []; m._grenzen = glbTemplates['XWing']._grenzen || null;
+  xw.duesenMat = null;   // Duesen-Materialien neu suchen (xwGlanzUpdate)
+  // Eigene Materialien: clone(true) teilt sie mit der Vorlage – das Duesenleuchten des eigenen X-Wings haetten sonst alle
+  // geparkten mitgemacht. onBeforeCompile (Selbstleuchten) kommt beim Klonen mit.
+  const kopie = new Map();
+  m.traverse(o => { if(o.isMesh && o.material){ if(!kopie.has(o.material)){ const c = o.material.clone(); c.onBeforeCompile = o.material.onBeforeCompile; kopie.set(o.material, c); } o.material = kopie.get(o.material); } });
+  xwOhneCulling(m);
   xw.clip = null; xw.t = 0;
   xwHaltung(m, state.onGround ? 'unten' : 'oben'); xw.unten = !!state.onGround;
 }
@@ -12960,6 +13048,9 @@ function planeCamRef(){
 // bildratenunabhängiges Nachziehen. Der Loop schreibt es hier hinein, bevor er updateCamera ruft.
 let dtCam = 1/60;
 const _camOff = new THREE.Vector3(), _camDes = new THREE.Vector3();
+// Abstand Kamera -> Flieger aus dem vorigen Bild (siehe updateCamera, Ende). camOffGueltig: false nach einem Sprung
+// (Ortswechsel, Seitenblick, EVA-Kamera), dann gilt einmal wieder die Weltposition.
+const _camOffLast = new THREE.Vector3(); let camOffGueltig = false;
 // Hilfsvektoren fuer die Kamera-Kollision (wiederverwendet, damit pro Frame kein Muell entsteht)
 const _camFix = new THREE.Vector3(), _camTry = new THREE.Vector3();
 function updateCamera(){
@@ -13259,9 +13350,19 @@ function updateCamera(){
   // Bezug ist die ANGEZEIGTE Position (siehe planeCamRef) — beim schwimmenden Canadair weicht sie
   // von state.pos ab, sonst sind beide gleich.
   const ref = planeCamRef();
-  _camOff.copy(camera.position).sub(ref);
+  // Den Abstand aus dem VORIGEN Bild nehmen, nicht camera.position - ref: camera.position stammt aus dem vorigen Bild,
+  // ref schon aus diesem – darin steckte die Flugstrecke eines Bildes, und weil k bei hohem Tempo auf 0,5 gedeckelt ist,
+  // blieb im Gleichgewicht genau diese Strecke als Rueckstand stehen. Gemessen bei Warp (12.000 m/s, 60 fps): Kamera
+  // 278 m statt der 76 m Sollabstand hinter dem X-Wing – er war nur noch ein Punkt (live gemeldet). Bei 100 m/s sind es
+  // 1,7 m, deshalb fiel es frueher nicht auf. Hat die Kamera inzwischen woanders gestanden (Ortswechsel, Seitenblick,
+  // snapCamera), passt der gemerkte Wert nicht: dann einmal wie bisher aus der Weltposition.
+  if(camOffGueltig && _camOffLast.distanceTo(_camOff.copy(camera.position).sub(ref)) < 5 + state.vel.length() * dtCam * 1.5)
+    _camOff.copy(_camOffLast);
+  else _camOff.copy(camera.position).sub(ref);
   _camDes.copy(desired).sub(ref);
-  camera.position.copy(ref).add(_camOff.lerp(_camDes, k));
+  _camOff.lerp(_camDes, k);
+  camera.position.copy(ref).add(_camOff);
+  _camOffLast.copy(_camOff); camOffGueltig = true;
   camera.lookAt(ref);
 }
 

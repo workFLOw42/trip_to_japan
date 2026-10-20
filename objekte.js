@@ -148,8 +148,15 @@ function koerperAus(root, form){
     return bb.isEmpty() ? [] : [neuK(root, form === 'kreis' ? 'zyl' : 'box', bb)];
   }
   const liste = [];
+  // Fertig gemessene Grenzen (Engine: xwGrenzenMessen, _grenzen) – fuer Modelle, deren Rohgeometrie nicht die sichtbare
+  // Form ist. Der X-Wing T-65 ist ein SkinnedMesh mit hochkant liegender Ruhepose: aus seiner Geometrie stand die Grenze
+  // senkrecht in der Luft, man lief durch ihn hindurch (Live-Befund 20.10.2026). Seine Meshes zaehlen dann nicht.
+  const gemessen = [];
+  root.traverse(o => { if(o._grenzen && o._grenzen.length) gemessen.push(o); });
+  for(const g of gemessen) for(const b of g._grenzen) liste.push(neuK(g, 'box', b));
+  const unterGemessen = (o) => { for(let q = o; q; q = q.parent) if(gemessen.includes(q)) return true; return false; };
   root.traverse(o => {
-    if(!o.isMesh || ausgenommen(o, root)) return;
+    if(!o.isMesh || ausgenommen(o, root) || (gemessen.length && unterGemessen(o))) return;
     const geo = o.geometry; if(!geo || !geo.attributes || !geo.attributes.position) return;
     geo.computeBoundingBox();
     const t = geo.type || '';
