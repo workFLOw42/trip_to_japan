@@ -146,15 +146,16 @@ function spritzer(x, wy, z, n, kraft){
 }
 story.spritzer = spritzer;
 // Orcas der Engine (Live-Wunsch 18.10.2026): an der Oberflaeche eine Heckwelle und etwas Gischt, beim Sprung ein grosser
-// Spritzer beim Auftauchen und beim Eintauchen. Ruecken = Unterkante + 1,40 m (ORCA_BACK der Engine).
-const ORCA_RUECKEN = 1.4, _ow = new THREE.Vector3();
+// Spritzer beim Auftauchen und beim Eintauchen. Ruecken = Unterkante + ORCA_BACK der Engine (seit dem Low-Poly-Orca 2,05 m).
+// Erst beim Rechnen gelesen: spuren.js laedt VOR der Engine, ORCA_BACK gibt es beim Laden noch nicht.
+const orcaRuecken = () => typeof ORCA_BACK === 'number' ? ORCA_BACK : 1.4, _ow = new THREE.Vector3();
 function updateOrcaSpuren(dt){
   if(typeof orcas === 'undefined' || !orcas.length) return;
   const cp = camera.position;
   for(const o of orcas){
     if(!o.group || !o.placed || !o.group.visible) { o.spur = null; continue; }
     if(Math.hypot(o.x - cp.x, o.z - cp.z) > 400){ o.spur = null; continue; }
-    const wy = seaYAt(o.x, o.z), oben = o.group.position.y + ORCA_RUECKEN - wy;   // > 0: Ruecken ueber Wasser
+    const wy = seaYAt(o.x, o.z), oben = o.group.position.y + orcaRuecken() - wy;   // > 0: Ruecken ueber Wasser
     const S = o.spur || (o.spur = { oben, t: Math.random() * 0.2, gT: 0, unten: undefined });
     const fx = -Math.sin(o.heading), fz = -Math.cos(o.heading);
     // Sprung: zwei Ereignisse – der Ruecken schiesst aus dem Wasser (steigend), die Unterkante kommt von oben zurueck ins Wasser

@@ -3829,8 +3829,15 @@ function updateHarborSubs(dt){
 //    1,60 .. 3,19 m   Rueckenfinne, nur 0,12 bis 0,53 m breit
 // 8 m ist die Laenge eines ausgewachsenen Bullen, passt also unskaliert.
 const ORCA_LEN   = 8;
-const ORCA_H     = 3.19;    // Modellhoehe im Spielmassstab
-const ORCA_BACK  = 1.40;    // Ruecken (Koerperoberkante) ueber Modellunterkante
+// SEIT 20.10.2026 ein anderes Modell: der Low-Poly-Orca von WildPoly3D (CC-BY-NC-4.0) mit eigenen Clips
+// (swim, idle, rushbeach, jump_pose_up, jump_pose_down). Die Masse oben gelten fuer das ALTE Modell. Das
+// neue, ebenso auf 8 m normiert und in der Schwimm-Haltung ausgemessen (16 Laengsbaender, C:/tmp/glbcheck):
+// 8,00 x 3,53 (Brustflossen) x 3,43 m, Finne bis 3,43, Koerper-Oberkante hinter dem Kopf 2,09 bis 2,17 m,
+// zur Fluke hin bis 1,06 m abfallend. Der Ruecken liegt damit 0,7 m hoeher als beim alten Modell, weil die
+// Brustflossen beim Schwimmen tiefer haengen. ORCA_BACK steht wie beim alten Modell gut 0,1 m unter der
+// hoechsten Koerperstelle (alt 1,40 bei 1,53).
+const ORCA_H     = 3.43;    // Modellhoehe im Spielmassstab
+const ORCA_BACK  = 2.05;    // Ruecken (Koerperoberkante) ueber Modellunterkante
 //
 // SPRUNG: 45 Grad Abwurf, 10 m Scheitelhoehe, 40 m Weite, 2,86 s in der Luft.
 //
@@ -3989,6 +3996,36 @@ function cloneSkinned(src){
   });
   return dst;
 }
+// Clip nach Namen. Die Namen tragen den Rig-Namen davor ("Orca_Rig|Orca_Rig|swim"). Der alte Orca hat nur
+// "Take 001" – dann gibt es keinen Treffer, und die Aufrufer nehmen den ersten Clip wie bisher.
+function orcaClip(clips, name){ return clips.find(c => c.name === name || c.name.endsWith('|' + name)) || null; }
+// Alle Eckpunkte in Weltkoordinaten, mit Skinning (also in der Haltung der laufenden Animation)
+function orcaPunkte(obj){
+  const P = [], v = new THREE.Vector3();
+  obj.updateMatrixWorld(true);
+  obj.traverse(m => {
+    if(!m.isMesh) return;
+    const pos = m.geometry.attributes.position;
+    if(m.isSkinnedMesh) m.skeleton.update();
+    for(let i = 0; i < pos.count; i++){
+      v.fromBufferAttribute(pos, i);
+      if(m.isSkinnedMesh) m.boneTransform(i, v);
+      v.applyMatrix4(m.matrixWorld); P.push(v.clone());
+    }
+  });
+  return P;
+}
+// Einem Klon (cloneSkinned(orcaTpl)) ohne eigenen Mixer eine feste Haltung geben – fuer Standbilder. Ohne das
+// stuende er in der Ruhepose, und die ist beim Low-Poly-Orca hochkant. name: Clip ("jump_pose_down", "swim" …),
+// t: Anteil der Cliplaenge. Fehlt der Clip (alter Orca), nimmt sie den ersten.
+function orcaHaltung(gruppe, name, t){
+  const clips = (orcaTpl && orcaTpl.userData.clips) || [];
+  const c = orcaClip(clips, name) || clips[0];
+  if(!c) return;
+  const mx = new THREE.AnimationMixer(gruppe);
+  mx.clipAction(c).play(); mx.setTime((t || 0) * c.duration);
+  gruppe.updateMatrixWorld(true);
+}
 // Die Vorlage einmal bauen: laden, auf ORCA_LEN normieren, Nase auf -Z (wie alle Flugzeuge und
 // Schiffe), Unterkante auf y = 0. Die Animation wird hier NICHT gestartet — jeder Klon bekommt
 // seinen eigenen Mixer mit eigenem Zeitversatz, sonst schlagen alle Fluken im Takt.
@@ -4004,8 +4041,14 @@ function preloadOrca(){
   for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
   gl.parse(bytes.buffer, '', (gltf)=>{
     const obj = gltf.scene;
-    obj.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(obj);
+    // Gemessen wird in der SCHWIMM-Haltung, nicht in der Ruhepose: der Low-Poly-Orca steht ohne Animation
+    // hochkant (roh 2,2 x 4,2 x 1,6). Box3.setFromObject haette ihn auf die Hoehe statt die Laenge normiert
+    // und quer gedreht. orcaPunkte rechnet das Skinning mit. Beim alten Orca macht es keinen Unterschied
+    // (7,95 statt 8,00 m).
+    const swim = orcaClip(gltf.animations || [], 'swim');
+    const mx0 = swim ? new THREE.AnimationMixer(obj) : null;
+    if(mx0){ mx0.clipAction(swim).play(); mx0.setTime(swim.duration * 0.25); }
+    const box = new THREE.Box3().setFromPoints(orcaPunkte(obj));
     const size = new THREE.Vector3(); box.getSize(size);
     obj.scale.setScalar(ORCA_LEN / Math.max(0.001, Math.max(size.x, size.z)));
     // Laengsachse auf Z (beim Orca liegt sie schon dort, die Zeile ist die gleiche Absicherung wie
@@ -4019,9 +4062,11 @@ function preloadOrca(){
     // (Breite 4,16 bis 4,20) und die Rueckenfinne bei Z = 4,5 (Hoehe 3,01). Beim Orca sitzen
     // Brustflossen und Finne im vorderen Drittel, die Fluke am Ende — der Kopf liegt hier also bei
     // HOHEM Z. Dasselbe wie rot180 bei Kreuzfahrtschiff und Liberty-Frachter.
+    // (Beim Low-Poly-Orca nachgemessen: Fluke ebenfalls bei niedrigem Z, Brustflossen bei hohem – die
+    // Drehung gilt fuer beide Modelle.)
     obj.rotation.y += Math.PI;
-    obj.updateMatrixWorld(true);
-    const b2 = new THREE.Box3().setFromObject(obj);
+    const b2 = new THREE.Box3().setFromPoints(orcaPunkte(obj));
+    if(mx0){ mx0.stopAllAction(); mx0.uncacheRoot(obj); }
     const c = new THREE.Vector3(); b2.getCenter(c);
     obj.position.x -= c.x; obj.position.z -= c.z;
     obj.position.y -= b2.min.y;               // Unterkante auf 0, wie bei den Schiffen
@@ -4046,11 +4091,20 @@ function buildOrcaBody(o){
   const clips = orcaTpl.userData.clips || [];
   if(clips.length){
     o.mixer = new THREE.AnimationMixer(o.group);
-    o.mixer.clipAction(clips[0]).play();
+    // Schwimmen nach Namen ("swim" beim Low-Poly-Orca), sonst der erste Clip (alter Orca: "Take 001")
+    const swim = orcaClip(clips, 'swim') || clips[0];
+    o.swimAct = o.mixer.clipAction(swim); o.swimAct.play();
+    // Sprung-Posen (Standbilder, 0 s lang): hoch beim Steigen, runter beim Fallen. orcaPose blendet sie
+    // ueber die Gewichte ein, die Schwimmbewegung laeuft darunter weiter.
+    const up = orcaClip(clips, 'jump_pose_up'), down = orcaClip(clips, 'jump_pose_down');
+    if(up && down){
+      o.upAct = o.mixer.clipAction(up); o.downAct = o.mixer.clipAction(down);
+      for(const a of [o.upAct, o.downAct]){ a.play(); a.setEffectiveWeight(0); }
+    }
     // Eigener Startpunkt und leicht eigenes Tempo — sonst schwimmt die Herde im Gleichschritt.
-    // Die Schleife ist 2,03 s lang und laeuft nahtlos (2,2 Grad Differenz zwischen erstem und
-    // letztem Frame), ein Versatz faellt also nirgends auf.
-    o.mixer.setTime(Math.random()*2.03);
+    // Die Schleife ist rund 2 s lang (alt 2,03 s, neu 1,97 s) und laeuft nahtlos, ein Versatz faellt
+    // also nirgends auf.
+    o.mixer.setTime(Math.random()*swim.duration);
     o.mixer.timeScale = 0.85 + Math.random()*0.3;
   }
 }
@@ -4273,7 +4327,23 @@ function updateOrcas(dt){
     o.group.position.set(o.x, o.y, o.z);
     // Reihenfolge YXZ wie ueberall im Spiel: erst Kurs (Y), dann Nickwinkel (X).
     o.group.rotation.set(o.pitch, o.heading, 0, 'YXZ');
+    orcaPose(o, dt, swimY);
   }
+}
+// Sprung-Posen des Low-Poly-Orcas: ueber der Schwimmhoehe und mit der Nase nach oben "jump_pose_up", ab dem
+// Scheitel (Nase nach unten) "jump_pose_down", im Wasser die Schwimmbewegung. Der Wechsel folgt dem Nickwinkel,
+// den updateOrcas ohnehin stetig rechnet (+45 Grad beim Absprung, 0 am Scheitel, -45 beim Eintauchen) – damit
+// ist er so weich wie die Bahn selbst; die Gewichte ziehen mit 6/s nach. Ohne Posen-Clips (alter Orca) nichts.
+function orcaPose(o, dt, swimY){
+  if(!o.upAct) return;
+  const luft = o.jumper && o.y > swimY + 0.3;
+  const s = Math.max(-1, Math.min(1, o.pitch / (Math.PI/4)));        // +1 steigt mit 45 Grad, -1 faellt
+  const zielUp = luft ? Math.max(0, s) : 0, zielDown = luft ? Math.max(0, -s) : 0;
+  const k = Math.min(1, 6*dt);
+  o.wUp = (o.wUp || 0) + (zielUp - (o.wUp || 0)) * k;
+  o.wDown = (o.wDown || 0) + (zielDown - (o.wDown || 0)) * k;
+  o.upAct.setEffectiveWeight(o.wUp); o.downAct.setEffectiveWeight(o.wDown);
+  o.swimAct.setEffectiveWeight(Math.max(0, 1 - o.wUp - o.wDown));
 }
 // Trifft (x,y,z) ein Handelsschiff? Wie hitsBuilding, aber für die fahrende Flotte. Gerechnet wird im
 // Schiffs-Koordinatensystem (um -heading zurückgedreht), damit ein langes Schiff auch schräg als
