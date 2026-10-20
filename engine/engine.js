@@ -4173,6 +4173,8 @@ function spawnOrcas(){
 function clearOrcas(){
   for(const o of orcas) if(o.group) scene.remove(o.group);
   orcas.length = 0;
+  // Ortswechsel in den Spielen (Etappe) raeumt auch Fische und Seeloewen ab – sie suchen sich am neuen Ort Platz
+  if(typeof clearStrandleben === 'function') clearStrandleben();
 }
 // Jeden Frame: schwimmen, springen oder tauchen.
 //
@@ -4344,6 +4346,201 @@ function orcaPose(o, dt, swimY){
   o.wDown = (o.wDown || 0) + (zielDown - (o.wDown || 0)) * k;
   o.upAct.setEffectiveWeight(o.wUp); o.downAct.setEffectiveWeight(o.wDown);
   o.swimAct.setEffectiveWeight(Math.max(0, 1 - o.wUp - o.wDown));
+}
+// ---------- STRANDLEBEN: Forellen im Flachwasser, Seeloewen am Strand ----------
+// Fuer die Spiele auf dieser Engine (Das Geheimland, Trip to Japan): beim Schwimmen und Tauchen am Strand
+// sieht man ab und zu kleine Gruppen echter Fische, und am Strand liegen zwei Seeloewen, die ab und zu ins
+// Wasser robben, dort planschen und wieder zurueck an Land kommen. Im Flugspiel ist es AUS
+// (strandleben.an = false) – die Spiele schalten es ein (strandleben.an = true).
+// Es benutzt nur isOnLand / isOnBeach / seabedY / seaYAt / evaFootY. Die Spiele ueberschreiben diese fuer ihre
+// eigenen Welten (Insel, Festland, Fluss) – so finden Fische und Seeloewen dort die richtige Kueste.
+// Modelle (WildPoly3D bzw. Natural History Museum of Los Angeles County, CC-BY-NC / CC-BY-NC-SA), alle mit der
+// Nase auf +Z gebaut (am Knochen Head/head gemessen) – sie werden wie die Orcas um 180 Grad gedreht.
+//   Forelle  0,25 m, Clip Trout_Swim (0,96 s)                  -> auf FORELLE_LEN vergroessert
+//   Seeloewe 2,1 m, swim/walk/sleep/sleep_side/water_idle/roll/bark …   (furseal)
+//   Robbe    1,5 m, swim/walk/sleep/water_idle/roll/clapping …          (seal)
+const strandleben = { an: false, forellen: [], loewen: [], tpl: {}, laedt: {}, t: 0 };
+const FORELLE_LEN = 0.45;      // m – echte Forellen sind 30 bis 60 cm; mit 25 cm sah man sie im Wasser kaum
+const FORELLE_GRUPPEN = 3, FORELLE_JE = 4;
+const FORELLE_TIEF_MIN = 0.8, FORELLE_TIEF_MAX = 6;   // m Wassertiefe, in der sie stehen (Flachwasser)
+const FORELLE_ABST_MIN = 6, FORELLE_ABST_MAX = 35, FORELLE_WEG = 70;   // m um den Spieler
+const FORELLE_SPD = 0.9, FORELLE_FLUCHT = 4.5, FORELLE_SCHEU = 2.5;   // m/s, m/s, m
+const LOEWE_SICHT = 260;       // m: weiter weg vom Spieler werden die Seeloewen nicht bewegt (spart Rechenzeit)
+const LOEWE_SPD_LAND = 0.6, LOEWE_SPD_WASSER = 2.2;
+function strandGLB(key, win){
+  const d = window[win];
+  if(!d || !THREE.GLTFLoader || strandleben.tpl[key] || strandleben.laedt[key]) return;
+  strandleben.laedt[key] = true;
+  const bin = atob(d.split(',')[1]); const bytes = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  new THREE.GLTFLoader().parse(bytes.buffer, '', g => {
+    const obj = g.scene;
+    obj.rotation.y = Math.PI;                       // Nase auf -Z (siehe oben)
+    // Groesse IMMER in der Schwimm-Haltung messen (orcaPunkte, mit Skinning): die Bindepose der Forelle hat eine ganz
+    // andere Ausdehnung als das sichtbare Tier – Box3.setFromObject ergab ~1 cm, die Forelle wurde damit 40-fach zu
+    // gross (ueber 10 m, live gemeldet).
+    const clip = orcaClip(g.animations || [], key === 'forelle' ? 'Trout_Swim' : 'swim') || (g.animations || [])[0];
+    const mx0 = clip ? new THREE.AnimationMixer(obj) : null;
+    if(mx0){ mx0.clipAction(clip).play(); mx0.setTime(clip.duration * 0.3); }
+    const s = new THREE.Box3().setFromPoints(orcaPunkte(obj)).getSize(new THREE.Vector3());
+    const soll = { forelle: FORELLE_LEN, seeloewe: 2.1, robbe: 1.5 }[key];
+    obj.scale.multiplyScalar(soll / Math.max(0.001, s.x, s.z));
+    if(mx0){ mx0.stopAllAction(); mx0.uncacheRoot(obj); }
+    obj.traverse(o => { if(o.isMesh){ o.castShadow = false; o.frustumCulled = false; } });
+    const w = new THREE.Group(); w.add(obj); w.userData.clips = g.animations || [];
+    strandleben.tpl[key] = w;
+  }, () => { strandleben.laedt[key] = false; });
+}
+function strandClip(tpl, name){ return orcaClip(tpl.userData.clips, name) || tpl.userData.clips[0]; }
+function strandAct(t, name){
+  const tpl = strandleben.tpl[t.art], c = strandClip(tpl, name);
+  if(!c || t.clip === c) return;
+  const a = t.mixer.clipAction(c);
+  a.reset().play();
+  if(t.act){ a.crossFadeFrom(t.act, 0.4, false); }
+  t.act = a; t.clip = c;
+}
+// Wassertiefe an (x,z): Oberflaeche minus Grund. Land/Strand -> 0
+function strandTiefe(x, z){
+  if(isOnLand(x, z) || isOnBeach(x, z)) return 0;
+  return seaYAt(x, z) - seabedY(x, z);
+}
+// ---- Forellen: kleine Gruppen im Flachwasser vor dem Strand, um den Spieler herum ----
+function forellenPlatz(F){
+  for(let i = 0; i < 25; i++){
+    const a = Math.random() * Math.PI * 2, d = FORELLE_ABST_MIN + Math.random() * (FORELLE_ABST_MAX - FORELLE_ABST_MIN);
+    const x = F.x + Math.cos(a) * d, z = F.z + Math.sin(a) * d, t = strandTiefe(x, z);
+    if(t >= FORELLE_TIEF_MIN + 0.4 && t <= FORELLE_TIEF_MAX) return { x, z };
+  }
+  return null;
+}
+function forellenSetzen(g, F){
+  const p = forellenPlatz(F); g.da = !!p;
+  for(const f of g.fische) f.obj.visible = !!p;
+  if(!p) return;
+  g.x = p.x; g.z = p.z; g.kurs = Math.random() * Math.PI * 2; g.flucht = 0;
+  for(const f of g.fische){ f.dx = (Math.random() - 0.5) * 1.6; f.dz = (Math.random() - 0.5) * 1.6; f.dy = Math.random(); f.ph = Math.random() * 6; }
+}
+function updateForellen(dt, F, P){
+  const tpl = strandleben.tpl.forelle; if(!tpl) return;
+  if(!strandleben.forellen.length){
+    for(let k = 0; k < FORELLE_GRUPPEN; k++){
+      const g = { fische: [], da: false, x: 0, z: 0, kurs: 0, flucht: 0, warte: Math.random() * 3 };
+      for(let i = 0; i < FORELLE_JE; i++){
+        const obj = cloneSkinned(tpl); scene.add(obj); obj.visible = false;
+        const mixer = new THREE.AnimationMixer(obj), c = strandClip(tpl, 'Trout_Swim');
+        if(c){ const a = mixer.clipAction(c); a.play(); mixer.setTime(Math.random() * c.duration); mixer.timeScale = 0.8 + Math.random() * 0.5; }
+        g.fische.push({ obj, mixer, dx: 0, dz: 0, dy: 0, ph: 0 });
+      }
+      strandleben.forellen.push(g);
+    }
+  }
+  for(const g of strandleben.forellen){
+    if(!g.da){ g.warte -= dt; if(g.warte <= 0){ forellenSetzen(g, F); g.warte = 2 + Math.random() * 4; } continue; }
+    // weiterziehen: langsam, leichter Bogen; vor Land und zu flachem Wasser abdrehen
+    const nah = Math.hypot(P.x - g.x, P.z - g.z);
+    if(nah < FORELLE_SCHEU + 1.5 && g.flucht <= 0){ g.flucht = 2.2; g.kurs = Math.atan2(P.x - g.x, P.z - g.z); }   // weg vom Spieler: vorwaerts (-sin, -cos) = g - P
+    g.flucht -= dt;
+    const v = g.flucht > 0 ? FORELLE_FLUCHT : FORELLE_SPD;
+    g.kurs += Math.sin(strandleben.t * 0.4 + g.x) * 0.25 * dt;
+    const fx = -Math.sin(g.kurs), fz = -Math.cos(g.kurs);
+    const tv = strandTiefe(g.x + fx * 2, g.z + fz * 2);
+    if(tv < FORELLE_TIEF_MIN || tv > FORELLE_TIEF_MAX + 2) g.kurs += 2.2 * dt * (g.flucht > 0 ? 2 : 1);
+    else { g.x += fx * v * dt; g.z += fz * v * dt; }
+    if(Math.hypot(F.x - g.x, F.z - g.z) > FORELLE_WEG){ g.da = false; for(const f of g.fische) f.obj.visible = false; g.warte = 1 + Math.random() * 3; continue; }
+    const ober = seaYAt(g.x, g.z), grund = seabedY(g.x, g.z);
+    const mitteY = Math.max(grund + 0.35, Math.min(ober - 0.45, grund + (ober - grund) * 0.45));
+    for(const f of g.fische){
+      f.mixer.timeScale = g.flucht > 0 ? 2.5 : 1;
+      f.mixer.update(dt);
+      f.ph += dt * (g.flucht > 0 ? 3 : 1);
+      const ox = f.dx + Math.sin(f.ph * 0.7) * 0.25, oz = f.dz + Math.cos(f.ph * 0.6) * 0.25;
+      f.obj.position.set(g.x + ox, mitteY + (f.dy - 0.5) * 0.5 + Math.sin(f.ph) * 0.06, g.z + oz);
+      f.obj.rotation.set(0, g.kurs + Math.sin(f.ph * 1.3) * 0.15, 0);
+    }
+  }
+}
+// ---- Seeloewen: zwei Tiere an einem Strand. Liegen im Sand, robben ins Wasser, planschen, kommen zurueck ----
+// Der Strandplatz wird einmal gesucht (der naechste Sandpunkt mit Wasser daneben) und bleibt; die Spiele koennen
+// ihn mit strandleben.festPlatz = {x, z, wx, wz} selbst setzen (wx/wz: Ziel im Wasser).
+function loewenPlatz(F){
+  // festPlatz: vom Spiel vorgegeben (bleibt auch nach clearStrandleben), sonst einmal suchen
+  if(strandleben.festPlatz) return (strandleben.platz = strandleben.festPlatz);
+  if(strandleben.platz) return strandleben.platz;
+  for(let r = 15; r < 400; r += 15){
+    for(let k = 0; k < 24; k++){
+      const a = k / 24 * Math.PI * 2 + r * 0.01, x = F.x + Math.cos(a) * r, z = F.z + Math.sin(a) * r;
+      // Sand = Land, hinter dem es nach wenigen Metern ins Wasser geht. Nicht isOnBeach allein: auf dem Festland von
+      // Trip to Japan zaehlt der ganze Strand als Land (isOnLand), isOnBeach meldet dort nichts.
+      if(strandTiefe(x, z) > 0) continue;
+      // Richtung zum Wasser: wo es am naechsten tief wird
+      for(let w = 0; w < 16; w++){
+        const b = w / 16 * Math.PI * 2, wx = x + Math.cos(b) * 12, wz = z + Math.sin(b) * 12;
+        if(strandTiefe(wx, wz) > 1.2) return (strandleben.platz = { x, z, wx, wz });
+      }
+    }
+  }
+  return null;
+}
+function updateLoewen(dt, F){
+  for(const art of ['seeloewe', 'robbe']) if(!strandleben.tpl[art]) return;
+  if(!strandleben.loewen.length){
+    const pl = loewenPlatz(F); if(!pl) return;
+    ['seeloewe', 'robbe'].forEach((art, i) => {
+      const obj = cloneSkinned(strandleben.tpl[art]); scene.add(obj);
+      const t = { art, obj, mixer: new THREE.AnimationMixer(obj), act: null, clip: null,
+        x: pl.x + (i ? 2.2 : -1.6), z: pl.z + (i ? -1.4 : 1.2), kurs: Math.random() * 6, zustand: 'liegen',
+        t: 6 + Math.random() * 10 + i * 9, zx: 0, zz: 0 };
+      t.heim = { x: t.x, z: t.z };
+      strandAct(t, i ? 'sleep' : 'sleep_side');
+      strandleben.loewen.push(t);
+    });
+  }
+  const pl = strandleben.platz;
+  for(const t of strandleben.loewen){
+    if(Math.hypot(F.x - t.x, F.z - t.z) > LOEWE_SICHT){ t.obj.visible = false; continue; }
+    t.obj.visible = true;
+    t.mixer.update(dt); t.t -= dt;
+    let v = 0, zielKurs = null;
+    if(t.zustand === 'liegen'){
+      if(t.t <= 0){ t.zustand = 'insWasser'; t.zx = pl.wx + (Math.random() - 0.5) * 10; t.zz = pl.wz + (Math.random() - 0.5) * 10; strandAct(t, 'walk'); }
+    } else if(t.zustand === 'insWasser' || t.zustand === 'heim'){
+      const zx = t.zustand === 'heim' ? t.heim.x : t.zx, zz = t.zustand === 'heim' ? t.heim.z : t.zz;
+      const nass = strandTiefe(t.x, t.z) > 0.6;
+      strandAct(t, nass ? 'swim' : 'walk');
+      v = nass ? LOEWE_SPD_WASSER : LOEWE_SPD_LAND; zielKurs = Math.atan2(t.x - zx, t.z - zz);   // Nase -Z
+      if(Math.hypot(zx - t.x, zz - t.z) < 1.2){
+        if(t.zustand === 'heim'){ t.zustand = 'liegen'; t.t = 15 + Math.random() * 25; strandAct(t, Math.random() < 0.5 ? 'sleep' : (t.art === 'seeloewe' ? 'sleep_side' : 'idle')); }
+        else { t.zustand = 'planschen'; t.t = 10 + Math.random() * 12; strandAct(t, 'water_idle'); }
+      }
+    } else if(t.zustand === 'planschen'){
+      // treten auf der Stelle, ab und zu eine Runde schwimmen oder sich rollen
+      if(t.t <= 0){ t.zustand = 'heim'; }
+      else if(Math.random() < dt * 0.08){ strandAct(t, Math.random() < 0.5 ? 'roll' : 'swim'); t.runde = 3; }
+      if(t.runde > 0){ t.runde -= dt; v = LOEWE_SPD_WASSER * 0.7; t.kurs += 0.9 * dt; if(t.runde <= 0) strandAct(t, 'water_idle'); }
+    }
+    if(zielKurs !== null){ let d = zielKurs - t.kurs; d = Math.atan2(Math.sin(d), Math.cos(d)); t.kurs += Math.max(-1.5 * dt, Math.min(1.5 * dt, d)); }
+    if(v){ t.x += -Math.sin(t.kurs) * v * dt; t.z += -Math.cos(t.kurs) * v * dt; }
+    // Hoehe: an Land auf dem Sand, im Wasser mit dem Ruecken knapp unter der Oberflaeche, beim Treten Kopf heraus
+    const tief = strandTiefe(t.x, t.z);
+    let y;
+    if(tief <= 0.6) y = Math.max(evaFootY(t.x, t.z), tief > 0 ? seaYAt(t.x, t.z) - 0.25 : -1e9);
+    else y = seaYAt(t.x, t.z) - (t.zustand === 'planschen' && t.clip && /water_idle/.test(t.clip.name) ? 0.85 : 0.3);
+    t.obj.position.set(t.x, y, t.z); t.obj.rotation.set(0, t.kurs, 0);
+  }
+}
+function clearStrandleben(){
+  for(const g of strandleben.forellen) for(const f of g.fische) scene.remove(f.obj);
+  for(const t of strandleben.loewen) scene.remove(t.obj);
+  strandleben.forellen.length = 0; strandleben.loewen.length = 0; strandleben.platz = null;
+}
+function updateStrandleben(dt){
+  if(!strandleben.an || locale !== 'earth'){ if(strandleben.forellen.length || strandleben.loewen.length) clearStrandleben(); return; }
+  strandGLB('forelle', 'FORELLE_GLB'); strandGLB('seeloewe', 'SEELOEWE_GLB'); strandGLB('robbe', 'ROBBE_GLB');
+  strandleben.t += dt;
+  const F = worldFocus(), P = eva ? eva.group.position : state.pos;
+  updateForellen(dt, F, P);
+  updateLoewen(dt, F);
 }
 // Trifft (x,y,z) ein Handelsschiff? Wie hitsBuilding, aber für die fahrende Flotte. Gerechnet wird im
 // Schiffs-Koordinatensystem (um -heading zurückgedreht), damit ein langes Schiff auch schräg als
@@ -14423,6 +14620,7 @@ function loop(now){
   updateDrift(dt);           // Bewegungsreferenz unter Wasser (Blasen) und auf Mond/Mars (Staub)
   updateComets(dt);          // im Weltall: Kometenstreifen entgegen der Fahrtrichtung
   updateOrcas(dt);           // Killerwale: Springer (45 Grad, 10 m hoch) und tauchende Schule
+  updateStrandleben(dt);     // Forellen im Flachwasser, Seeloewen am Strand (nur wenn ein Spiel es einschaltet)
   updateRockets(dt);         // Raketenstarts auf den Inseln (starten bei Annäherung, steigen ins All)
   // Erststart: sobald der Hangar geladen IST und danach kurz Ruhe war, beginnt der X-Wing dort.
   // Die Wartezeit ist nötig, weil beim App-Start noch weitere Modelle nachladen (siehe oben).

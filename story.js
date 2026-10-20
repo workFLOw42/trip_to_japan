@@ -3437,6 +3437,7 @@ function hookUbootNeigen(){
 }
 
 window.STORY_HOOK = function(){
+  if(typeof strandleben !== 'undefined') strandleben.an = true;   // Forellen im Flachwasser, Seeloewen am Strand (Engine)
   // Live-Wunsch (08.10.2026): Alpha Jet bis 3000 m (Engine: 2200) – der Fuji ist 2 km hoch, der Lavaschacht endet darueber
   if(PLANE_SPECS.AlphaJet) PLANE_SPECS.AlphaJet.maxAlt = 3000;
   hookWelt();

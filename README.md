@@ -237,6 +237,8 @@ Dieses Spiel wäre ohne die großartige Arbeit vieler Künstlerinnen und Künstl
 
 | Modell / Sound | Künstler/in | Lizenz |
 |---|---|---|
+| Orca (Low Poly, animiert) · Seelöwe (Furseal) · Robbe (Seal) – in der Engine | **WildPoly3D** (Sketchfab) | [CC BY-NC 4.0](http://creativecommons.org/licenses/by-nc/4.0/) – unverändert (nicht kommerziell) |
+| Low Poly Rainbow Trout (Forelle) – in der Engine | **Natural History Museum of Los Angeles County** (Sketchfab) | [CC BY-NC-SA 4.0](http://creativecommons.org/licenses/by-nc-sa/4.0/) – unverändert (nicht kommerziell) |
 | [Prancha de Surf / Surfboard](https://sketchfab.com/3d-models/prancha-de-surf-surfboard-bafbc865dc8642b1bacc484dd9a5f1fc) | **Leandro Cruz** (Sketchfab) | [CC BY-SA 4.0](http://creativecommons.org/licenses/by-sa/4.0/) – ausgerichtet und skaliert |
 | [Wolf](https://sketchfab.com/3d-models/wolf-e319f122c2474d3186b841b019fb0edd) | **OLEKSO** (Sketchfab) | [CC BY-NC 4.0](http://creativecommons.org/licenses/by-nc/4.0/) – unverändert (nicht kommerziell) |
 | [Intermediate Advanced Snowboard](https://sketchfab.com/3d-models/intermediate-advanced-snowboard-267e04a025434d7d8587ec2ee60ad62e) | **Final Render Animation Studio** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – skaliert, Material auf PBR umgestellt |
