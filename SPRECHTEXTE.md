@@ -21,8 +21,8 @@ Stand: 09.10.2026 – vom User überarbeitet und in den Code übernommen (`story
 
 | Situation | Rolle | Text |
 |---|---|---|
-| Startsequenz beginnt (X-Wing, Alpha Jet) | weiblich | Bitte Startsequenz durchführen! |
-| Startsequenz geschafft (X-Wing, Alpha Jet) | weiblich | Startsequenz abgeschlossen. Guten Flug! |
+| Startsequenz beginnt (X-Wing, Jet) | weiblich | Bitte Startsequenz durchführen! |
+| Startsequenz geschafft (X-Wing, Jet) | weiblich | Startsequenz abgeschlossen. Guten Flug! |
 
 ---
 
@@ -307,7 +307,7 @@ Wie Etappe 2 Fall B, nur Satz 1 ohne Kurzschluss (den gibt es in Etappe 3 nicht)
 
 ## Etappe 6 – Japan (Fuji)
 
-### Risiko (1 Tag): Alpha Jet → Höhle im Fuji
+### Risiko (1 Tag): Jet → Höhle im Fuji
 
 **In der Höhle (Autopilot - Funker):**
 
@@ -327,10 +327,10 @@ Wie Etappe 2 Fall B, nur Satz 1 ohne Kurzschluss (den gibt es in Etappe 3 nicht)
 | Situation | Rolle | Text |
 |---|---|---|
 | Gelandet (1 Tag) | weiblich | Sauber gelandet! Was für ein unglaublicher Flug! |
-| Startsequenz beginnt (Alpha-Jet) | weiblich | Bitte Startsequenz durchführen! |
-| Startsequenz geschafft (Alpha-Jet) | weiblich | Startsequenz abgeschlossen. Guten Flug! |
+| Startsequenz beginnt (Jet) | weiblich | Bitte Startsequenz durchführen! |
+| Startsequenz geschafft (Jet) | weiblich | Startsequenz abgeschlossen. Guten Flug! |
 | Fels berührt / zu langsam / abgestürzt (7 Tage) | – | *keine Ansage* – der Globus nennt die Tage und den Grund |
-| Startsequenz verpasst (Alpha-Jet)| weiblich | Die Startsequenz hat nicht geklappt – ohne Startsequenz darf hier keiner fliegen. Die Flughafenpolizei nimmt Samu fest. Eine Woche Gefängnis. |
+| Startsequenz verpasst (Jet)| weiblich | Die Startsequenz hat nicht geklappt – ohne Startsequenz darf hier keiner fliegen. Die Flughafenpolizei nimmt Samu fest. Eine Woche Gefängnis. |
 
 ---
 

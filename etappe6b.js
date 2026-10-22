@@ -175,7 +175,18 @@ story.e6hoehleAus = hoehleAus;
 
 // ---- Ablauf -----------------------------------------------------------------------------------------------
 const ho = story.hoehle = { aktiv: false, auto: false, t: 0, phase: '', fertig: false, rede: null, hudEl: null, ausbruch: null };
-const AUTO_U = 0;                         // Autopilot fliegt hoechstens bis hier (Ende des Anlaufs), dann uebernimmt man
+const AUTO_U = 0;                         // Ende des Anlaufs: ab hier uebernimmt man – aber erst nach dem "LOS!" der Ansage
+// Live-Befund 22.10.2026: "nach dem Uebergang in die Hoehle konnte ich gleich steuern, die Erklaerung fehlte". Die Ansage
+// wartete hinter einer anderen (sprich stellt sich an), der Autopilot gab am Ende des Anlaufs trotzdem ab. Jetzt: vorher
+// alle Ansagen beenden (story.stilleAlle), und der Autopilot gibt erst ab, wenn die Ansage fertig ist. Reicht der Anlauf
+// dafuer nicht, bremst er auf den letzten AUTO_BREMS m bis auf AUTO_MIN der Fahrt herunter (er erreicht das Ende so nie,
+// bevor die Ansage durch ist) – mit "LOS!" ist er wieder auf Vollgas.
+const AUTO_BREMS = 1600, AUTO_MIN = 0.12;
+// Kurvenlage im Autopiloten (Live-Wunsch 22.10.2026: "in echt neigt er sich ein wenig"): Querlage aus der Kruemmung der
+// Mittellinie, so stark wie bei einer koordinierten Kurve bei dieser Fahrt (atan(v^2 / (g r))), hoechstens AUTO_ROLL_MAX,
+// weich nachgefuehrt
+const AUTO_ROLL_MAX = 0.75, AUTO_ROLL_FOLGT = 2.5;
+let autoRoll = 0;
 const ANSAGE = ['Wie bist du denn hier reingeraten?! Egal!', 'Du musst da schleunigst raus, der Vulkan bricht gleich aus!', 'Immer Vollgas durch die Höhle!', 'Drei…', 'Zwei…', 'Eins…', 'LOS!'];
 function hoehleStart(){
   // Hoehle haengt in Welt 6 – wurde die entsorgt (Etappe neu), neu bauen
@@ -200,15 +211,25 @@ function hoehleStart(){
   abschnitteZeigen();
   snapCamera();
   hud();
-  ho.rede = story.sprich(ANSAGE, () => { ho.auto = false; ho.phase = 'frei'; story.hinweis('Vollgas! Durch die Höhle – nichts berühren!'); story.spaeter(4, () => story.hinweis('')); }, 'pilot');
+  if(story.stilleAlle) story.stilleAlle();                             // nichts mehr vor der Erklaerung in der Schlange
+  autoRoll = 0; ho.ansageFertig = false;
+  ho.rede = story.sprich(ANSAGE, () => { ho.ansageFertig = true; }, 'pilot');
 }
+function autoAbgeben(){ ho.auto = false; ho.phase = 'frei'; story.hinweis('Vollgas! Durch die Höhle – nichts berühren!'); story.spaeter(4, () => story.hinweis('')); }
 story.hoehleStart = hoehleStart;
 // Autopilot: Lage genau entlang der Mittellinie, Hoehe Mitte
-function autoAusrichten(u){
+function autoAusrichten(u, v, dt){
   const a = punkt(u, mitteV(u), hoehe(u) / 2), b = punkt(u + 20, mitteV(u + 20), hoehe(u + 20) / 2);
   const d = b.clone().sub(a).normalize();
   // Nase des Modells = -Z: Matrix4.lookAt(eye, target, up) richtet +Z von target zu eye -> target = d (nicht -d)
   state.quat.setFromRotationMatrix(new THREE.Matrix4().lookAt(new THREE.Vector3(), d, new THREE.Vector3(0, 1, 0)));
+  // Kurvenlage: Kruemmung der Mittellinie v(u) ~ v'' (flach), Radius r = 1/|v''|; rechts (+v) = Rollen nach rechts
+  if(v !== undefined){
+    const h = 40, k = (mitteV(u + h) - 2 * mitteV(u) + mitteV(u - h)) / (h * h);
+    const soll = Math.max(-AUTO_ROLL_MAX, Math.min(AUTO_ROLL_MAX, Math.atan(v * v * k / 9.81)));
+    autoRoll += (soll - autoRoll) * Math.min(1, (dt || 0) * AUTO_ROLL_FOLGT);
+    state.quat.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -autoRoll));
+  }
 }
 function hoehleUpdate(dt){
   if(!ho.aktiv || ho.fertig) return;
@@ -218,10 +239,13 @@ function hoehleUpdate(dt){
   if(ho.auto){
     // Autopilot bis AUTO_U: genau auf der Mittellinie, wartet am Ende der Strecke, bis die Ansage fertig ist (Schleife)
     // kein Neustart mehr (Live-Feedback): am Ende des Anlaufs vorzeitig uebergeben, die Ansage laeuft weiter
-    let u = L.u + spec.vMax * dt;
-    if(u > AUTO_U){ ho.auto = false; ho.phase = 'frei'; story.hinweis('Vollgas! Durch die Höhle – nichts berühren!'); story.spaeter(4, () => story.hinweis('')); return; }
-    state.pos.copy(punkt(u, mitteV(u), hoehe(u) / 2)); autoAusrichten(u);
-    state.throttle = 1; state.vel.copy(new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat).multiplyScalar(spec.vMax));
+    // Fahrt: Vollgas; laeuft die Ansage noch, auf den letzten AUTO_BREMS m vor dem Ende sanft herunter (nie bis zum Stand)
+    const rest = AUTO_U - L.u, k = ho.ansageFertig ? 1 : Math.max(AUTO_MIN, Math.min(1, rest / AUTO_BREMS));
+    const v = spec.vMax * k;
+    let u = Math.min(AUTO_U - 1, L.u + v * dt);
+    if(ho.ansageFertig && L.u + spec.vMax * dt > AUTO_U){ autoAbgeben(); return; }
+    state.pos.copy(punkt(u, mitteV(u), hoehe(u) / 2)); autoAusrichten(u, v, dt);
+    state.throttle = 1; state.vel.copy(new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat).multiplyScalar(v));
     planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
     hud(); return;
   }
@@ -375,12 +399,16 @@ function raus(){
 }
 function ende(ok, wie){
   if(ho.fertig) return;
+  // Live-Befund 22.10.2026: "an die Hoehlenwand gestossen, sieht man den Jet in der Luft haengen, Boden und Waende sind kurz
+  // weg" – hoehleAus kam sofort, die Schwarzblende danach brauchte noch ~1,5 s. Jetzt bleibt die Hoehle (und ihre Kamera)
+  // stehen, bis es schwarz ist; ausgeblendet wird erst beim Weitergehen.
+  const inDerHoehle = ho.aktiv;
   ho.fertig = true; ho.aktiv = false; ho.landen = false; ho.szene = null; ho.bremsFrei = false;
-  hoehleAus(); szeneNurVulkan(false); gyroZeigen(true); planeGroup.scale.setScalar(1);
-  story.kunstflugAus = false;
+  if(!inDerHoehle){ hoehleAus(); story.kunstflugAus = false; }
+  szeneNurVulkan(false); gyroZeigen(true); planeGroup.scale.setScalar(1);
   story.ziel = null;
   const wieTxt = ok ? 'durch den Fuji' : (wie === 'zu langsam' ? 'zu langsam in der Höhle' : 'Absturz, Krankenhaus');
-  const weiter = () => { hudAus(); story.e6flugEnde(ok, wieTxt); };
+  const weiter = () => { hoehleAus(); story.kunstflugAus = false; hudAus(); story.e6flugEnde(ok, wieTxt); };
   // Live-Wunsch: nach dem Stillstand kein Gas mehr (steht fest) und gleich der Globus – die Ansage laeuft noch hinein
   if(ok){ ho.steht = true; ho.gelandet = true; state.vel.set(0, 0, 0); state.throttle = 0;
     story.sprich(['Sauber gelandet! Was für ein unglaublicher Flug!']); story.spaeter(1.2, weiter); return; }
@@ -539,6 +567,11 @@ function hookE6b(){
     _camUp.lerp(_up, 0.12); _camUp.addScaledVector(_r, -_camUp.dot(_r)); if(_camUp.lengthSq() < 1e-4) _camUp.copy(_up); _camUp.normalize();
     _soll.copy(state.pos).addScaledVector(_r, -26).addScaledVector(_camUp, 6);
     camera.position.lerp(_soll, 0.3);
+    // in der Roehre halten (Live-Befund 22.10.2026: nach dem Anstossen sah man den Jet von aussen) – quer und in der Hoehe auf
+    // den Querschnitt an dieser Stelle geklemmt, 4 m Abstand zur Wand
+    if(!ho.szene){ const L = lokal(camera.position.x, camera.position.z), mv = mitteV(L.u), hb = breite(L.u) / 2 - 4, hh = hoehe(L.u) - 4;
+      const v = Math.max(mv - hb, Math.min(mv + hb, L.v)), y = Math.max(HOEHE_Y + 4, Math.min(HOEHE_Y + hh, camera.position.y));
+      camera.position.x = H0.x + v; camera.position.y = y; }
     camera.up.copy(_camUp);
     camera.lookAt(state.pos.x + _r.x * 40, state.pos.y + _r.y * 40, state.pos.z + _r.z * 40);
   };

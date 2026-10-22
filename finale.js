@@ -18,7 +18,9 @@ story.finaleSchild = () => story.freiesSpiel ? 'Abenteuer · B: Rundflug' : (({ 
 const MAX_ALT = 2500;            // Gipfel 2000 m + 500 m (Live-Wunsch)
 const SPRUNG_MIN = 2300;         // ab dieser Hoehe uebernimmt der Pilot ueber der Piste
 const SPRUNG_R = 600;            // Radius um den Zielpunkt ueber der Piste
-const SCHIRM_AUF = 120;          // m ueber Grund: der Schirm geht von allein auf
+// m ueber der Landestelle: der Schirm geht von allein auf – gemeinsamer Wert der Engine (FALLSCHIRM_AUF, 75 m; Live-Wunsch
+// 22.10.2026, vorher 120 m). Bezug ist die Flaeche, auf der er landet (bodenY: Piste, Berg, Insel oder Meer)
+const SCHIRM_AUF = typeof FALLSCHIRM_AUF !== 'undefined' ? FALLSCHIRM_AUF : 75;
 const PISTE_B = 44;              // Breite der Piste
 const RING_R = 70, RING_TREFFER = 170;
 
@@ -393,7 +395,7 @@ function sprungSchritt(dt){
     k.v.x += (zx - k.v.x) * a; k.v.z += (zz - k.v.z) * a;
     k.v.y = Math.max(-55, k.v.y - 9.81 * dt);
     freiflugSchritt(dt);
-    if(p.y - 0.8 - bodenY(p.x, p.z) < SCHIRM_AUF) schirmAuf();
+    if(p.y - 0.8 - bodenY(lx, lz) < SCHIRM_AUF) schirmAuf();   // ueber der Landestelle (Piste), nicht dem Boden darunter
     state.vel.copy(k.v); fahrtwind(dt);
   } else if(fin.schritt === 'schirm'){
     // Blick in Flugrichtung (zum Landepunkt), der Stick dreht etwas mit
@@ -1000,7 +1002,7 @@ function megaStart(){
   ab.vy = 16 + ab.v * 0.5; fin.schritt = 'mega'; ab.spin0 = ab.spin; ab.flip = 0; m.phase = 'brett'; m.t = 0;
   if(typeof rumble === 'function') rumble(400, 0.8, 0.8);
 }
-const MEGA_SCHIRM = 45;                                   // m ueber dem Meer: Schirm geht auf (~5 s bis aufs Wasser)
+const MEGA_SCHIRM = SCHIRM_AUF;                           // m ueber dem Meer: Schirm geht auf (gemeinsamer Wert, vorher 45)
 function megaSchritt(dt){
   const m = ab.mega, rs = rStick();
   m.t += dt; ab.luftT += dt;

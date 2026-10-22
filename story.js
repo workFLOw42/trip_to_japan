@@ -1023,6 +1023,9 @@ function finaleDirekt(nr){
 }
 story.finaleDirektStart = finaleDirekt;
 story.sprich = sprich;
+// Alle laufenden und wartenden Ansagen beenden (etappe6b.js: vor der Erklaerung in der Hoehle – sonst wartete sie hinter
+// "Startsequenz abgeschlossen" und kam erst, als man schon selbst flog, Live-Befund 22.10.2026)
+story.stilleAlle = () => { for(const r of [...reden]) r.abbrechen(); };
 story.hinweis = hinweis;
 // Alle Etappen-Enden laufen ueber story.etappeEnde (Live-Befund 14.10.: X-Wing, U-Boot, Mond/Mars und Absturz riefen die
 // Funktion direkt auf – Reiselog und Statistik haengen an story.etappeEnde, die Etappen fehlten im Abspann)
@@ -3195,11 +3198,9 @@ function hookHud(){
   // Leuchtsaeule der Engine ueber Mondbasis/Rover: entfaellt (Live-Wunsch 18.10.2026)
   const beaconOrig = showBeacon;
   showBeacon = function(){ const r = beaconOrig.apply(this, arguments); if(beaconObj) beaconObj.visible = false; return r; };
-  showBig = function(t){
-    if(t && /\u{1F9D1}\u200D\u{1F680}/u.test(t)) t = '';
-    if(nurSymbol(t)) t = '';
-    return showBigOrig.call(this, t);
-  };
+  // 22.10.2026: das grosse Mittelsymbol (#big) ganz heraus – auch mit Text (die Engine zeigt dort nur Symbole)
+  showBig = function(){ return showBigOrig.call(this, ''); };
+  { const big = document.getElementById('big'); if(big) big.style.display = 'none'; }
   const mdlEl = document.getElementById('mdl');
   const statEl = document.getElementById('status');
   const hudOrig = updateHUD;

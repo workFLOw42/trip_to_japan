@@ -483,7 +483,7 @@ function etappe6Start(){
   marken.length = 0;
   story.phase = null; story.ende = false;
   flug.aktiv = false;
-  story.hinweis('Zwei Wege: Alpha Jet (weiß) oder Shinkansen (gelber Ring am Bahnsteig) – hinlaufen und Y drücken');
+  story.hinweis('Zwei Wege: Jet (blau-rot) oder Shinkansen (gelber Ring am Bahnsteig) – hinlaufen und Y drücken');
   story.spaeter(12, () => { if(eva && !story.phase) story.hinweis(''); });
   // Test-Shortcut vom Startbildschirm ("E6 Höhle"): einsteigen, Startsequenz und Hinflug ueberspringen, Hoehle mit Autopilot
   if(story.hoehleDirekt){ story.hoehleDirekt = false; story.spaeter(1.5, hoehleDirekt); }
@@ -507,7 +507,7 @@ story.etappe6Start = etappe6Start;
 const flug = { aktiv: false, laeuft: false, rede: null };
 story.e6flug = flug;
 const ALPHA_TEXT = [
-  'Willkommen im Alpha Jet! Wir fliegen zum Fuji.',
+  'Willkommen im Jet! Wir fliegen zum Fuji.',
   'Zuerst die Startsequenz, du kennst sie schon. Dann Vollgas, abheben und dem roten Punkt im Radar folgen.',
 ];
 function alphaEinsteigen(ohneSequenz){
@@ -720,11 +720,11 @@ story.aufgabeE6 = () => (story.aufgabeE6c && story.aufgabeE6c()) || (e6() && sto
   ['Geschafft', 'die Reise geht bald weiter'],
   ...(story.finaleStufe && story.finaleStufe() <= 2 ? [['C-400 (gelb)', story.finaleSchild() + ' – hinlaufen, Y']] : []),
   ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],
-]] : null) || (story.aufgabeE6b && story.aufgabeE6b()) || (flug.aktiv ? ['Alpha Jet zum Fuji', [
+]] : null) || (story.aufgabeE6b && story.aufgabeE6b()) || (flug.aktiv ? ['Jet zum Fuji', [
   ['Start', 'Startsequenz, dann Vollgas und abheben'],
   ['Ziel', 'roter Punkt im Radar, kurz vor dem Fuji'],
 ]] : (e6() && !story.phase ? ['Etappe 6: Japan – der Fuji', [
-  ['Alpha Jet (weiß)', '1 Tag'],
+  ['Jet (blau-rot)', '1 Tag'],
   ['Shinkansen (gelb)', '4 Tage – Weichen wählen'],
   ['Einsteigen', 'hinlaufen, Y'],
   ['Zeit', (42 - story.tage) + ' von 42 Tagen übrig'],

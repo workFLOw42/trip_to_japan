@@ -2004,8 +2004,15 @@ const SHIP_TYPES = [
   // Fuer die Ausweichlogik ist das Tempo gleichgueltig: bei Land voraus (47,5 m = halbe Rumpflaenge)
   // haelt das Schiff an und dreht nur, statt weiterzufahren — bei 0,08 m Weg pro Frame ist die
   // Vorausschau unabhaengig von der Geschwindigkeit reichlich.
-  { key:'sub',       glb:()=>window.SUBMARINE_GLB, len:95,  wl:0.1537, spd:4.0, sym:'🛥️',
-    subDive:5.8, subPeriod:26 },
+  // Seit 22.10.2026 ist das Modell die Orthoceras (Steampunk-U-Boot by Red Kaiser, CC-BY-4.0). Live-Wunsch: alle Masse im
+  // Verhaeltnis auf die alte Breite 23,2 m, nur der Turm gestaucht, so dass es mit Turm so hoch ist wie das alte (30,3 m):
+  // 83,4 m lang, 23,2 m breit, Rumpf 19,0 m, mit Turm 30,3 m (subVorbereiten staucht alles ueber dem Rumpf). Der Bug liegt
+  // im Modell auf +z (rot180). Ohne Harpune.
+  // wl 0,25: aufgetaucht steht der Rumpf ~3 m ueber Wasser wie beim alten (die Wasserlinie ist ein Anteil der LAENGE ueber
+  // der Unterkante; gemessen C:/tmp/neu_modelle/test_sub60c.js: bei 0,19 ragte er seitlich 8 m heraus -> 5 m tiefer).
+  // Tempo, Tauchen, Kurvenlage, Steuerung unveraendert (SUB_*).
+  { key:'sub',       glb:()=>window.SUBMARINE_GLB, len:83.4, wl:0.25, spd:4.0, sym:'🛥️',
+    subDive:5.8, subPeriod:26, rot180:true, pre:(o)=>subVorbereiten(o) },
 ];
 // Wie viele Schiffe gleichzeitig um den Spieler herum fahren, und in welchem Ring. Das Meer soll
 // belebt wirken, ohne dass man ständig ausweichen muss.
@@ -2055,6 +2062,7 @@ function preloadSeaShips(){
     for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
     gl.parse(bytes.buffer, '', (gltf)=>{
       const obj = gltf.scene;
+      if(def.pre) def.pre(obj, gltf);
       obj.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(obj);
       const size = new THREE.Vector3(); box.getSize(size);
@@ -2072,6 +2080,11 @@ function preloadSeaShips(){
       if(size.x > size.z) obj.rotation.y = Math.PI/2;
       // Einzelne Modelle sind gegen die Fahrtrichtung modelliert -> um 180 Grad drehen.
       if(def.rot180) obj.rotation.y += Math.PI;
+      // breite: quer auf dieses Mass stauchen (das neue U-Boot auf die Breite des alten)
+      // (die Breite wird nur gestaucht, nie gedehnt: bei 60 m ist das neue Boot von sich aus ~16,7 m breit -> bleibt so,
+      // wenn es schmaler als die alte Breite ist)
+      if(def.breite){ const q = Math.min(size.x, size.z) * obj.scale.x; if(q > def.breite){ const f = def.breite / q; if(size.x > size.z) obj.scale.z *= f; else obj.scale.x *= f; } }
+      if(def.hoch) obj.scale.y *= def.hoch;                                // flacher (U-Boot)
       obj.updateMatrixWorld(true);
       const box2 = new THREE.Box3().setFromObject(obj);
       const c = new THREE.Vector3(); box2.getCenter(c);
@@ -4893,6 +4906,44 @@ function isXWing(){ return MODEL_NAMES[currentModel] === 'XWing'; }
 function isBoat(){ return MODEL_NAMES[currentModel] === 'Boat'; }
 // Steuert man das U-Boot?
 function isSub(){ return MODEL_NAMES[currentModel] === 'Sub'; }
+// U-Boot-Modell (Orthoceras): Harpune ab; die Schraube ("propeller_system_0", Clip Propeller_action: dreht um die
+// Laengsachse des Modells) dreht updateSubSchraube je nach Fahrt – am eigenen U-Boot und an den KI-Booten.
+function subVorbereiten(o){
+  o.updateMatrixWorld(true);
+  const weg = []; o.traverse(n => { if(/harpoon/i.test(n.name)) weg.push(n); }); for(const n of weg) if(n.parent) n.parent.remove(n);
+  o.traverse(n => { if(n.name === 'propeller_system_0') n.userData.subSchraube = true; });
+  // Turm stauchen: alles ueber der Rumpfoberkante (hoechstes Band, das noch 60 % der groessten Breite hat) wird in der Hoehe
+  // so zusammengeschoben, dass das Boot im Verhaeltnis zur Breite so hoch ist wie das alte (SUB_HOEHE / SUB_BREITE). Die
+  // Schraube (dreht sich) bleibt, wie sie ist.
+  { const SUB_BREITE = 23.2, SUB_HOEHE = 30.3, N = 60;
+    o.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(o), sz = bb.getSize(new THREE.Vector3()), H = sz.y, quer = sz.x < sz.z ? 'x' : 'z';
+    const mq = (bb.min[quer] + bb.max[quer]) / 2, br = new Array(N).fill(0), v = new THREE.Vector3();
+    o.traverse(m => { if(!m.isMesh) return; const p = m.geometry.attributes.position; for(let i = 0; i < p.count; i++){ v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld);
+      const j = Math.min(N - 1, Math.max(0, Math.floor((v.y - bb.min.y) / H * N))); br[j] = Math.max(br[j], Math.abs(v[quer] - mq) * 2); } });
+    const maxB = Math.max(...br); let oben = 0; for(let j = 0; j < N; j++) if(br[j] >= 0.6 * maxB) oben = j + 1;
+    const top = bb.min.y + oben / N * H, soll = sz[quer] * SUB_HOEHE / SUB_BREITE, k = Math.max(0.2, Math.min(1, (soll - (top - bb.min.y)) / (bb.max.y - top)));
+    const unterSchraube = (m) => { for(let q = m; q; q = q.parent) if(q.userData.subSchraube) return true; return false; };
+    const inv = new THREE.Matrix4();
+    o.traverse(m => { if(!m.isMesh || unterSchraube(m)) return;
+      m.geometry = m.geometry.clone(); inv.copy(m.matrixWorld).invert();
+      const p = m.geometry.attributes.position;
+      for(let i = 0; i < p.count; i++){ v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld);
+        if(v.y > top){ v.y = top + (v.y - top) * k; v.applyMatrix4(inv); p.setXYZ(i, v.x, v.y, v.z); } }
+      p.needsUpdate = true; m.geometry.computeBoundingBox(); m.geometry.computeBoundingSphere(); }); }
+  // Metall 1 ohne Umgebungsbild wird schwarz (gemessen: das ganze Boot dunkel) – Messing und Kupfer sollen leuchten
+  const fertig = new Set(); o.traverse(n => { if(!n.isMesh || fertig.has(n.material)) return; fertig.add(n.material); n.material.metalness = 0.35; n.material.roughness = 0.55; n.material.needsUpdate = true; });
+}
+const SUB_SCHRAUBE = 6;      // rad/s bei voller Fahrt (KI: halbe Drehzahl)
+const _subQ = new THREE.Quaternion(), _subZ = new THREE.Vector3(0, 0, 1);
+function subSchraubenDrehen(root, w){ root.traverse(n => { if(!n.userData.subSchraube) return;
+  if(!n.userData.basis) n.userData.basis = n.quaternion.toArray(); n.quaternion.fromArray(n.userData.basis).multiply(_subQ.setFromAxisAngle(_subZ, w)); }); }
+let subSchraubeW = 0, subSchraubeKI = 0;
+function updateSubSchraube(dt){
+  subSchraubeKI += SUB_SCHRAUBE * 0.5 * dt;
+  for(const sh of seaShips) if(sh.key === 'sub' && sh.group) subSchraubenDrehen(sh.group, subSchraubeKI);
+  if(isSub()){ subSchraubeW += SUB_SCHRAUBE * Math.min(1, Math.abs(state.vel.length()) / 14) * dt; subSchraubenDrehen(modelHolder, subSchraubeW); }
+}
 // Boot ODER U-Boot: alles, was auf dem Wasser statt in der Luft unterwegs ist. Es gibt eine Reihe
 // Stellen, die genau das meinen (kein Gyro, keine Höhenzeile, ovaler Schatten, Bootsmotor) — die
 // fragen diese Funktion, damit nicht jede von ihnen einzeln um das U-Boot erweitert werden muss.
@@ -5918,10 +5969,10 @@ function updateOvalShadow(){
     px = eva.group.position.x; pz = eva.group.position.z;
     alt = Math.max(0, eva.group.position.y - evaFootY(px, pz));
     yawS = eva.yaw; rx = 0.9; rz = 0.9;
-  } else if(isSub()){                        // U-Boot: 95 m langer Rumpf
+  } else if(isSub()){                        // U-Boot: 83,4 m langer Rumpf (seit 22.10.2026, vorher 95)
     px = state.pos.x; pz = state.pos.z; alt = 0;
     const f = new THREE.Vector3(0,0,-1).applyQuaternion(state.quat);
-    yawS = Math.atan2(f.x, f.z) + Math.PI; rx = 7.5; rz = 50;
+    yawS = Math.atan2(f.x, f.z) + Math.PI; rx = 7.5; rz = 44;
   } else {                                   // Feuerwehrboot: 16 m langer Rumpf
     px = state.pos.x; pz = state.pos.z; alt = 0;
     const f = new THREE.Vector3(0,0,-1).applyQuaternion(state.quat);
@@ -6054,6 +6105,7 @@ function updateShadow(){
     }
   }
   planeShadow.position.set(state.pos.x, shadowY, state.pos.z);
+  { const delta = MODEL_NAMES[currentModel] === 'AlphaJet'; shDelta.visible = delta; shWing.visible = !delta; }   // Eurofighter: Deltafluegel
   // Kurs (Gierwinkel) übernehmen, damit der Umriss in Flugrichtung zeigt
   const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(state.quat);
   planeShadow.rotation.y = Math.atan2(fwd.x, fwd.z) + Math.PI;
@@ -6066,6 +6118,9 @@ function updateShadow(){
   planeShadow.scale.set(scale, 1, scale);
   // nah = dunkel, hoch = blasser, aber Mindest-Deckkraft, damit er auf Wasser sichtbar bleibt
   shadowMat.opacity = (0.18 + 0.22 * (1 - f)) * SHADOW_DECK;
+  // Am Boden kraeftiger (Live-Befund 22.10.2026: auf der hellen Bahn war der Schatten kaum zu sehen, der Flieger wirkte, als
+  // laege er auf) – ein klarer Kontaktschatten unter Rumpf und Fluegeln
+  if(state.onGround && !isWaterCraft()) shadowMat.opacity = 0.55;
 }
 
 // ---------- Schleudersitz + Fallschirm (nur AlphaJet) ----------
@@ -6129,6 +6184,10 @@ function chuteSeaRescue(ch, dt){
 }
 // Ein gerettetes Boot mit abraeumen (wird ueberall dort aufgerufen, wo der Fallschirm entfernt wird).
 function clearChuteBoat(ch){ if(ch && ch.boat){ scene.remove(ch.boat); ch.boat = null; } }
+// Fallschirm geht auf: so viele Meter UEBER DER LANDESTELLE (Boden, Skipiste oder Meer – was dort unten ist), gilt fuer
+// alle Fallschirmspruenge der Spiele (Trip to Japan: Finale und Megasprung; Das Geheimland: fallschirm.js). Live-Wunsch
+// 22.10.2026: 75 m (vorher 120 m ueber Grund bzw. 45 m ueber dem Meer)
+const FALLSCHIRM_AUF = 75;
 function ejectSeat(){
   if((!isAlphaJet() && !isMustang()) || state.onGround || state.ejected || state.crashed) return;
   state.ejected = true;
@@ -7026,6 +7085,9 @@ function evaExit(){
   // canLandHere). Dort gibt es keinen Grund zum Stehen — also schwebt der Astronaut von der
   // ersten Sekunde an, statt auf unsichtbarem Boden zu landen.
   if(locale === 'death' && !onHangarFloor(x, z)) evaStartJet(x, z, g.position.y);
+  // Steht der X-Wing, ist er geparkt: Fahrwerk draussen, Fluegel zu (Live-Befund 22.10.2026, Trip to Japan: die Etappen
+  // bauen das Modell, bevor onGround gesetzt ist – er stand mit X-Fluegeln am Boden)
+  if(isXWing() && state.onGround && xw.m){ xw.start = false; xw.clip = null; xw.unten = true; xwHaltung(xw.m, 'unten'); }
   state.throttle = 0;                 // Motor aus, während man draußen ist
   showBig('🧑‍🚀'); bigTimer = 1.2;     // kurze Bestätigung, dann wieder freie Sicht
   evaOrbit = 0; evaPitch = 0;         // Kamera beginnt hinter ihm
@@ -7409,6 +7471,19 @@ scene.add(planeGroup);
 const modelHolder = new THREE.Group(); // enthält das aktuelle Mesh, korrekt gedreht/skaliert
 planeGroup.add(modelHolder);
 let propMeshes = [];   // rotierende Propeller (Canadair)
+// Propeller der P-51 Mustang: das Modell bringt eine Animation mit (Knoten "propeler" dreht um seine eigene y-Achse,
+// gemessen aus den Schluesselbildern: q = Grundlage * Drehung um y). Statt des Clips dreht updatePropSpin den Knoten
+// selbst – je nach Schub: Motor an (man sitzt drin) = Leerlauf, mit Schub schneller; steht er leer da, steht er still.
+let propSpin = [];     // { node, basis, w }
+let propSpeed = 0;     // rad/s, folgt dem Soll weich (anlaufen, auslaufen)
+const PROP_LEER = 7, PROP_VOLL = 52;
+const _propQ = new THREE.Quaternion(), _propY = new THREE.Vector3(0, 1, 0);
+function updatePropSpin(dt){
+  if(!propSpin.length) return;
+  const soll = (typeof eva !== 'undefined' && eva) ? 0 : PROP_LEER + Math.max(0, state.throttle) * (PROP_VOLL - PROP_LEER);
+  propSpeed += (soll - propSpeed) * Math.min(1, dt * (soll > propSpeed ? 1.6 : 0.6));
+  for(const p of propSpin){ p.w = (p.w + propSpeed * dt) % (Math.PI * 2); p.node.quaternion.copy(p.basis).multiply(_propQ.setFromAxisAngle(_propY, p.w)); }
+}
 // Fahrwerk ist bei den FMS-Modellen fest im Mesh enthalten -> kein separates Fahrwerk.
 
 // ---------- Externe GLB-Modelle (Sketchfab) ----------
@@ -7419,7 +7494,13 @@ const glbTemplates = {};       // name -> fertig ausgerichtete Group (Vorlage zu
 const GLB_CONFIG = {
   // yOff: manueller Höhen-Offset (negativ = tiefer setzen, falls das Modell schwebt)
   Canadair: { data: () => window.CANADAIR_GLB, span: 18.5, yOff: 0 },
-  AlphaJet: { data: () => window.ALPHAJET_GLB, span: 11,   yOff: 0, recolor: 'wbr' },
+  // "AlphaJet" ist seit 22.10.2026 der Eurofighter Typhoon F2 (by SIpriv, CC-BY-4.0) – Name, Flugwerte, Landeregeln,
+  // Parkplaetze, KI und Schleudersitz bleiben die des Alpha Jets. Nase im Modell auf -z: preJet dreht sie auf +x wie beim
+  // alten Modell (GLB_ROT/PARK_GLB_ROT/TRAFFIC_ROT bleiben PI/2), faerbt ihn und nimmt die Waffen ab. span 11 wie bisher
+  // span 11 = die laengere Achse, wie beim Alpha Jet: beide sind im Spiel 11 m lang (Alpha Jet 8,1 m Spannweite, Eurofighter
+  // 8,5 m) – Parkplaetze, Traegerdeck und Kamera passen wie bisher. (spanQuer: true wuerde ihn auf 11 m SPANNWEITE bringen,
+  // dann ist er 14,3 m lang – gemessen C:/tmp/neu_modelle/masse.js)
+  AlphaJet: { data: () => window.ALPHAJET_GLB, span: 11,   yOff: 0, pre: (o) => euroVorbereiten(o) },
   Airbus:   { data: () => window.AIRBUS_GLB,   span: 27.1, yOff: 0 },
   Mustang:  { data: () => window.MUSTANG_GLB,  span: 11,   yOff: 0 },
   Transall: { data: () => window.TRANSALL_GLB, span: 20,   yOff: 0 },
@@ -7444,13 +7525,14 @@ function preloadGLB(name){
     // gestellt. orcaPunkte rechnet das Skinning mit. Bei den Modellen ohne Clips bleibt alles wie bisher.
     // (_clips statt userData.clips: three.js kopiert userData beim Klonen per JSON, siehe xwHaltung)
     obj._clips = gltf.animations || [];
+    if(cfg.pre) cfg.pre(obj);
     const haltung = xwHaltung(obj, 'unten');
     if(haltung) xwMaterial(obj);
     const mess = () => haltung ? new THREE.Box3().setFromPoints(orcaPunkte(obj)) : new THREE.Box3().setFromObject(obj);
     // auf Ziel-Spannweite normieren (größere Horizontalachse = Spannweite)
     const box = mess();
     const size = new THREE.Vector3(); box.getSize(size);
-    obj.scale.setScalar(cfg.span / Math.max(size.x, size.z));
+    obj.scale.setScalar(cfg.span / (cfg.spanQuer ? size.z : Math.max(size.x, size.z)));   // spanQuer: Nase auf x, Spannweite z
     // X/Z zentrieren, Unterseite auf y=0 (+ manueller Offset pro Modell)
     const box2 = mess();
     const c = new THREE.Vector3(); box2.getCenter(c);
@@ -7491,6 +7573,65 @@ function recolorWBR(root){
   });
 }
 function preloadAllGLB(){ Object.keys(GLB_CONFIG).forEach(preloadGLB); }
+// ---- Eurofighter (Modell des "AlphaJet") -----------------------------------------------------------------------------
+// Lackierung (Wunsch 22.10.2026): Fluegel, Canards und Seitenleitwerk rot, der Rumpf blau – nur die Aussenhaut
+// (material_0, die Teile liegen dort in EINEM Mesh: je Dreieck nach Lage). Original bleiben: Glaskanzel (13), Duesen (1, 2),
+// die dunkelgrauen Ruder und Klappen (3), Markierungen (9), Nase, Cockpit, Fahrwerk. Die Waffen (material_4: Raketen und
+// Behaelter unter den Fluegeln) sind weg.
+const EURO_ROT = 0xc8202a, EURO_BLAU = 0x1f4fbf;
+const EURO_RUMPF = 0.95;     // m (Modellmass): halbe Rumpfbreite – weiter aussen ist Fluegel/Canard
+function euroVorbereiten(o){
+  o.updateMatrixWorld(true);
+  const weg = [];
+  o.traverse(m => { if(m.isMesh && m.material && m.material.name === 'material_4') weg.push(m); });
+  for(const m of weg) m.parent.remove(m);
+  const rot = new THREE.Color(EURO_ROT), blau = new THREE.Color(EURO_BLAU), v = new THREE.Vector3(), c = new THREE.Color(), neu = new Map();
+  const hol = ['getX', 'getY', 'getZ', 'getW'];
+  o.traverse(m => {
+    if(!m.isMesh || !m.material || m.material.name !== 'material_0') return;
+    // jedes Dreieck mit eigenen Ecken (harte Farbkante) – von Hand: toNonIndexed kopiert in r128 die verschachtelten
+    // Puffer dieses Modells falsch (gemessen: zerrissene Geometrie)
+    const g0 = m.geometry, idx = g0.index, n = idx ? idx.count : g0.attributes.position.count, g = new THREE.BufferGeometry();
+    for(const [name, a] of Object.entries(g0.attributes)){ const k = a.itemSize, arr = new Float32Array(n * k);
+      for(let i = 0; i < n; i++){ const j = idx ? idx.getX(i) : i; for(let q = 0; q < k; q++) arr[i * k + q] = a[hol[q]](j); }
+      g.setAttribute(name, new THREE.BufferAttribute(arr, k)); }
+    const p = g.attributes.position, col = new Float32Array(p.count * 3);
+    // Lage im Modell (x quer, y hoch): Seitenleitwerk = hoch ueber dem Rumpf und schmal, Fluegel/Canards = weit aussen
+    for(let i = 0; i < p.count; i += 3){ let ax = 0, ay = 0;
+      for(let k = 0; k < 3; k++){ v.fromBufferAttribute(p, i + k).applyMatrix4(m.matrixWorld); ax += Math.abs(v.x) / 3; ay += v.y / 3; }
+      c.copy(ax > EURO_RUMPF || (ay > 2.15 && ax < 0.2) ? rot : blau);
+      for(let k = 0; k < 3; k++) col.set([c.r, c.g, c.b], (i + k) * 3); }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    m.geometry = g;
+    if(!neu.has(m.material)){ const n2 = m.material.clone(); n2.vertexColors = true; n2.map = null; n2.metalness = 0.15; n2.roughness = 0.55; n2.needsUpdate = true; neu.set(m.material, n2); }
+    m.material = neu.get(m.material);
+  });
+  o.rotation.y = -Math.PI / 2;                       // Nase -z -> +x (wie das alte Modell)
+  o.updateMatrixWorld(true);
+}
+// Fahrwerk (Clip "Lndg gear": bei 0 s ausgefahren, am Ende eingefahren). Regeln (Wunsch 22.10.2026): ueber EURO_GEAR_ALT
+// ueber Grund einfahren; darunter und bei hoechstens 30 % Schub ausfahren; am Boden immer draussen. Fliegende KI-Jets und
+// der Vorbeiflug: eingefahren (euroHaltung(m, 'oben')).
+const EURO_GEAR_ALT = 50, EURO_GEAR_SCHUB = 0.3;
+function euroHaltung(m, haltung){
+  const c = (m._clips || []).find(a => a.name === 'Lndg gear'); if(!c) return;
+  const mx = m._mixer || (m._mixer = new THREE.AnimationMixer(m)); mx.stopAllAction();
+  const a = mx.clipAction(c); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+  mx.setTime(haltung === 'oben' ? c.duration - 0.001 : 0); m.updateMatrixWorld(true);
+}
+const euro = { m: null, raus: true, k: 0 };          // k = 0 ausgefahren .. 1 eingefahren (laeuft weich nach)
+function euroModellNeu(m){ euro.m = m; m._clips = glbTemplates['AlphaJet']._clips || []; euro.raus = !!state.onGround || euro.raus; euro.k = euro.raus ? 0 : 1; euroHaltung(m, euro.raus ? 'unten' : 'oben'); }
+function updateEuroFahrwerk(dt){
+  if(!euro.m || MODEL_NAMES[currentModel] !== 'AlphaJet' || !euro.m.parent) return;
+  const c = (euro.m._clips || []).find(a => a.name === 'Lndg gear'); if(!c) return;
+  const agl = state.pos.y - xwGrund();
+  if(state.onGround) euro.raus = true;
+  else if(agl > EURO_GEAR_ALT) euro.raus = false;
+  else if(state.throttle <= EURO_GEAR_SCHUB) euro.raus = true;
+  const ziel = euro.raus ? 0 : 1, alt = euro.k;
+  euro.k += Math.sign(ziel - euro.k) * Math.min(Math.abs(ziel - euro.k), dt / c.duration);
+  if(euro.k !== alt || !euro.m._mixer) { euroHaltung(euro.m, 'unten'); euro.m._mixer.setTime(euro.k * (c.duration - 0.001)); }
+}
 
 // Feuerwehrboot-GLB (by gogiart) separat laden — kein fliegbares Modell.
 let boatTemplate = null;
@@ -10786,6 +10927,14 @@ planeShadow.renderOrder = 999;
 const shBody = new THREE.Mesh(new THREE.CircleGeometry(1, 24), shadowMat);
 shBody.rotation.x = -Math.PI/2; shBody.scale.set(1.2, 1, 4.5); shBody.renderOrder = 999;
 planeShadow.add(shBody);
+// Deltafluegel (Eurofighter): ein Dreieck statt der Ellipse – sonst lag unter den breiten Fluegeln kein Schatten, und er
+// sah aus, als laege er mit den Fluegeln auf (Live-Befund 22.10.2026). Groesse wie shWing (updateShadow skaliert beide).
+// Masse: Spitze 1,5 m vor der Mitte, Hinterkante 3,2 m dahinter, 4,3 m halbe Spannweite (der Eurofighter im Spiel: 11 m
+// lang, 8,5 m breit). Die Schatten-Gruppe zeigt mit +z nach vorn (rotation.y = Kurs + PI), die Form liegt in x/y -> -x
+// gedreht auf den Boden: y wird zu -z, also Spitze bei y = -1,5.
+const shDelta = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(0, -1.5), new THREE.Vector2(-4.3, 3.2), new THREE.Vector2(4.3, 3.2)])), shadowMat);
+shDelta.rotation.x = -Math.PI/2; shDelta.renderOrder = 999; shDelta.visible = false;
+planeShadow.add(shDelta);
 const shWing = new THREE.Mesh(new THREE.CircleGeometry(1, 24), shadowMat);
 shWing.rotation.x = -Math.PI/2; shWing.scale.set(5.5, 1, 1.1); shWing.renderOrder = 999;
 planeShadow.add(shWing);
@@ -10989,7 +11138,7 @@ scene.add(ovalShadow);
 function buildModel(name) {
   // altes Mesh entfernen
   while (modelHolder.children.length) modelHolder.remove(modelHolder.children[0]);
-  propMeshes = [];
+  propMeshes = []; propSpin = [];
 
   // Das Feuerwehrboot ist kein Flugzeug-GLB: es kommt aus derselben Vorlage wie die
   // Rettungsboote (makeFireBoat), damit es genau so aussieht wie das, das zum Wrack fährt.
@@ -11018,6 +11167,8 @@ function buildModel(name) {
     m.rotation.y = GLB_ROT[name] || 0;
     modelHolder.add(m);
     if(name === 'XWing') xwModellNeu(m);
+    if(name === 'AlphaJet') euroModellNeu(m);
+    if(name === 'Mustang') m.traverse(o => { if(o.name === 'propeler') propSpin.push({ node: o, basis: o.quaternion.clone(), w: 0 }); });
     return { span: GLB_SPAN[name] || 11, scale: 1 };
   }
   // GLB noch nicht geladen -> leer lassen (wird nachgezogen, sobald preloadGLB fertig ist)
@@ -12221,7 +12372,10 @@ const CAM_CFG = {
   // Kamera und Heck statt 15,4 m, das Boot steht also ganz im Bild statt es zu fuellen. Der Bug
   // ist dann 123,8 m entfernt, knapp mehr als die Sichtweite am Grund (135 m deckt ihn, in der
   // Tiefe verliert er sich leicht im Blau — das gehoert dazu).
-  Sub:      { dist: 3.2,  hgt: 1.5 },
+  //
+  // 22.10.2026: das neue U-Boot ist 83,4 m lang – Live-Wunsch "Kamera ein wenig weiter nach hinten": 3,4 ergibt 81,6 m
+  // Abstand, also ~40 m hinter dem Heck (beim alten 95-m-Boot ~30 m).
+  Sub:      { dist: 3.4,  hgt: 1.5 },
 };
 function camCfg(){ return CAM_CFG[MODEL_NAMES[currentModel]] || { dist:1, hgt:1 }; }
 
@@ -12456,7 +12610,7 @@ const SUB_ROLL     = 0.18;   // wie stark es sich in die Kurve legt (rein optisc
 // wuerde das Boot die Tiefe nie aendern. 10 Grad sieht man kaum und steuert sich ruhig.
 // Die Sinkrate bleibt dieselbe, weil SUB_DIVE_EFF entsprechend steigt (siehe dort).
 const SUB_PMAX     = 0.17;
-const SUB_LOOK     = 47;     // m Vorausschau = halbe Rumpflaenge (95 m), wie BOAT_LOOK beim Boot
+const SUB_LOOK     = 42;     // m Vorausschau = halbe Rumpflaenge (83,4 m seit 22.10.2026, vorher 95), wie BOAT_LOOK beim Boot
 const SUB_HALF_W   = 12;     // m halbe Breite fuer die Umrisspruefung (Druckkoerper 23,2 m)
 // Wie weit vor dem Bug nach Ufer gesucht wird, wenn man mit Y aussteigen will (siehe buttonY).
 // 130 m: halbe Rumpflaenge (47) plus der Abstand, den das Boot vor dem Strand haelt. Beim Liegeplatz
@@ -12645,7 +12799,14 @@ function stepPhysicsKern(dt, inp){
 
   // Steuerraten aus dem aktiven Modell (Airbus träge, SuperCup wendig)
   const pitchRate=spec.pitch, rollRate=spec.roll, yawRate=0.7;
-  const e = new THREE.Euler(inp.pitch*pitchRate*dt, -inp.yaw*yawRate*dt, -inp.roll*rollRate*dt, 'XYZ');
+  // Am Boden rollt ein Flugzeug wie ein Auto (Live-Wunsch 22.10.2026, Trip to Japan + Geheimland): unter der Abhebe-
+  // geschwindigkeit tun Ziehen und Rollen nichts – sonst kippte es um seinen Ursprung, und Duesen bzw. Fluegel tauchten in
+  // die Bahn. Erst ab vTO hebt Ziehen die Nase (und er hebt ab). Gelenkt wird am Boden nur ueber das Gieren.
+  // Der X-Wing (VTOL) ist ausgenommen: er steigt senkrecht und zieht dabei die Nase nicht.
+  const amBodenGesperrt = state.onGround && !(spec.vtol) && state.vel.length() < spec.vTO;
+  const pIn = amBodenGesperrt ? 0 : (state.onGround ? Math.max(0, inp.pitch) : inp.pitch);   // am Boden nie Nase runter
+  const rIn = state.onGround ? 0 : inp.roll;
+  const e = new THREE.Euler(pIn*pitchRate*dt, -inp.yaw*yawRate*dt, -rIn*rollRate*dt, 'XYZ');
   const dq = new THREE.Quaternion().setFromEuler(e);
   state.quat.multiply(dq); state.quat.normalize();
 
@@ -12972,7 +13133,10 @@ function stepPhysicsKern(dt, inp){
     state.vel.x *= 0.995; state.vel.z *= 0.995;   // wenig Rollreibung -> rollt zum Abheben an
     state.onGround = true;
     const eul = new THREE.Euler().setFromQuaternion(state.quat,'YXZ');
-    eul.x *= 0.9; eul.z *= 0.9;                    // Nase am Boden waagerecht halten
+    // Nase am Boden waagerecht halten. Unter vTO GANZ waagerecht (sonst Fluegel/Duesen im Boden, siehe oben), darueber
+    // darf die Nase steigen (Rotation zum Abheben), nur nicht unter die Waagerechte
+    if(speed < spec.vTO && !spec.vtol){ eul.x = 0; eul.z = 0; }
+    else { eul.x = Math.max(0, eul.x) * 0.98; eul.z *= 0.9; }
     state.quat.setFromEuler(eul);
   } else {
     state.onGround = false;
@@ -13043,8 +13207,24 @@ function floatCanadair(dt){
 const _camRef = new THREE.Vector3();
 function planeCamRef(){
   _camRef.copy(state.pos);
-  _camRef.y = planeGroup.position.y;   // beim Canadair die schwimmende Hoehe, sonst identisch
+  _camRef.y = planeGroup.position.y + camBodenHub;   // beim Canadair die schwimmende Hoehe, sonst identisch
   return _camRef;
+}
+// Kamera am Boden (Live-Befund 22.10.2026: "auch wenn er korrekt auf den Raedern steht, sieht es so aus, als laege er auf
+// dem Boden"): der Ursprung der Flieger liegt an der Unterkante der Raeder, die Kamera zielte also auf den Boden und stand
+// knapp darueber – man sah unter den Fluegeln keinen Boden. Am Boden zielt sie auf die halbe Modellhoehe (der Rumpf) und
+// steht entsprechend hoeher; in der Luft gleitet das auf 0 zurueck (Fliegen unveraendert). Fuer alle Flugzeuge, nicht
+// fuer Boote/U-Boot (dort ist der Ursprung die Wasserlinie).
+let camBodenHub = 0, _camHubModell = null, _camHubH = 0;
+const CAM_BODEN_EXTRA = 1.5;   // m: am Boden zusaetzlich hoeher – schraeg von oben sieht man die Luft unter den Fluegeln
+function updateCamBodenHub(dt){
+  const flieger = !isWaterCraft() && !eva && locale === 'earth';
+  if(flieger && _camHubModell !== modelHolder.children[0]){
+    _camHubModell = modelHolder.children[0];
+    _camHubH = 0; if(_camHubModell){ const bb = new THREE.Box3().setFromObject(modelHolder); if(!bb.isEmpty()) _camHubH = Math.max(0, bb.max.y - planeGroup.position.y) * 0.5; }
+  }
+  const ziel = flieger && state.onGround ? _camHubH + CAM_BODEN_EXTRA : 0;
+  camBodenHub += (ziel - camBodenHub) * Math.min(1, dt * 1.5);
 }
 
 // ---------- Kamera ----------
@@ -14106,6 +14286,7 @@ function spawnPlane(model, x, z){
   if(!glbTemplates[model]) return null;
   const group=new THREE.Group(), holder=new THREE.Group(); group.add(holder);
   const m=glbTemplates[model].clone(true); m.rotation.y=TRAFFIC_ROT[model]||0; holder.add(m);
+  if(model==='AlphaJet'){ m._clips = glbTemplates[model]._clips; euroHaltung(m, 'oben'); }   // fliegt: Fahrwerk drin
   const altOff=(Math.random()-0.5)*90;
   group.position.set(x, Math.max(60, state.pos.y+altOff), z); scene.add(group);
   const wantsTrail=(model==='Airbus'||model==='AlphaJet'||model==='Mustang');
@@ -14730,6 +14911,7 @@ function spawnFlyby(){
   start.y=state.pos.y+4+Math.random()*12;                          // tiefer Vorbeiflug (Action-Zone)
   const group=new THREE.Group(), holder=new THREE.Group(); group.add(holder);
   const m=glbTemplates['AlphaJet'].clone(true); m.rotation.y=TRAFFIC_ROT['AlphaJet']; holder.add(m);
+  m._clips = glbTemplates['AlphaJet']._clips; euroHaltung(m, 'oben');
   group.position.copy(start); scene.add(group);
   flyby={ group, holder, vel:fwd.clone().multiplyScalar(SOUND_SPEED+60), cone:makeFlybyCone(),
           coneT:0, boomed:false, life:6, fwd:fwd.clone() };
@@ -14856,6 +15038,10 @@ function loop(now){
   updateShadow();            // Höhen-Schatten am Boden (ab <=20 m)
   if(locale === 'earth') updateSea(dt);   // animierte Meereswellen (nur in der Erdwelt)
   for(const p of propMeshes) p.rotation.z += (10 + state.throttle*40) * dt;  // Propeller drehen
+  updatePropSpin(dt);        // Propeller der Mustang (je nach Schub)
+  updateCamBodenHub(dt);     // Kamera am Boden auf Rumpfhoehe (alle Flugzeuge)
+  updateEuroFahrwerk(dt);    // Fahrwerk des Eurofighters (AlphaJet)
+  updateSubSchraube(dt);     // Schraube des U-Boots (je nach Fahrt)
   if(locale === 'earth') updateTrafficAll(dt);   // KI-Flugverkehr (Bahnen, Choreografie, Vorbeiflug)
   updateShipsSea(dt);        // Handelsschiffe auf dem Meer (feste Hindernisse, fahren gemaechlich)
   updateHarborBoats(dt);     // die Feuerwehrboote am Kai schwimmen mit der Duenung

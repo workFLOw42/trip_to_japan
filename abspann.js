@@ -50,7 +50,7 @@ function e6Nachtrag(){
   const fehlt = [2, 3, 4, 5].filter(n => !story.reiseLog.some(e => e.etappe === n));
   const rest = story.tage - story.reiseLog.reduce((s, e) => s + e.tage, 0);
   if(fehlt.length){ for(const n of fehlt) story.reiseLog.push({ etappe: n, ort: ORT[n - 1], tage: 0, wie: '?' }); return; }
-  if(rest > 0) story.reiseLog.push({ etappe: 6, ort: ORT[5], tage: rest, wie: rest === 1 ? 'mit dem Alpha Jet' : rest === 4 ? 'mit dem Shinkansen' : '' });
+  if(rest > 0) story.reiseLog.push({ etappe: 6, ort: ORT[5], tage: rest, wie: rest === 1 ? 'mit dem Jet' : rest === 4 ? 'mit dem Shinkansen' : '' });
 }
 function abspannText(){
   e1Nachtrag(); e6Nachtrag();
