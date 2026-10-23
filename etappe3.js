@@ -53,7 +53,11 @@ function imFluss(x, z, rand){
   return Math.abs(flussLage(x, z).d) < FLUSS_B / 2 - (rand || 0);
 }
 // Bodenhoehe: Wiese 0,3 m (wie die Inseln), Ufer faellt ins Flussbett
-const WIESE_Y = 0.3, WASSER_Y = 0, BETT_Y = -3;
+// BETT_Y: Live-Wunsch 23.10.2026 ("warum kann ich im Fluss nicht tauchen?") – mit -3 war er in der Mitte 2,7 m tief, Samu
+// haelt beim Schwimmen Abstand zum Grund, zum Tauchen blieb kaum etwas. Jetzt 5,4 m in der Mitte; die Watzone am Ufer
+// (bis WAT3 tief) ist damit gut 5 m breit, wie am Meer (WAT_W 6)
+const WIESE_Y = 0.3, WASSER_Y = 0, BETT_Y = -6;
+const WAT3 = 0.8;                                  // m Wassertiefe, bis zu der Samu am Ufer watet (danach schwimmt er)
 function bodenY(x, z){
   const a = Math.abs(flussLage(x, z).d);
   if(a >= FLUSS_B / 2 + UFER_SAND) return WIESE_Y;
@@ -176,7 +180,17 @@ function hookWelt3(){
     const a = Math.abs(flussLage(x, z).d); return !imFluss(x, z) && a < FLUSS_B / 2 + UFER_SAND; };
   isOpenWater = function(x, z){ return hier() ? imFluss(x, z) : isOpenWaterOrig.apply(this, arguments); };
   surfaceY    = function(x, z){ return hier() ? (imFluss(x, z) ? WASSER_Y : bodenY(x, z)) : surfaceYOrig.apply(this, arguments); };
-  evaFootY    = function(x, z){ return hier() ? (imFluss(x, z) ? WASSER_Y : bodenY(x, z)) : evaFootYOrig.apply(this, arguments); };
+  // Steg (STEG3) und flaches Uferwasser: dort steht Samu (waten); tiefer als WAT3 schwimmt er (Live-Wunsch 22.10.2026: "ueber
+  // die Kante laufen und dann im Wasser sein")
+  evaFootY    = function(x, z){ if(!hier()) return evaFootYOrig.apply(this, arguments);
+    if(aufSteg3(x, z)) return steg3Y(x, z);
+    if(imFluss(x, z)) return bodenY(x, z) > WASSER_Y - WAT3 ? bodenY(x, z) : WASSER_Y;
+    return bodenY(x, z); };
+  const evaSolidOrig = evaSolid;
+  evaSolid    = function(x, z){ if(!hier()) return evaSolidOrig.apply(this, arguments);
+    if(aufSteg3(x, z)) return true;
+    if(imFluss(x, z)) return bodenY(x, z) > WASSER_Y - WAT3;
+    return evaSolidOrig.apply(this, arguments); };
   // Flusswasser ist glatt: keine Duenung
   seaYAt      = function(x, z, t){ return hier() ? WASSER_Y : seaYAtOrig.apply(this, arguments); };
   seaSurfaceY = function(dx, dz, t){ return hier() ? WASSER_Y : seaSurfaceYOrig.apply(this, arguments); };
@@ -275,7 +289,11 @@ function baueKulisse(){
   // scharf ist.
   const wasser = new THREE.MeshLambertMaterial({ color: 0x2c6a8f, transparent: true, opacity: 0.92 });
   const sand = new THREE.MeshLambertMaterial({ color: 0x8f7a4c });
+  // Flussbett als eigenes Band in der Form von bodenY (V-Profil, Mitte am tiefsten): beim Tauchen sieht Samu den Grund, auf
+  // dem er steht und an den er taucht (das Bodengitter darunter liegt flach bei BETT_Y – am Ufer schwebte er sonst sichtbar)
+  const bett = new THREE.MeshLambertMaterial({ color: 0x5a6640 });
   const baender = [
+    [-FLUSS_B / 2, FLUSS_B / 2, (q) => BETT_Y * 0.9 * (1 - Math.abs(2 * q - 1)) - 0.02, bett],
     [-FLUSS_B / 2, FLUSS_B / 2, () => WASSER_Y, wasser],
     [FLUSS_B / 2 - 2, FLUSS_B / 2 + UFER_SAND, (q) => 0.02 + WIESE_Y * q, sand],
     [-FLUSS_B / 2 - UFER_SAND, -FLUSS_B / 2 + 2, (q) => 0.02 + WIESE_Y * (1 - q), sand],
@@ -287,15 +305,84 @@ function baueKulisse(){
   const fels = new THREE.MeshLambertMaterial({ color: 0x6f6a62 });
   for(const f of FELSEN){
     const m = new THREE.Mesh(new THREE.DodecahedronGeometry(f.r, 0), fels);
-    m.position.set(f.x, 0.4, f.z); m.scale.y = 0.75; m.rotation.set(f.x, f.z, 0);
+    // oben wie bisher (0,4 m Mitte, 0,75 flach), unten bis in den Grund gestreckt – unter Wasser schwebt kein Felsen
+    const oben = 0.4 + 0.75 * f.r, unten = bodenY(f.x, f.z) - 0.5;
+    m.position.set(f.x, (oben + unten) / 2, f.z); m.scale.y = Math.max(0.75, (oben - unten) / (2 * f.r)); m.rotation.set(0, f.x + f.z, 0);
     w.add(m); kul.felsen.push(m);
   }
-  // Steg am Start (kleines Holzdeck am rechten Ufer, daneben liegt das Boot)
-  const holz = new THREE.MeshLambertMaterial({ color: 0x8a6a45 });
-  const steg = new THREE.Mesh(new THREE.BoxGeometry(6, 0.5, 26), holz);
-  const sp = stegPlatz();
-  steg.position.set(sp.x, 0.45, sp.z); steg.rotation.y = sp.yaw;
-  w.add(steg);
+  w.add(baueSteg3());
+}
+// Steg (STEG3) gebaut wie Joshis Steg im Geheimland (steg.js, Live-Wunsch 23.10.2026: "sieht nicht aus wie der Steg beim
+// JFG-Spiel"): einzelne Querplanken in zwei Holztoenen, leicht unregelmaessig, auf der Rampe mit der Steigung gekippt;
+// Laengstraeger darunter, Pfaehle alle 3 m bis in den Grund und als Pfosten 0,4 m ueber die Planken, niedrige Kante an
+// den Seiten und am Ende, zwei Poller am Stegende (dort liegt das Boot)
+function baueSteg3(){
+  const g = new THREE.Group(), R = steg3Rahmen(), yaw = Math.atan2(R.nx, R.nz);           // lokal +z = vom Fluss zum Ufer
+  const planke = new THREE.MeshLambertMaterial({ color: 0x9a7348 }), planke2 = new THREE.MeshLambertMaterial({ color: 0x8a6640 });
+  const dunkel = new THREE.MeshLambertMaterial({ color: 0x5b3e24 });
+  const lage = (m, s, t, y) => { const p = steg3Punkt(s); m.position.set(p.x + R.fx * t, y, p.z + R.fz * t); m.rotation.set(0, yaw, 0, 'YXZ'); g.add(m); return m; };
+  const rampeNeig = Math.atan2(STEG3.H - WIESE_Y - 0.05, STEG3.sAnfang - STEG3.sRampe);   // zum Ufer hin abwaerts
+  let i = 0;
+  for(let s = STEG3.sEnde; s < STEG3.sAnfang - 0.01; s += 0.32, i++){
+    const sm = Math.min(s + 0.14, STEG3.sAnfang - 0.14), p = steg3Punkt(sm);
+    const m = lage(new THREE.Mesh(new THREE.BoxGeometry(STEG3.B - (i % 4 === 1 ? 0.06 : 0), 0.06, 0.28), i % 3 ? planke : planke2),
+      sm, Math.sin(i * 2.3) * 0.02, steg3Y(p.x, p.z) - 0.03);
+    m.rotation.y = yaw + Math.sin(i * 7.1) * 0.012;
+    if(sm > STEG3.sRampe) m.rotation.x = rampeNeig;
+    m.userData.begehbar = true;                                                              // man steht darauf
+  }
+  // Laengstraeger unter dem ebenen Teil
+  const L = STEG3.sRampe - STEG3.sEnde;
+  for(const v of [-1, 1]) lage(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, L), dunkel), STEG3.sEnde + L / 2, v * (STEG3.B / 2 - 0.15), STEG3.H - 0.14);
+  // Pfaehle alle 3 m bis ins Flussbett, oben als Pfosten ueber die Planken
+  const oben = STEG3.H + 0.4;
+  for(let s = STEG3.sEnde + 0.15; s < STEG3.sRampe + 1; s += 3){
+    for(const v of [-1, 1]){
+      const t = v * (STEG3.B / 2 - 0.04), p = steg3Punkt(s), unten = Math.min(0, bodenY(p.x + R.fx * t, p.z + R.fz * t)) - 0.3, lang = oben - unten;
+      lage(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11 + 0.02 * lang / 4.6, lang, 8), dunkel), s, t, (oben + unten) / 2);
+    }
+  }
+  // niedrige Kante an beiden Seiten des ebenen Teils und vorn am Ende (0,14 m: man steigt drueber ins Wasser)
+  for(const v of [-1, 1]) lage(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, L - 0.2), dunkel), STEG3.sEnde + 0.1 + (L - 0.2) / 2, v * (STEG3.B / 2 - 0.05), STEG3.H + 0.07);
+  lage(new THREE.Mesh(new THREE.BoxGeometry(STEG3.B, 0.14, 0.1), dunkel), STEG3.sEnde + 0.05, 0, STEG3.H + 0.07);
+  // Poller am Stegende (das Boot liegt davor)
+  for(const v of [-1, 1]) lage(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.42, 10), dunkel), STEG3.sEnde + 0.6, v * (STEG3.B / 2 - 0.2), STEG3.H + 0.21);
+  g.traverse(o => { if(o.isMesh) o.castShadow = true; });
+  // Grenze wie bei Joshis Steg (Live-Wunsch 22.10.2026): Planken sind Boden, Pfaehle, Kanten und Poller eine Grenze (Samu
+  // laeuft und schwimmt nicht hindurch); das Feuerwehrboot prallt am ganzen Steg ab (bootAmSteg)
+  if(story.ding) story.ding(g, { welt: 3, typ: 'steg' });
+  return g;
+}
+// Feuerwehrboot bleibt mit dem ganzen Rumpf im Wasser (Live-Befund 23.10.2026: "das Feuerwehrboot kann halb auf dem Strand
+// fahren" – die Engine prueft nur die Bootsmitte): Bug, Mitte und Heck mit der halben Bootsbreite hoechstens bis BOOT_UFER m
+// an die Wasserlinie; was darueber hinausragt, schiebt das Boot zur Flussmitte zurueck und nimmt die Fahrt dorthin weg
+const BOOT_UFER = 2;
+function bootImWasser(fwd, dt){
+  const grenze = FLUSS_B / 2 - BOOT_UFER;
+  let beruehrt = false;
+  for(const sv of [BOAT_LOOK, 0, -BOAT_LOOK]){
+    const L = flussLage(state.pos.x + fwd.x * sv, state.pos.z + fwd.z * sv), zuviel = Math.abs(L.d) + BOAT_HALF_W - grenze;
+    if(zuviel <= 0) continue;
+    const s = Math.sign(L.d), qx = -L.rz * s, qz = L.rx * s;                                   // quer zur Stroemung, zum Ufer hin
+    state.pos.x -= qx * zuviel; state.pos.z -= qz * zuviel;
+    const raus = state.vel.x * qx + state.vel.z * qz; if(raus > 0){ state.vel.x -= qx * raus; state.vel.z -= qz * raus; }
+    planeGroup.position.copy(state.pos); beruehrt = true;
+  }
+  if(beruehrt) state.vel.multiplyScalar(Math.max(0, 1 - 3.5 * dt));   // am Ufer kostet es Fahrt (wie bisher auf Grund gelaufen)
+}
+// Feuerwehrboot am Steg: Bug, Mitte und Heck mit der halben Bootsbreite gegen den Steg (Planken mit Pfaehlen bis in den Grund)
+// – beruehrt es ihn, wird es seitlich hinausgeschoben und gebremst (wie an einer Mauer; kein Felsen-Kontakt)
+function bootAmSteg(fwd){
+  const R = steg3Rahmen(), rand = BOAT_HALF_W + 0.3;
+  for(const sv of [BOAT_LOOK, 0, -BOAT_LOOK]){
+    const px = state.pos.x + fwd.x * sv, pz = state.pos.z + fwd.z * sv, l = steg3Lokal(px, pz);
+    if(l.s < STEG3.sEnde - rand || l.s > STEG3.sAnfang || Math.abs(l.t) >= STEG3.B / 2 + rand) continue;
+    if(l.s < STEG3.sEnde){ const w = STEG3.sEnde - rand - l.s; state.pos.x += R.nx * w; state.pos.z += R.nz * w; }   // vor dem Stegende: zur Flussmitte
+    else { const seite = l.t !== 0 ? Math.sign(l.t) : (Math.sign(state.vel.x * R.fx + state.vel.z * R.fz) || 1), w = seite * (STEG3.B / 2 + rand) - l.t;
+      state.pos.x += R.fx * w; state.pos.z += R.fz * w; }                                                      // seitlich hinaus
+    state.vel.multiplyScalar(0.3);
+    planeGroup.position.copy(state.pos);
+  }
 }
 // Band entlang des Flusses zwischen den Querabstaenden d0..d1 (Meter von der Mitte). hoehe(q) gibt
 // die Hoehe fuer q = 0 (bei d0) bis 1 (bei d1).
@@ -434,12 +521,27 @@ function stegPlatz(){
   const ab = FLUSS_B / 2 - 6;
   return { x: mitteX(z) + nx * ab, z: z + nz * ab, yaw: Math.atan2(-L.rx, -L.rz) };
 }
+// Steg wie bei Joshi (Live-Wunsch 22.10.2026): vom Sandufer quer in den Fluss, Planken auf Pfaehlen, vom Sand eine Rampe
+// hinauf; am Ende liegt in der Flussmitte das Feuerwehrboot quer (Bug flussabwaerts). Eingestiegen wird am Stegende (Ring
+// auf den Planken, Y). Vom Steg aus geht Samu ueber die Kante ins Wasser und schwimmt.
+// Lage: senkrecht zur Flussrichtung bei z = FLUSS_Z0 - 40, auf der rechten Seite (+d). s = Abstand von der Flussmitte.
+const STEG3 = { z: FLUSS_Z0 - 40, B: 2.4, H: 0.75, sEnde: 9, sRampe: 40, sAnfang: 47 };
+function steg3Rahmen(){
+  const z = STEG3.z, L = flussLage(mitteX(z), z);
+  return { ox: mitteX(z), oz: z, nx: -L.rz, nz: L.rx, fx: L.rx, fz: L.rz };      // n: von der Mitte zum Ufer, f: flussab
+}
+function steg3Lokal(x, z){ const R = steg3Rahmen(), dx = x - R.ox, dz = z - R.oz; return { s: dx * R.nx + dz * R.nz, t: dx * R.fx + dz * R.fz }; }
+function aufSteg3(x, z){ const l = steg3Lokal(x, z); return Math.abs(l.t) < STEG3.B / 2 && l.s > STEG3.sEnde && l.s < STEG3.sAnfang; }
+function steg3Y(x, z){ const l = steg3Lokal(x, z); if(l.s <= STEG3.sRampe) return STEG3.H;
+  return STEG3.H + (WIESE_Y + 0.05 - STEG3.H) * Math.min(1, (l.s - STEG3.sRampe) / (STEG3.sAnfang - STEG3.sRampe)); }
+function steg3Punkt(s){ const R = steg3Rahmen(); return { x: R.ox + R.nx * s, z: R.oz + R.nz * s }; }
+story.e3steg = { STEG3, aufSteg3, steg3Punkt, steg3Y };   // fuer Tests
+// Boden fuer Samus Schatten (story.js hookSchatten): auf dem Steg die Planken – die Engine legte ihn aufs Wasser darunter,
+// dort verdecken ihn die Planken (Live-Befund 23.10.2026). Nur fuer den, der oben ist (unter dem Steg schwimmt er).
+story.stegBoden = (x, z) => (hier() && eva && aufSteg3(x, z) && eva.group.position.y > steg3Y(x, z) - 0.45) ? steg3Y(x, z) : null;
 function bootPlatz(){
-  const sp = stegPlatz();
-  const L = flussLage(sp.x, sp.z);
-  const nx = -L.rz, nz = L.rx;
-  // 9 m vom Steg Richtung Flussmitte, Nase flussabwaerts
-  return { x: sp.x - nx * 9, z: sp.z - nz * 9, yaw: Math.atan2(-L.rx, -L.rz) };
+  const R = steg3Rahmen(), p = steg3Punkt(STEG3.sEnde - 4.5);
+  return { x: p.x, z: p.z, yaw: Math.atan2(-R.fx, -R.fz) };                          // quer zum Steg, Bug flussabwaerts
 }
 function xwingPlatz(){
   const sp = stegPlatz();
@@ -456,16 +558,10 @@ function ankunft(){
   const nx = -L.rz, nz = L.rx;
   return { x: sp.x + nx * 40 + L.rx * 30, z: sp.z + nz * 40 + L.rz * 30 };
 }
-const park = { boot: null, ring: null };
-// Ring auf der Wiese hinter dem Sandstreifen, gegenueber dem Boot (wie der U-Boot-Ring in Etappe 1)
-function ringPlatz(){
-  const bp = bootPlatz();
-  const L = flussLage(bp.x, bp.z);
-  const nx = -L.rz, nz = L.rx;
-  const seite = Math.sign(L.d) || 1;                    // Boot liegt auf dieser Seite der Mitte
-  const ab = FLUSS_B / 2 + UFER_SAND + 6 - Math.abs(L.d);
-  return { x: bp.x + nx * seite * ab, z: bp.z + nz * seite * ab };
-}
+const park = { boot: null };
+// Stegende auf den Planken: dort steigt Samu ein (Leuchtpfeil, Schild "4 Tage" und Radar zeigen hierher; einen Ring gibt es
+// nicht mehr – Y geht nah am Boot, bootNah)
+function ringPlatz(){ return steg3Punkt(STEG3.sEnde + 1.6); }
 function ladeBootModell(){
   if(park.boot || !story.welt) return;
   const g = makeFireBoat();               // Engine-Boot (GLB, falls geladen), geteilte Materialien
@@ -473,9 +569,16 @@ function ladeBootModell(){
   const bp = bootPlatz();
   g.position.set(bp.x, -BOAT_DRAFT, bp.z); g.rotation.y = bp.yaw;
   story.welt(3).add(g); park.boot = g;
+  if(story.ding) story.ding(g, { welt: 3, typ: 'feuerwehrboot', nurZuFuss: true });   // Samu schwimmt/geht nicht hindurch
 }
+// Einsteigen mit Y, sobald Samu nah genug am Boot ist (Live-Wunsch 23.10.2026: "beim Feuerwehrboot braucht es den Ring nicht
+// mehr"): zu Fuss hoechstens BOOT_NAH m vom Rumpf (Linie Bug–Heck, halbe Bootsbreite) – vom Stegende aus reicht das
+const BOOT_NAH = 5;
 function bootNah(){
-  return !!(e3() && !story.phase && park.ring && park.ring.drin());
+  if(!e3() || story.phase || !eva || eva.boat || (story.schwimm && story.schwimm.aktiv)) return false;
+  const bp = bootPlatz(), fx = -Math.sin(bp.yaw), fz = -Math.cos(bp.yaw), p = eva.group.position;
+  const l = Math.max(-BOAT_LOOK, Math.min(BOAT_LOOK, (p.x - bp.x) * fx + (p.z - bp.z) * fz));
+  return Math.hypot(p.x - bp.x - fx * l, p.z - bp.z - fz * l) < BOAT_HALF_W + BOOT_NAH;
 }
 story.bootNah = bootNah;
 
@@ -521,13 +624,11 @@ function flussStart(){
   evaOrbit = 0; evaPitch = 0;
   snapCamera();
   park.boot = null; ladeBootModell();
-  const rp = ringPlatz();
-  park.ring = story.einstiegsRing(rp.x, WIESE_Y, rp.z);
   marken.length = 0;
   story.phase = null;
   story.ende = false;
   boot.aktiv = false; boot.fertig = false;
-  story.hinweis('Zwei Wege: X-Wing (weiß) oder Feuerwehrboot (gelber Ring am Ufer) – hinlaufen und Y drücken');
+  story.hinweis('Zwei Wege: X-Wing (weiß) oder Feuerwehrboot (am Ende des Stegs) – hinlaufen und Y drücken');
   story.spaeter(12, () => { if(eva && !story.phase) story.hinweis(''); });
 }
 story.etappe3Start = flussStart;
@@ -601,10 +702,13 @@ function ladeSchildkroeten(){
 // (keine verkleinerten Texturen), es wird nur im Spiel skaliert/gedreht. Skelett + "Swim" 5 s; jedes Tier ein eigener
 // Klon (cloneSkinned der Engine), eigener Mixer mit Zeitversatz. Im Modell 10,3 m lang, Kopf auf -Z.
 // Sie schwimmen in sanften Schlangenlinien auf und ab (mit und gegen die Stroemung), Ruecken knapp unter der
-// Oberflaeche – Augen und Panzer schauen heraus. Keine Kollision: sie sind Kulisse, das Boot faehrt durch.
+// Oberflaeche – Augen und Panzer schauen heraus. Grenze (Live-Wunsch 22.10.2026): zwei Kreise (Kopf, Schwanz) ueber
+// story.tierQuelle – Samu schwimmt nicht hindurch. Kommt das Feuerwehrboot naeher als KROKO_TAUCH_R, tauchen sie ab
+// (KROKO_TAUCH_T tief, Grenze aus: das Boot faehrt ueber sie hinweg) und kommen danach wieder hoch.
 // KROKO_TIEF: Unterkante unter Wasser. Gemessen in der Schwimmhaltung (C:\tmp\sfg\kroko\nah.js): nur 0,63 m hoch – mit
 // 0,55 lag der Ruecken bei -0,01 m, also ganz unter Wasser (nur als Schatten). 0,25: Ruecken und Augen ~0,2 m darueber.
 const KROKO_L = 4.5, KROKO_TIEF = 0.25;            // m Laenge (grosses Nilkrokodil), m Unterkante unter Wasser
+const KROKO_TAUCH_R = 22, KROKO_TAUCH_T = 3.5;      // m: so nah darf das Boot kommen, m: so tief tauchen sie dann
 const KROKO_PLAETZE = [                            // [z, Querlage (Anteil der halben Breite), Richtung +1 flussab]
   [380, 0.45, 1], [250, -0.5, -1], [60, 0.3, 1], [-200, -0.35, -1], [-620, 0.5, 1], [-860, -0.4, 1],
   [-1180, 0.35, -1], [-1500, -0.5, 1], [-1880, 0.4, -1], [-2150, -0.3, 1],
@@ -646,7 +750,10 @@ function updateKrokodile(dt){
     const quer = o.q + Math.sin(o.t * 0.25) * 0.15;
     const L = flussLage(mitteX(o.z), o.z), nx = -L.rz, nz = L.rx;
     const x = mitteX(o.z) + nx * quer * (FLUSS_B / 2 - 8), z = o.z + nz * quer * (FLUSS_B / 2 - 8);
-    o.k.position.set(x, WASSER_Y - KROKO_TIEF, z);
+    // Feuerwehrboot nah (eigenes Wasserfahrzeug, Samu sitzt drin): abtauchen, sonst langsam wieder hoch
+    const bootNah = isBoat() && !eva && Math.hypot(state.pos.x - x, state.pos.z - z) < KROKO_TAUCH_R;   // global-ok: Engine
+    o.tauch = (o.tauch || 0) + ((bootNah ? 1 : 0) - (o.tauch || 0)) * Math.min(1, dt * (bootNah ? 1.6 : 0.5));
+    o.k.position.set(x, WASSER_Y - KROKO_TIEF - (o.tauch || 0) * KROKO_TAUCH_T, z);
     // Kopf (-Z) in Schwimmrichtung: flussab = (L.rx, L.rz), dazu das Pendeln
     const fx = L.rx * o.dir, fz = L.rz * o.dir;
     o.k.rotation.y = Math.atan2(-fx, -fz) + Math.cos(o.t * 0.25) * 0.12 * o.dir;
@@ -655,6 +762,10 @@ function updateKrokodile(dt){
     if(o.k.visible && o.mixer && d < 200) o.mixer.update(dt);
   }
 }
+// Grenze der Krokodile: Kopf- und Schwanzkreis; abgetaucht keine Grenze (das Boot faehrt darueber)
+if(story.tierQuelle) story.tierQuelle(() => story.etappe !== 3 ? null
+  : krokodile.filter(o => o.k.visible && (o.tauch || 0) < 0.3).flatMap(o => { const s = o.k.scale.x, fx = -Math.sin(o.k.rotation.y), fz = -Math.cos(o.k.rotation.y), a = KROKO_L * 0.27 * s;
+    return [-1, 1].map(v => ({ x: o.k.position.x + fx * a * v, z: o.k.position.z + fz * a * v, y: o.k.position.y - 0.3, r: 0.75 * s, h: 1.0 })); }));
 // Grenze (objekte.js, Live-Wunsch 18.10.2026): nicht durch die Schildkroeten (niedrig, aber zu hoch zum Drueberlaufen)
 if(story.tierQuelle) story.tierQuelle(() => story.etappe !== 3 ? null
   : schildkroeten.filter(k => k.visible && k.parent).map(k => {
@@ -809,6 +920,8 @@ function bootUpdate(dt){
   // ein einziges Schrammen mehrfach. Das Boot prallt ab (Fahrt umgekehrt und gedaempft).
   boot.cool = Math.max(0, boot.cool - dt);
   const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);
+  bootAmSteg(fwd);
+  bootImWasser(fwd, dt);
   for(const f of FELSEN){
     let hit = false;
     for(const s of [BOAT_LOOK, 0, -BOAT_LOOK]){
@@ -930,7 +1043,6 @@ function updateE3(dt){
   updateKrokodile(dt || 0);
   if(enden.length) updateFlussEnden();
   if(park.boot) park.boot.visible = !boot.aktiv;
-  if(park.ring) park.ring.zeigen(!!eva && locale === 'earth' && !story.phase);
 }
 story.updateE3 = updateE3;
 story.aufgabeE3 = () => boot.aktiv ? ['Feuerwehrboot', [

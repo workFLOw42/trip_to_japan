@@ -204,6 +204,7 @@ function collectSeaIslands(ox, oz){
     const rSand = info.radius*BEACH_FACTOR, rAussen = rSand + SHORE_FADE_W;
     _seaIslands.push(info.wx, info.wz, rSand, rAussen*rAussen, info.radius*info.radius);
   }
+  for(const s of zusatzLand()){ const rA = s.r + SHORE_FADE_W; _seaIslands.push(s.x, s.z, s.r, rA*rA, s.r*s.r); }
 }
 // Wie oft die sichtbare Meeresflaeche neu gerechnet wird, je nach Hoehe. Nachgemessen ist der
 // Wellenhub am Bildschirm 333 px bei 10 m Hoehe, aber nur 6,7 px bei 500 m und 1,7 px bei 2.000 m —
@@ -309,6 +310,16 @@ const SHELF_W     = 180;
 // Insel-System steht nach dem Meer). const wird nicht gehoistet — die Rechnung waere ein
 // ReferenceError und das Spiel bliebe schwarz. Wer ISLAND_Y (0,30) aendert, muss hier mit.
 const SEABED_SHORE_Y = -1.2;
+// Kuestenprofil (Abstand d vom Strand -> Wassertiefe): 0..KUESTE_FLACH m Flachwasser (bis KUESTE_FLACH_TIEF tief), dann
+// gleichmaessig bis KUESTE_MITTE auf KUESTE_MITTE_TIEF, danach KUESTE_STEIL m je m bis SEA_DEPTH (Live-Wunsch 22.10.2026:
+// im Geheimland liegt am Ende des Stegs 10 m Wasser, genug fuer den Sprung der Orcas ueber das Boot)
+const KUESTE_FLACH = 6, KUESTE_FLACH_TIEF = 1.8, KUESTE_MITTE = 21.4, KUESTE_MITTE_TIEF = 10, KUESTE_STEIL = 0.7;
+function kuesteTiefe(d){
+  if(d <= 0) return -SEABED_SHORE_Y;
+  if(d <= KUESTE_FLACH) return -SEABED_SHORE_Y + (KUESTE_FLACH_TIEF + SEABED_SHORE_Y) * d / KUESTE_FLACH;
+  if(d <= KUESTE_MITTE) return KUESTE_FLACH_TIEF + (KUESTE_MITTE_TIEF - KUESTE_FLACH_TIEF) * (d - KUESTE_FLACH) / (KUESTE_MITTE - KUESTE_FLACH);
+  return Math.min(SEA_DEPTH, KUESTE_MITTE_TIEF + (d - KUESTE_MITTE) * KUESTE_STEIL);
+}
 // Bodenhoehe an einer WELTposition. Deterministisch, ohne Zufall pro Aufruf — dieselbe Stelle gibt
 // immer denselben Wert, sonst wuerde der Boden beim Neurastern zappeln.
 // islands ist die vorgesammelte Inselliste (siehe collectSeabedIslands); ohne sie fragt die
@@ -329,11 +340,13 @@ function seabedY(x, z, islands){
       if(d < rand) rand = d;
     }
   }
+  for(const s of zusatzLand()){ const dd = Math.hypot(x - s.x, z - s.z) - s.r; if(dd < rand) rand = dd; }
   if(rand <= 0) return SEABED_SHORE_Y;           // unter Insel und Strand: knapp darunter
-  // Vom Strand hinaus in die Tiefe. smoothstep und nicht linear: so entsteht ein flacher Schelf am
-  // Ufer und danach eine sichtbare Abbruchkante, statt einer gleichmaessigen Rampe.
-  const f = Math.min(1, rand / SHELF_W);
-  const sm = f*f*(3 - 2*f);
+  // Vom Strand hinaus in die Tiefe – das Kuestenprofil (kuesteTiefe, Live-Wunsch 22.10.2026, fuer alle Inseln): ein
+  // schmales Flachwasser, dann gleichmaessig auf KUESTE_MITTE_TIEF, dann steiler bis zur Meerestiefe. Vorher ein
+  // smoothstep ueber 180 m – 20 m vor dem Strand war das Wasser nur 3-4 m tief, zu flach fuer Orcas und das U-Boot.
+  const f = Math.min(1, Math.max(0, rand - KUESTE_MITTE) / SHELF_W);
+  const sm = f*f*(3 - 2*f);                       // Relief erst hinter der Mitte des Profils (der Strandteil bleibt glatt)
   // Relief. Zwei ueberlagerte lange Wellen geben Sandbaenke und Huegel; sie greifen mit sm an,
   // damit der Schelf am Strand glatt bleibt und das Relief erst draussen einsetzt.
   // Die Amplituden 15 und 24 waren fuer 200 m Grundtiefe gewaehlt und ergeben +-39 m. Bei 100 m
@@ -343,7 +356,7 @@ function seabedY(x, z, islands){
   // rund 100 m, und die Sandbaenke behalten ihr Verhaeltnis zur Tiefe.
   const relief = SEA_DEPTH / 200;
   const dune = (Math.sin(x*0.0035)*Math.cos(z*0.0041)*15 + Math.sin((x+z)*0.0017)*24) * relief;
-  return SEABED_SHORE_Y + (-SEA_DEPTH - SEABED_SHORE_Y)*sm + dune*sm;
+  return -kuesteTiefe(rand) + dune*sm;
 }
 const seabedGeo = new THREE.PlaneGeometry(SEABED_SIZE, SEABED_SIZE, SEABED_SEG, SEABED_SEG);
 seabedGeo.rotateX(-Math.PI/2);
@@ -842,7 +855,15 @@ function carrierInfo(cx, cz){
 }
 
 // Liegt Weltposition (x,z) auf einer Insel-Grasfläche?
+// Zusaetzliches Land der Spiele (Live-Befund 22.10.2026, Geheimland: die Waldinsel ist viel groesser als die Inselzelle
+// der Engine – hinter dem Wald kamen fuer die Engine sofort Meer, Schiffe, U-Boote und Wale): window.spielInseln() ->
+// [{ x, z, r }] Landscheiben. Sie gelten ueberall als Land (isOnLand, also auch wasserTiefe), das Meeresgitter versteckt
+// sich darunter wie unter jeder Insel (collectSeaIslands), und der Meeresboden faellt erst an ihrem Rand ab (seabedY).
+const _keineSpielInseln = [];
+// (eigener Name: eine globale function spielInseln wuerde den Haken window.spielInseln ueberschreiben)
+function zusatzLand(){ return (typeof window.spielInseln === 'function' && window.spielInseln()) || _keineSpielInseln; }
 function isOnLand(x, z) {
+  for(const s of zusatzLand()) if(Math.hypot(x - s.x, z - s.z) < s.r) return true;
   const pcx = Math.round(x / CELL), pcz = Math.round(z / CELL);
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
     const info = islandInfo(pcx + dx, pcz + dz);
@@ -2250,8 +2271,8 @@ function placeSeaShip(sh, fx, fz){
     const x = fx + Math.cos(a)*d, z = fz + Math.sin(a)*d;
     if(!seaShipWaterFor(sh, x, z)) continue;
     if(!seaShipSpotFree(x, z, sh.len, sh)) continue;
+    { const h0 = sh.heading; sh.heading = Math.random()*Math.PI*2; const ok = seaShipSeitenFrei(sh, x, z) && seaShipWaterFor(sh, x - Math.sin(sh.heading) * (sh.hl || 50), z - Math.cos(sh.heading) * (sh.hl || 50)); if(!ok){ sh.heading = h0; continue; } }
     sh.x = x; sh.z = z;
-    sh.heading = Math.random()*Math.PI*2;
     if(sh.group){ sh.group.position.set(x, 0, z); sh.group.rotation.y = sh.heading; }
     return true;
   }
@@ -2379,7 +2400,7 @@ function updateShipsSea(dt){
     // Vor dem Bug muss Wasser sein: geprüft wird eine halbe Schiffslänge voraus, sonst schiebt sich
     // ein 300-m-Schiff mit dem Bug in den Strand, bevor sein Mittelpunkt Land erreicht.
     const ax = nx + fx*sh.hl, az = nz + fz*sh.hl;
-    if(seaShipWaterFor(sh, ax, az) && seaShipWaterFor(sh, nx, nz)){
+    if(seaShipWaterFor(sh, ax, az) && seaShipWaterFor(sh, nx, nz) && seaShipSeitenFrei(sh, nx, nz)){
       sh.x = nx; sh.z = nz;
     } else {
       // Land voraus -> abdrehen. Ein Schiff wendet langsam, also nur den Kurs ändern und diesen
@@ -4131,7 +4152,7 @@ function placeOrca(o, fx, fz){
     const a = spawnWinkel();          // vorderer Kegel, siehe SPAWN_KEGEL bei den Fischen
     const d = ORCA_SPAWN_MIN + Math.random()*(ORCA_SPAWN_MAX-ORCA_SPAWN_MIN);
     const x = fx + Math.cos(a)*d, z = fz + Math.sin(a)*d;
-    if(isOnLand(x, z) || isOnBeach(x, z) || isOnCarrier(x, z)) continue;
+    if(wasserTiefe(x, z) < ORCA_TIEF_MIN) continue;              // nur in tiefem, freiem Wasser (wasserTiefe)
     if(hitsSeaShip(x, ISLAND_Y+2, z)) continue;
     o.x = x; o.z = z;
     o.heading = Math.random()*Math.PI*2;
@@ -4201,19 +4222,100 @@ function clearOrcas(){
 // Orcas sind KEINE Hindernisse: sie stehen in keiner Kollisionsliste. Ein Tier von 8 m, das dicht
 // am Boot auftaucht, wuerde sonst zum Absturz fuehren, wo man nichts falsch gemacht hat — und ein
 // Wal weicht aus, ein Frachter nicht.
+// Ist die Sprungstrecke frei? Anlauf: mindestens ORCA_TIEF_MIN Wasser; Flug: Wasser darunter (kein Land, kein Fels, kein
+// Schiff); Landung und Tauchphase: wieder mindestens ORCA_TIEF_MIN (Live-Wunsch 22.10.2026). Alle 6 m geprueft.
+// Die Spiele duerfen das erweitern (window.orcaSprungFreiExtra).
+// ---- Ortswechsel in den Spielen (Live-Befund 22.10.2026, Geheimland: nach dem Wechsel von der kleinen Waldinsel (88 m) zur
+// grossen (230 m) ohne Neuladen lagen Wale, Wracks und U-Boote mitten auf der Piste): alles, was fuer den alten Ort gerechnet
+// war, verwerfen – Zwischenspeicher, Unterwasser-Zellen, Tiere – und die Schiffe, die jetzt nicht mehr im Wasser liegen, neu
+// setzen. Danach entsteht alles nach der Wasser-Definition (wasserTiefe) neu.
+function ortNeuBerechnen(){
+  blendenSofort();
+  for(const c of [_islandCache, _bldgCache, _subBerthCache, _rockCache, _parkCache, _xwpCache, _wreckCache]) c.clear();
+  seabedAtX = null; seabedAtZ = null;
+  clearUwCells(); clearOrcas(); clearFish();
+  const F = worldFocus();
+  for(const sh of seaShips) if(sh.group && !(seaShipWaterFor(sh, sh.x, sh.z) && seaShipSeitenFrei(sh, sh.x, sh.z))) placeSeaShip(sh, F.x, F.z);
+}
+// ---- Wasser: wo ist freies Wasser? (Live-Wunsch 22.10.2026) ------------------------------------------------------------
+// EINE Definition fuer alle Tiere (Orcas, Forellen, Rochen, Seeloewen) statt Radien um die Inselmitte (die passten nur zu
+// einer Inselgroesse) und einzelner Land-Abfragen: wasserTiefe(x, z) = freie Wassertiefe dort, 0 = kein Wasser (Land,
+// Strand, Traeger, oder ein Hindernis, das ein Spiel meldet). imWasser(x, y, z) = liegt der PUNKT im Wasser (nicht im
+// Grund, nicht in einem Hindernis) – fuer Tiere in der Tiefe. Die Spiele melden ihre Hindernisse ueber
+// window.wasserSperre(x, y, z): y undefined = "reicht das Hindernis bis an die Oberflaeche?", sonst "ist der Punkt im
+// Hindernis?" (Trip to Japan: die Felsen der Schlucht; Felsen sind zwar im Wasser, aber eben kein Wasser).
+// Boote auf dem Wasser, vor denen die Tiere ausweichen (Live-Wunsch 22.10.2026: "wenn irgendein Boot auf einen Wal zufaehrt,
+// tauchen diese weg oder schwimmen weg" – Fische und Rochen ganz entspannt; vor schwimmenden Kindern haben sie keine Angst):
+// das eigene Wasserfahrzeug an der Oberflaeche und was ein Spiel meldet (window.spielBoote() -> [{ x, z, fx, fz, v }])
+function booteAufDemWasser(){
+  const out = [];
+  if(locale !== 'earth') return out;
+  if(!eva && isWaterCraft()){ const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat); f.y = 0; f.normalize();
+    out.push({ x: state.pos.x, z: state.pos.z, fx: f.x, fz: f.z, v: state.vel.length(), tief: isSub() ? Math.max(0, seaYAt(state.pos.x, state.pos.z) - state.pos.y) : 0 }); }
+  if(typeof window.spielBoote === 'function'){ const b = window.spielBoote(); if(b) for(const q of b) out.push(Object.assign({ tief: 0 }, q)); }
+  return out;
+}
+// Faehrt das Boot b auf (x, z) zu? -> Ausweichrichtung (Kurs-Winkel wie heading der Tiere: Nase auf -Z), sonst null
+const AUSWEICH_R = 40, AUSWEICH_WINKEL = 0.6;
+function bootWeichen(b, x, z, r){
+  const rx = x - b.x, rz = z - b.z, d = Math.hypot(rx, rz) || 1e-3;
+  if(d > (r || AUSWEICH_R) || b.v < 0.5) return null;
+  if((rx * b.fx + rz * b.fz) / d < Math.cos(AUSWEICH_WINKEL)) return null;      // nicht vor dem Bug
+  const seite = (b.fx * rz - b.fz * rx) > 0 ? 1 : -1;                         // auf welcher Seite des Kurses liegt das Tier
+  const ax = -b.fz * seite, az = b.fx * seite;                                 // quer zum Kurs, nach aussen
+  return Math.atan2(-(ax + b.fx * 0.5), -(az + b.fz * 0.5));                   // schraeg nach vorn-aussen wegschwimmen
+}
+function wasserSperreAt(x, y, z){ return typeof window.wasserSperre === 'function' && !!window.wasserSperre(x, y, z); }
+function wasserTiefe(x, z){
+  if(locale !== 'earth') return 0;
+  if(isOnLand(x, z) || isOnBeach(x, z) || isOnCarrier(x, z)) return 0;
+  if(wasserSperreAt(x, undefined, z)) return 0;
+  return Math.max(0, seaYAt(x, z) - seabedY(x, z));
+}
+function imWasser(x, y, z){
+  if(wasserTiefe(x, z) <= 0) return false;
+  if(y < seabedY(x, z) || y > seaYAt(x, z) + 0.5) return false;
+  return !wasserSperreAt(x, y, z);
+}
+// Tiefenbereich je Tierart (m Wassertiefe, wasserTiefe): da schwimmen sie, flacher/tiefer drehen sie ab
+const TIER_TIEFE = { orca: [7, Infinity], rochen: [5, Infinity], forelle: [1.8, 7] };
+const ORCA_TIEF_MIN = TIER_TIEFE.orca[0];   // flacher schwimmt kein Orca, und nach dem Sprung muss dort so viel Wasser sein
+const ORCA_SPRUNG_WARTE = 3;   // s: so lange schwimmt ein Springer weiter, wenn die Sprungstrecke nicht frei ist
+function orcaSprungFrei(o){
+  if(o.sprungGeplant) return true;                     // von einem Spiel gezielt gesetzter Sprung (Bahn dort geprueft)
+  const fx = -Math.sin(o.heading), fz = -Math.cos(o.heading), vh = ORCA_JUMP_V * Math.cos(ORCA_JUMP_A);
+  const sAb = ORCA_SPD * ORCA_RUNUP_T, sLand = sAb + vh * ORCA_JUMP_T, sEnde = sLand + ORCA_SPD * ORCA_UNDER_T;
+  for(let s = 0; s <= sEnde; s += 6){ const x = o.x + fx * s, z = o.z + fz * s, t = wasserTiefe(x, z);
+    if(hitsSeaShip(x, ISLAND_Y + 2, z)) return false;
+    if(s > sAb && s < sLand){ if(t <= 0) return false; }      // im Flug: nur Wasser darunter
+    else if(t < ORCA_TIEF_MIN) return false; }                // Anlauf, Landung, Tauchen: tief genug
+  if(typeof window.orcaSprungFreiExtra === 'function' && !window.orcaSprungFreiExtra(o, fx, fz, weg)) return false;
+  return true;
+}
+let _bootListe = [];
 function updateOrcas(dt){
   if(locale !== 'earth'){ if(orcas.length) clearOrcas(); return; }
   if(!orcaTpl){ preloadOrca(); return; }
   if(!orcas.length){ spawnOrcas(); return; }
   const F = worldFocus();
+  _bootListe = booteAufDemWasser();
   for(const o of orcas){
     if(!o.placed){ o.placed = placeOrca(o, F.x, F.z); if(o.placed) buildOrcaBody(o); continue; }
     if(!o.group){ buildOrcaBody(o); if(!o.group) continue; }
     if(o.mixer) o.mixer.update(dt);
     o.t += dt;
+    // Springer: vom Anlauf bis zum Ende des Eintauchens bleibt der KURS FEST (Live-Befund 22.10.2026: "im Sprung aendern
+    // sie die Richtung, vermutlich weil erst vor der Landung geprueft wird, ob sie landen koennen"). Geprueft wird die
+    // ganze Strecke schon VOR dem Anlauf (orcaSprungFrei): ist sie nicht frei, schwimmt er ORCA_SPRUNG_WARTE s weiter
+    // (die Vorausschau dreht ihn dabei vom Land weg) und versucht es dann noch einmal – NICHT den Zyklus von vorn: sonst kam
+    // er nie mehr in die Tauchphase, und das Geheimland fand keinen Springer fuer den Sprung ueber das Boot am Steg.
+    // (fest nur in Anlauf und Flug – unter Wasser darf er wieder abdrehen, dort sieht man es nicht)
+    const tSchw = ORCA_JUMP_CYCLE - ORCA_RUNUP_T - ORCA_JUMP_T - ORCA_UNDER_T, imSprung = o.jumper && !o.deep && o.t >= tSchw && o.t < tSchw + ORCA_RUNUP_T + ORCA_JUMP_T;
+    if(o.jumper && !o.deep && !o.sprungOk && o.t >= tSchw){ if(orcaSprungFrei(o)) o.sprungOk = true; else o.t = tSchw - ORCA_SPRUNG_WARTE; }
+    if(o.jumper && o.t < tSchw) o.sprungOk = false;
     // Weiterschwimmen. Ein leichter Bogen im Kurs, damit sie nicht schnurgerade ziehen — dieselbe
-    // Machart wie bei den Handelsschiffen (updateShipsSea).
-    o.heading += Math.sin(seaTime*0.11 + o.x*0.002) * 0.10 * dt;
+    // Machart wie bei den Handelsschiffen (updateShipsSea). Im Sprung nicht.
+    if(!imSprung) o.heading += Math.sin(seaTime*0.11 + o.x*0.002) * 0.10 * dt;
     // Nase auf -Z, also dieselbe Rechnung wie bei den Schiffen.
     const fx = -Math.sin(o.heading), fz = -Math.cos(o.heading);
     o.x += fx * ORCA_SPD * dt;
@@ -4221,8 +4323,16 @@ function updateOrcas(dt){
     // Vor Land, Schiffen und dem Traeger abdrehen, statt hineinzuschwimmen. 30 m Vorausschau sind
     // bei 3,2 m/s rund 9 s Reaktionsweg.
     const ax = o.x + fx*30, az = o.z + fz*30;
-    if(isOnLand(ax, az) || isOnBeach(ax, az) || isOnCarrier(ax, az) || hitsSeaShip(ax, ISLAND_Y+2, az))
+    if(!imSprung && (wasserTiefe(ax, az) < ORCA_TIEF_MIN || hitsSeaShip(ax, ISLAND_Y+2, az)))
       o.heading += 1.2 * dt * (1 + Math.random());
+    // Booten ausweichen (nicht im Sprung, nicht die gezielten Spruenge der Spiele)
+    if(!imSprung && !o.sprungGeplant) for(const b of _bootListe){
+      if(o.deep && b.tief < 5) continue;                                      // Tiefsee-Tiere: nur das getauchte U-Boot
+      const w = bootWeichen(b, o.x, o.z, o.deep || b.tief > 5 ? 55 : AUSWEICH_R); if(w === null) continue;
+      o.heading += Math.max(-1.8 * dt, Math.min(1.8 * dt, Math.atan2(Math.sin(w - o.heading), Math.cos(w - o.heading)))); o.weicht = 2; }
+    if(o.weicht > 0) o.weicht -= dt;
+    // liegt er doch einmal im Flachen oder an Land (Spielwechsel, groessere Insel, ein Hindernis): neu aussetzen
+    if(!imSprung && wasserTiefe(o.x, o.z) < 2 && !o.sprungGeplant) placeOrca(o, F.x, F.z);
     // Zu weit weg -> an neuer Stelle aussetzen (die Herde begleitet den Spieler wie die Flotte).
     if(Math.hypot(o.x - F.x, o.z - F.z) > ORCA_DESPAWN) placeOrca(o, F.x, F.z);
     const surf = seaYAt(o.x, o.z, dt);
@@ -4261,6 +4371,9 @@ function updateOrcas(dt){
         ziel = obenMax;                             // so tief wie moeglich, waehrend es abdreht
         o.heading += 1.2 * dt * (1 + Math.random());
       }
+      // Hindernisse in der Tiefe (window.wasserSperre, z. B. die Felsen der Schlucht): voraus abdrehen, drin neu aussetzen
+      if(!imWasser(o.x + fx*30, o.y, o.z + fz*30)) o.heading += 1.2 * dt * (1 + Math.random());
+      if(wasserSperreAt(o.x, o.y, o.z)){ placeOrca(o, F.x, F.z); continue; }
       // Mit BEGRENZTER Sinkrate folgen (siehe ORCA_DEEP_VY): so zieht das Tier seine Bahn und wird
       // nicht vom Boot gezogen — und der Nickwinkel bleibt dabei von selbst unter ORCA_DEEP_PMAX,
       // weil beides aus derselben Rechnung kommt.
@@ -4374,15 +4487,28 @@ function orcaPose(o, dt, swimY){
 //   Forelle  0,25 m, Clip Trout_Swim (0,96 s)                  -> auf FORELLE_LEN vergroessert
 //   Seeloewe 2,1 m, swim/walk/sleep/sleep_side/water_idle/roll/bark …   (furseal)
 //   Robbe    1,5 m, swim/walk/sleep/water_idle/roll/clapping …          (seal)
-const strandleben = { an: false, forellen: [], loewen: [], tpl: {}, laedt: {}, t: 0 };
+//   Rochen  (Stingray, WildPoly3D), Clips Stingray_swim / Stingray_swim2   -> auf ROCHEN_LEN Spannweite
+// Rochen (Live-Wunsch 22.10.2026): "einfach wie die Wale frei durchs Meer tauchen, aber wie die Fische nicht zu nah an der
+// Kueste" – einzeln, gemaechlich, dicht ueber dem Grund, nur in tiefem Wasser (ROCHEN_TIEF_MIN), weiter draussen als die
+// Forellen; ziehen weite Boegen und drehen vor flachem Wasser ab. Vom Ufer aus nicht zu sehen.
+const strandleben = { an: false, forellen: [], loewen: [], rochen: [], tpl: {}, laedt: {}, t: 0 };
+const ROCHEN_N = 5, ROCHEN_LEN = 1.6;       // Anzahl um den Spieler, Spannweite (m)
+const ROCHEN_TIEF_MIN = TIER_TIEFE.rochen[0], ROCHEN_UNTER = 2.5;   // m Wassertiefe mindestens (Tabelle), m unter der Oberflaeche
+// naeher am Spieler (Live-Befund 22.10.2026: "noch keinen Rochen schwimmen gesehen" – mit 25..160 m lagen sie meist ausserhalb
+// der Sicht unter Wasser)
+const ROCHEN_ABST_MIN = 8, ROCHEN_ABST_MAX = 60, ROCHEN_WEG = 130;   // m um den Spieler
+const ROCHEN_SPD = 1.6, ROCHEN_GRUND = 0.8;  // m/s, m ueber dem Meeresgrund
+// hoechstens so tief unter der Oberflaeche (Live-Befund 23.10.2026, Geheimland: "man sieht noch keine Rochen" – ueber dem Grund
+// lagen sie vor dem Steg 17 bis 33 m tief, Joshi schwimmt bei 2,5 m; im tiefen Wasser ziehen sie jetzt im Freiwasser)
+const ROCHEN_TIEF_MAX = 8;
 const FORELLE_LEN = 0.45;      // m – echte Forellen sind 30 bis 60 cm; mit 25 cm sah man sie im Wasser kaum
 const FORELLE_GRUPPEN = 3, FORELLE_JE = 4;
 // Nicht zu flach: vom Strand aus sah man sie schwimmen (Live-Befund 20.10.2026). Ab 1,8 m Wassertiefe und mindestens
 // FORELLE_UNTER unter der Oberflaeche – beim Schwimmen und Tauchen sieht man sie, vom Ufer aus nicht.
-const FORELLE_TIEF_MIN = 1.8, FORELLE_TIEF_MAX = 7;   // m Wassertiefe, in der sie stehen
+const FORELLE_TIEF_MIN = TIER_TIEFE.forelle[0], FORELLE_TIEF_MAX = TIER_TIEFE.forelle[1];   // m Wassertiefe (Tabelle)
 const FORELLE_UNTER = 0.9;     // m: so weit bleibt der Ruecken mindestens unter der Wasseroberflaeche
 const FORELLE_ABST_MIN = 6, FORELLE_ABST_MAX = 35, FORELLE_WEG = 70;   // m um den Spieler
-const FORELLE_SPD = 0.9, FORELLE_FLUCHT = 4.5, FORELLE_SCHEU = 2.5;   // m/s, m/s, m
+const FORELLE_SPD = 0.9, FORELLE_FLUCHT = 1.6, FORELLE_SCHEU = 2.5;   // m/s, m/s (entspannt weg vom Boot), m
 const LOEWE_SICHT = 260;       // m: weiter weg vom Spieler werden die Seeloewen nicht bewegt (spart Rechenzeit)
 const LOEWE_SPD_LAND = 0.6, LOEWE_SPD_WASSER = 2.2;
 function strandGLB(key, win){
@@ -4397,15 +4523,22 @@ function strandGLB(key, win){
     // Groesse IMMER in der Schwimm-Haltung messen (orcaPunkte, mit Skinning): die Bindepose der Forelle hat eine ganz
     // andere Ausdehnung als das sichtbare Tier – Box3.setFromObject ergab ~1 cm, die Forelle wurde damit 40-fach zu
     // gross (ueber 10 m, live gemeldet).
-    const clip = orcaClip(g.animations || [], key === 'forelle' ? 'Trout_Swim' : 'swim') || (g.animations || [])[0];
+    const clip = orcaClip(g.animations || [], key === 'forelle' ? 'Trout_Swim' : key === 'rochen' ? 'Stingray_swim' : 'swim') || (g.animations || [])[0];
     const mx0 = clip ? new THREE.AnimationMixer(obj) : null;
     if(mx0){ mx0.clipAction(clip).play(); mx0.setTime(clip.duration * 0.3); }
     const s = new THREE.Box3().setFromPoints(orcaPunkte(obj)).getSize(new THREE.Vector3());
-    const soll = { forelle: FORELLE_LEN, seeloewe: 2.1, robbe: 1.5 }[key];
+    const soll = { forelle: FORELLE_LEN, seeloewe: 2.1, robbe: 1.5, rochen: ROCHEN_LEN }[key];
     obj.scale.multiplyScalar(soll / Math.max(0.001, s.x, s.z));
     if(mx0){ mx0.stopAllAction(); mx0.uncacheRoot(obj); }
     obj.traverse(o => { if(o.isMesh){ o.castShadow = false; o.frustumCulled = false; } });
     const w = new THREE.Group(); w.add(obj); w.userData.clips = g.animations || [];
+    // Seeloewe/Robbe: wie tief reicht der Koerper je Haltung unter den Ursprung? (Live-Befund 22.10.2026: beim Liegen lagen sie
+    // halb im Sand – die Liegehaltungen reichen tiefer als der Ursprung). Einmal je Clip in der Mitte gemessen, beim Liegen
+    // an Land um genau so viel angehoben (updateLoewen)
+    if(key === 'seeloewe' || key === 'robbe'){ const unten = {}, mx = new THREE.AnimationMixer(w);
+      for(const c of w.userData.clips){ mx.stopAllAction(); mx.clipAction(c).play(); mx.setTime(c.duration * 0.5); w.updateMatrixWorld(true);
+        unten[c.name] = new THREE.Box3().setFromPoints(orcaPunkte(w)).min.y; }
+      mx.stopAllAction(); mx.uncacheRoot(w); w.userData.unten = unten; }
     strandleben.tpl[key] = w;
   }, () => { strandleben.laedt[key] = false; });
 }
@@ -4418,11 +4551,8 @@ function strandAct(t, name){
   if(t.act){ a.crossFadeFrom(t.act, 0.4, false); }
   t.act = a; t.clip = c;
 }
-// Wassertiefe an (x,z): Oberflaeche minus Grund. Land/Strand -> 0
-function strandTiefe(x, z){
-  if(isOnLand(x, z) || isOnBeach(x, z)) return 0;
-  return seaYAt(x, z) - seabedY(x, z);
-}
+// Wassertiefe an (x,z): die gemeinsame Definition (wasserTiefe) – Land, Strand und gemeldete Hindernisse sind 0
+function strandTiefe(x, z){ return wasserTiefe(x, z); }
 // ---- Forellen: kleine Gruppen im Flachwasser vor dem Strand, um den Spieler herum ----
 function forellenPlatz(F){
   for(let i = 0; i < 25; i++){
@@ -4456,8 +4586,8 @@ function updateForellen(dt, F, P){
   for(const g of strandleben.forellen){
     if(!g.da){ g.warte -= dt; if(g.warte <= 0){ forellenSetzen(g, F); g.warte = 2 + Math.random() * 4; } continue; }
     // weiterziehen: langsam, leichter Bogen; vor Land und zu flachem Wasser abdrehen
-    const nah = Math.hypot(P.x - g.x, P.z - g.z);
-    if(nah < FORELLE_SCHEU + 1.5 && g.flucht <= 0){ g.flucht = 2.2; g.kurs = Math.atan2(P.x - g.x, P.z - g.z); }   // weg vom Spieler: vorwaerts (-sin, -cos) = g - P
+    // vor schwimmenden Kindern keine Angst (Live-Wunsch 22.10.2026) – vor Booten ziehen sie ganz entspannt zur Seite
+    if(g.flucht <= 0) for(const b of booteAufDemWasser()){ const w = bootWeichen(b, g.x, g.z, 14); if(w !== null){ g.flucht = 3.5; g.kurs = w; break; } }
     g.flucht -= dt;
     const v = g.flucht > 0 ? FORELLE_FLUCHT : FORELLE_SPD;
     g.kurs += Math.sin(strandleben.t * 0.4 + g.x) * 0.25 * dt;
@@ -4476,6 +4606,52 @@ function updateForellen(dt, F, P){
       f.obj.position.set(g.x + ox, mitteY + (f.dy - 0.5) * 0.5 + Math.sin(f.ph) * 0.06, g.z + oz);
       f.obj.rotation.set(0, g.kurs + Math.sin(f.ph * 1.3) * 0.15, 0);
     }
+  }
+}
+// ---- Rochen: frei im tiefen Wasser um den Spieler (wie die Wale), nie nahe der Kueste -------------------------------
+function rochenPlatz(F){
+  for(let i = 0; i < 30; i++){
+    const a = Math.random() * Math.PI * 2, d = ROCHEN_ABST_MIN + Math.random() * (ROCHEN_ABST_MAX - ROCHEN_ABST_MIN);
+    const x = F.x + Math.cos(a) * d, z = F.z + Math.sin(a) * d;
+    if(strandTiefe(x, z) >= ROCHEN_TIEF_MIN + 1 && strandTiefe(x + 12, z) >= ROCHEN_TIEF_MIN && strandTiefe(x - 12, z) >= ROCHEN_TIEF_MIN
+      && strandTiefe(x, z + 12) >= ROCHEN_TIEF_MIN && strandTiefe(x, z - 12) >= ROCHEN_TIEF_MIN) return { x, z };   // auch rundherum tief
+  }
+  return null;
+}
+function rochenSetzen(r, F){
+  const p = rochenPlatz(F); r.da = !!p; r.obj.visible = !!p;
+  if(!p) return;
+  r.x = p.x; r.z = p.z; r.kurs = Math.random() * Math.PI * 2; r.ph = Math.random() * 6;
+  r.y = Math.max(seabedY(p.x, p.z) + ROCHEN_GRUND, seaYAt(p.x, p.z) - ROCHEN_TIEF_MAX);
+}
+function updateRochen(dt, F){
+  const tpl = strandleben.tpl.rochen; if(!tpl) return;
+  if(!strandleben.rochen.length){
+    for(let i = 0; i < ROCHEN_N; i++){
+      const obj = cloneSkinned(tpl); scene.add(obj); obj.visible = false;
+      const mixer = new THREE.AnimationMixer(obj), c = strandClip(tpl, i % 2 ? 'Stingray_swim2' : 'Stingray_swim');
+      if(c){ mixer.clipAction(c).play(); mixer.setTime(Math.random() * c.duration); mixer.timeScale = 0.6 + Math.random() * 0.3; }
+      strandleben.rochen.push({ obj, mixer, da: false, x: 0, z: 0, y: 0, kurs: 0, ph: 0, warte: Math.random() * 4 });
+    }
+  }
+  for(const r of strandleben.rochen){
+    if(!r.da){ r.warte -= dt; if(r.warte <= 0){ rochenSetzen(r, F); r.warte = 3 + Math.random() * 5; } continue; }
+    // weite Boegen; vor flachem Wasser (Kueste) abdrehen
+    r.ph += dt;
+    r.kurs += Math.sin(strandleben.t * 0.15 + r.ph * 0.3 + r.x * 0.01) * 0.35 * dt;
+    const fx = -Math.sin(r.kurs), fz = -Math.cos(r.kurs);
+    for(const b of booteAufDemWasser()){ const w = bootWeichen(b, r.x, r.z, 20); if(w !== null) r.kurs += Math.max(-0.6 * dt, Math.min(0.6 * dt, Math.atan2(Math.sin(w - r.kurs), Math.cos(w - r.kurs)))); }
+    if(strandTiefe(r.x + fx * 15, r.z + fz * 15) < ROCHEN_TIEF_MIN || !imWasser(r.x + fx * 15, r.y, r.z + fz * 15)) r.kurs += 0.9 * dt;
+    else { r.x += fx * ROCHEN_SPD * dt; r.z += fz * ROCHEN_SPD * dt; }
+    if(Math.hypot(F.x - r.x, F.z - r.z) > ROCHEN_WEG){ r.da = false; r.obj.visible = false; r.warte = 2 + Math.random() * 4; continue; }
+    // dicht ueber dem Grund, aber immer ROCHEN_UNTER unter der Oberflaeche; sanftes Auf und Ab
+    const ober = seaYAt(r.x, r.z), grund = seabedY(r.x, r.z);
+    const soll = Math.min(ober - ROCHEN_UNTER, Math.max(grund + ROCHEN_GRUND, ober - ROCHEN_TIEF_MAX) + Math.sin(r.ph * 0.4) * 0.4);
+    r.y += (soll - r.y) * Math.min(1, dt * 0.8);
+    r.mixer.update(dt);
+    if(wasserSperreAt(r.x, r.y, r.z)){ r.da = false; r.obj.visible = false; r.warte = 1; continue; }   // im Fels: neu setzen
+    r.obj.position.set(r.x, r.y, r.z);
+    r.obj.rotation.set(Math.sin(r.ph * 0.4) * 0.06, r.kurs, Math.sin(r.ph * 0.3) * 0.08);
   }
 }
 // ---- Seeloewen: zwei Tiere an einem Strand. Liegen im Sand, robben ins Wasser, planschen, kommen zurueck ----
@@ -4542,7 +4718,10 @@ function updateLoewen(dt, F){
     // Hoehe: an Land auf dem Sand, im Wasser mit dem Ruecken knapp unter der Oberflaeche, beim Treten Kopf heraus
     const tief = strandTiefe(t.x, t.z);
     let y;
-    if(tief <= 0.6) y = Math.max(evaFootY(t.x, t.z), tief > 0 ? seaYAt(t.x, t.z) - 0.25 : -1e9);
+    // an Land die Haltung ausgleichen (unten: so weit reicht der Koerper unter den Ursprung), weich beim Clipwechsel
+    const un = strandleben.tpl[t.art].userData.unten, soll = (un && t.clip && un[t.clip.name] !== undefined) ? Math.max(0, -un[t.clip.name]) : 0;
+    t.hub = (t.hub || 0) + (soll - (t.hub || 0)) * Math.min(1, dt * 2.5);
+    if(tief <= 0.6) y = Math.max(evaFootY(t.x, t.z) + (tief <= 0 ? t.hub : 0), tief > 0 ? seaYAt(t.x, t.z) - 0.25 : -1e9);
     else y = seaYAt(t.x, t.z) - (t.zustand === 'planschen' && t.clip && /water_idle/.test(t.clip.name) ? 0.85 : 0.3);
     t.obj.position.set(t.x, y, t.z); t.obj.rotation.set(0, t.kurs, 0);
   }
@@ -4550,14 +4729,16 @@ function updateLoewen(dt, F){
 function clearStrandleben(){
   for(const g of strandleben.forellen) for(const f of g.fische) scene.remove(f.obj);
   for(const t of strandleben.loewen) scene.remove(t.obj);
-  strandleben.forellen.length = 0; strandleben.loewen.length = 0; strandleben.platz = null;
+  for(const r of strandleben.rochen) scene.remove(r.obj);
+  strandleben.forellen.length = 0; strandleben.loewen.length = 0; strandleben.rochen.length = 0; strandleben.platz = null;
 }
 function updateStrandleben(dt){
-  if(!strandleben.an || locale !== 'earth'){ if(strandleben.forellen.length || strandleben.loewen.length) clearStrandleben(); return; }
-  strandGLB('forelle', 'FORELLE_GLB'); strandGLB('seeloewe', 'SEELOEWE_GLB'); strandGLB('robbe', 'ROBBE_GLB');
+  if(!strandleben.an || locale !== 'earth'){ if(strandleben.forellen.length || strandleben.loewen.length || strandleben.rochen.length) clearStrandleben(); return; }
+  strandGLB('forelle', 'FORELLE_GLB'); strandGLB('seeloewe', 'SEELOEWE_GLB'); strandGLB('robbe', 'ROBBE_GLB'); strandGLB('rochen', 'ROCHEN_GLB');
   strandleben.t += dt;
   const F = worldFocus(), P = eva ? eva.group.position : state.pos;
   updateForellen(dt, F, P);
+  updateRochen(dt, F);
   updateLoewen(dt, F);
 }
 // Trifft (x,y,z) ein Handelsschiff? Wie hitsBuilding, aber für die fahrende Flotte. Gerechnet wird im
@@ -4612,9 +4793,15 @@ function shipGridHit(sh, x, y, z, rand){
 // Fahrwasser für EIN BESTIMMTES Schiff: offenes Wasser, aber es selbst zählt nicht als Hindernis.
 // isOpenWater allein geht hier nicht — es fragt hitsBuilding, und das kennt seit dem Einbau auch die
 // Schiffe. Jedes Schiff hätte damit sein eigenes Fahrwasser gesperrt (gemessen: alle vier Typen).
+// Seit 22.10.2026 nach der gemeinsamen Wasser-Definition (wasserTiefe): genug Wasser unter dem Rumpf – nicht nur "kein Land"
+const SCHIFF_TIEF_MIN = 8;      // m Wassertiefe, die ein Schiff braucht
 function seaShipWaterFor(sh, x, z){
-  return !isOnLand(x, z) && !isOnBeach(x, z) && !isOnCarrier(x, z)
-         && !hitsBuilding(x, ISLAND_Y+2, z, false, sh);
+  return wasserTiefe(x, z) >= SCHIFF_TIEF_MIN && !hitsBuilding(x, ISLAND_Y+2, z, false, sh);
+}
+// ... auch an den Bordwaenden (vorher nur Bug und Mitte: ein 300-m-Schiff konnte mit der Seite ueber den Strand streifen)
+function seaShipSeitenFrei(sh, x, z){
+  const qx = Math.cos(sh.heading) * (sh.hw || 10), qz = -Math.sin(sh.heading) * (sh.hw || 10);
+  return seaShipWaterFor(sh, x + qx, z + qz) && seaShipWaterFor(sh, x - qx, z - qz);
 }
 // Ein Rumpf schiebt ein Boot beiseite — INNEN wie AUSSEN. Beides ist noetig, und zwar aus zwei
 // ganz verschiedenen Gruenden:
@@ -5954,6 +6141,7 @@ const SHADOW_MAXALT = 20;
 const SHADOW_LIFT = 0.045;     // m ueber festem Boden (siehe updateOvalShadow); Spiele legen eigene Schatten genauso hoch
 // Gesamtstaerke der weichen Schatten (Live-Wunsch 20.10.2026: "dezenter"): 70 % der frueheren Deckkraft
 const SHADOW_DECK = 0.7;
+const SCHATTEN_HINTEN = 1.8;   // m: am Boden so weit nach hinten versetzt (hinter dem Heck sichtbar)
 // Der ovale Schatten fuer Boote und den Astronauten. Getrennt von updateShadow, weil die Bezugsgroessen
 // andere sind: nicht state.pos und der Flugzeugkurs, sondern die Position des Boots bzw. der Figur.
 // Beim Astronauten ist die Hoehe interessant (er huepft, auf dem Mond sechsmal so hoch) — der
@@ -6097,7 +6285,7 @@ function updateShadow(){
   // 5,5 m ist die halbe Spannweite des Umrisses (shWing.scale.x), das groesste Mass des Schattens.
   // Nur ueber offenem Wasser die Wellen abtasten: an Land und auf dem TRAEGERDECK ist die Flaeche
   // eben, und ein seaYAt in der Naehe des Traegers wuerde den Schatten vom Deck ins Wasser ziehen.
-  let shadowY = surfY + 0.15;
+  let shadowY = surfY + (state.onGround ? 0.03 : 0.15);       // am Boden direkt auf der Flaeche (unter den Raedern)
   if(erde && !overLand && !onCar){
     for(let a = 0; a < 6.283; a += Math.PI/4){
       const s2 = seaYAt(state.pos.x + Math.sin(a)*5.5, state.pos.z + Math.cos(a)*5.5);
@@ -6105,6 +6293,9 @@ function updateShadow(){
     }
   }
   planeShadow.position.set(state.pos.x, shadowY, state.pos.z);
+  // am Boden ragt er etwas nach hinten heraus (Live-Wunsch 22.10.2026: nach dem Einsteigen sieht man von hinten drauf – so
+  // ist er hinter dem Heck zu sehen, wie ein Schatten der tiefstehenden Sonne)
+  if(state.onGround && !isWaterCraft()){ const hb = new THREE.Vector3(0, 0, 1).applyQuaternion(state.quat); hb.y = 0; if(hb.lengthSq() > 1e-6){ hb.normalize(); planeShadow.position.x += hb.x * SCHATTEN_HINTEN; planeShadow.position.z += hb.z * SCHATTEN_HINTEN; } }
   { const delta = MODEL_NAMES[currentModel] === 'AlphaJet'; shDelta.visible = delta; shWing.visible = !delta; }   // Eurofighter: Deltafluegel
   // Kurs (Gierwinkel) übernehmen, damit der Umriss in Flugrichtung zeigt
   const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(state.quat);
@@ -6120,7 +6311,7 @@ function updateShadow(){
   shadowMat.opacity = (0.18 + 0.22 * (1 - f)) * SHADOW_DECK;
   // Am Boden kraeftiger (Live-Befund 22.10.2026: auf der hellen Bahn war der Schatten kaum zu sehen, der Flieger wirkte, als
   // laege er auf) – ein klarer Kontaktschatten unter Rumpf und Fluegeln
-  if(state.onGround && !isWaterCraft()) shadowMat.opacity = 0.55;
+  if(state.onGround && !isWaterCraft()) shadowMat.opacity = 0.85;
 }
 
 // ---------- Schleudersitz + Fallschirm (nur AlphaJet) ----------
@@ -6184,6 +6375,23 @@ function chuteSeaRescue(ch, dt){
 }
 // Ein gerettetes Boot mit abraeumen (wird ueberall dort aufgerufen, wo der Fallschirm entfernt wird).
 function clearChuteBoat(ch){ if(ch && ch.boat){ scene.remove(ch.boat); ch.boat = null; } }
+// Szene vorwaermen (Live-Befund 22.10.2026, Geheimland: "beim Einstieg in die Mustang ruckelt es"): gemessen ein Bild mit
+// 300-450 ms – die Kamera springt hinter den Flieger, dort kommen Dinge ins Bild, die noch nie gezeichnet wurden; beim ersten
+// Zeichnen laedt die Grafikkarte ihre Geometrien hoch und uebersetzt Shader. Hier wird alles Sichtbare einmal ohne Sichtkegel
+// in ein winziges Ziel gezeichnet – am besten waehrend einer Blende (die Spiele rufen es beim Etappenstart).
+let _vorwaermRT = null;
+function szeneVorwaermen(){
+  if(!renderer || !scene || !camera) return;
+  // das eigene Fahrzeug immer mit (es ist oft gerade ausgeblendet – im Geheimland, solange Joshi in der Hoehle ist)
+  const pgSicht = planeGroup.visible; planeGroup.visible = true;
+  const aus = [];
+  scene.traverse(o => { if((o.isMesh || o.isLine || o.isPoints || o.isSprite) && o.frustumCulled){ o.frustumCulled = false; aus.push(o); } });
+  try {
+    if(!_vorwaermRT) _vorwaermRT = new THREE.WebGLRenderTarget(4, 4);
+    renderer.compile(scene, camera);
+    const alt = renderer.getRenderTarget(); renderer.setRenderTarget(_vorwaermRT); renderer.render(scene, camera); renderer.setRenderTarget(alt);
+  } finally { for(const o of aus) o.frustumCulled = true; planeGroup.visible = pgSicht; }
+}
 // Fallschirm geht auf: so viele Meter UEBER DER LANDESTELLE (Boden, Skipiste oder Meer – was dort unten ist), gilt fuer
 // alle Fallschirmspruenge der Spiele (Trip to Japan: Finale und Megasprung; Das Geheimland: fallschirm.js). Live-Wunsch
 // 22.10.2026: 75 m (vorher 120 m ueber Grund bzw. 45 m ueber dem Meer)
@@ -10138,6 +10346,15 @@ function uwGeoBlend(von, nach, b){
   if(von <= 0 || nach <= 0) return von + (nach - von)*b;   // Notausgang, sollte nie greifen
   return Math.exp(Math.log(von) + (Math.log(nach) - Math.log(von))*b);
 }
+// Licht beim Ankommen an einem neuen Ort sofort richtig (Live-Befund 22.10.2026, Trip to Japan: "in Tokio ist die Szene erst
+// komplett ueberstrahlt und regelt sich dann" – nach der U-Boot-Schlucht stand uwBlend noch hoch, unter Wasser ist das Licht
+// sehr hell (Streulicht 1,75 + uwAmbient) und klang mit UW_RATE erst ab; ebenso spaceBlend nach dem Weltall). Die Spiele
+// rufen es beim Etappenstart; danach rechnen updateSpaceBlend/updateUnderwater wie immer weiter.
+function blendenSofort(){
+  uwBlend = 0; uwCamBlend = 0; uwAmbient.intensity = 0;
+  spaceBlend = locale === 'earth' ? Math.max(0, Math.min(1, (state.pos.y - ATMO_TOP) / (SPACE_Y - ATMO_TOP))) : 1;
+  updateSpaceBlend(0);
+}
 function updateUnderwater(dt){
   updateUwCamBlend(dt);          // Kamera-Zug (eigener Wert, siehe dort — nicht uwBlend)
   // GLEITENDER Zielwert statt 0/1. Der harte Boolean liess den Nebel an der Oberflaeche
@@ -10215,13 +10432,18 @@ function updateUnderwater(dt){
   // kind keinen unterschied macht ob im flachen oder tiefen wasser". Am Grund bleiben damit 92 %
   // des Lichts statt 70 %. Ein kleiner Rest Verlauf bleibt, damit Tiefe ueberhaupt spuerbar ist.
   const dunkel = 1 - 0.08*tief;
-  hemiLight.intensity = hemiLight.intensity + (1.75*dunkel - hemiLight.intensity)*b;
+  // Schwimmer (zu Fuss im Wasser) nur halb so stark aufhellen (Live-Befund 22.10.2026: "wenn Samu schwimmt, ist der Meeresboden
+  // ueberstrahlt hell, im U-Boot ist er ok" – die Aufhellung ist fuer die Tiefe gedacht; beim Schwimmen ist man im flachen
+  // Wasser ueber hellem Sand)
+  const st = eva ? UW_SCHWIMMER : 1;
+  hemiLight.intensity = hemiLight.intensity + (1.75*dunkel*st - hemiLight.intensity)*b;
   sun.intensity       = sun.intensity       + (0.60*dunkel - sun.intensity      )*b;
   // Das richtungslose Licht (siehe uwAmbient): es macht aus der schwarzen Bootssilhouette einen
   // Koerper und hebt den Meeresboden vom Wasser ab. 0,75 ist kraeftig, aber unter Wasser gehoert
   // das so — dort gibt es kaum Schatten, weil das Licht an jedem Wasserteilchen gestreut wird.
-  uwAmbient.intensity = uwAmbient.intensity + (0.95*dunkel - uwAmbient.intensity)*b;
+  uwAmbient.intensity = uwAmbient.intensity + (0.95*dunkel*st - uwAmbient.intensity)*b;
 }
+const UW_SCHWIMMER = 0.5;
 
 // ---------- Weltraum-Anzeige über dem Flieger ----------
 // Gleiche Machart und Größe wie die Wassertropfen/Kisten: ein 60-px-Symbol, das an die projizierte
@@ -10932,7 +11154,10 @@ planeShadow.add(shBody);
 // Masse: Spitze 1,5 m vor der Mitte, Hinterkante 3,2 m dahinter, 4,3 m halbe Spannweite (der Eurofighter im Spiel: 11 m
 // lang, 8,5 m breit). Die Schatten-Gruppe zeigt mit +z nach vorn (rotation.y = Kurs + PI), die Form liegt in x/y -> -x
 // gedreht auf den Boden: y wird zu -z, also Spitze bei y = -1,5.
-const shDelta = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(0, -1.5), new THREE.Vector2(-4.3, 3.2), new THREE.Vector2(4.3, 3.2)])), shadowMat);
+// Live-Befund 22.10.2026 ("der Jet hat immer noch keinen Schatten, auch von der Seite nicht"): das Dreieck war mit 4,7 m
+// halb so lang wie der Jet und auf der hellen Bahn kaum zu sehen -> volle Laenge (Nase 5,5 m vor, Heck 5,5 m hinter der
+// Mitte), dazu der Rumpfstreifen (shBody)
+const shDelta = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(0, -5.5), new THREE.Vector2(-4.4, 3.4), new THREE.Vector2(-1.2, 5.5), new THREE.Vector2(1.2, 5.5), new THREE.Vector2(4.4, 3.4)])), shadowMat);
 shDelta.rotation.x = -Math.PI/2; shDelta.renderOrder = 999; shDelta.visible = false;
 planeShadow.add(shDelta);
 const shWing = new THREE.Mesh(new THREE.CircleGeometry(1, 24), shadowMat);
@@ -12621,7 +12846,9 @@ const SUB_UFER_R   = 130;
 const SUB_SURF_Y   = 0;
 // Wie weit ueber dem Meeresboden es spaetestens aufhoert. Der Rumpf ist 13 m dick und der Ursprung
 // liegt auf der Wasserlinie, also 3 m ueber der Rumpfmitte — 12 m lassen den Kiel frei.
-const SUB_FLOOR_CLR = 12;
+// 22 m seit 22.10.2026: die tiefste Stelle des neuen U-Boots (die Schraube unten am Heck) liegt 20,9 m unter der
+// Wasserlinie – mit 12 m (fuer das alte Boot, Unterkante 14,6 m) verschwanden Schraube und Rumpf im Meeresboden
+const SUB_FLOOR_CLR = 22;
 // Sinkrate = Fahrt * sin(Nickwinkel) * dieser Faktor. Von 0,75 auf 2,16 erhoeht, weil die maximale
 // Nasenlage von 30 auf 10 Grad gesunken ist (SUB_PMAX) — nachgerechnet gibt das exakt dieselbe
 // Rate wie vorher: sin(30 Grad)*0,75 = 0,375 und sin(10 Grad)*2,16 = 0,375.
@@ -13207,9 +13434,14 @@ function floatCanadair(dt){
 const _camRef = new THREE.Vector3();
 function planeCamRef(){
   _camRef.copy(state.pos);
-  _camRef.y = planeGroup.position.y + camBodenHub;   // beim Canadair die schwimmende Hoehe, sonst identisch
+  _camRef.y = planeGroup.position.y;   // beim Canadair die schwimmende Hoehe, sonst identisch
   return _camRef;
 }
+// Bezugspunkt der KAMERA: wie planeCamRef, am Boden auf Rumpfhoehe (camBodenHub). Getrennt, weil der Schatten (updateShadow)
+// planeCamRef fuer die Hoehe ueber Grund nimmt – mit dem Hub darin galt der Jet am Boden als einige Meter hoch, der Schatten
+// war gross, blass und kaum zu sehen (Live-Befund 22.10.2026: "erst ein paar Meter in der Luft sieht man ihn")
+const _camRefK = new THREE.Vector3();
+function camRefKamera(){ _camRefK.copy(planeCamRef()); _camRefK.y += camBodenHub; return _camRefK; }
 // Kamera am Boden (Live-Befund 22.10.2026: "auch wenn er korrekt auf den Raedern steht, sieht es so aus, als laege er auf
 // dem Boden"): der Ursprung der Flieger liegt an der Unterkante der Raeder, die Kamera zielte also auf den Boden und stand
 // knapp darueber – man sah unter den Fluegeln keinen Boden. Am Boden zielt sie auf die halbe Modellhoehe (der Rumpf) und
@@ -13475,7 +13707,7 @@ function updateCamera(){
   // 42-m-Nebel ueberhaupt zu sehen war. Das ist RUECKGEBAUT: bei 95 m Rumpflaenge sass sie damit
   // im Boot. Geloest ist es jetzt ueber die Sichtweite (UW_FOG_FAR 150 m) — der richtige Hebel,
   // denn zu sehen war das Problem, nicht der Abstand.
-  const desired = planeCamRef().clone()
+  const desired = camRefKamera().clone()
     .addScaledVector(back, cfg.dist*cc.dist + camBackExtra())
     .addScaledVector(upV,  cfg.height*cc.hgt);
   // Nur in der Inselwelt ist y = 0 der Meeresboden. Im Weltall liegt die Erdkugel UNTER dem Spieler
@@ -13532,8 +13764,8 @@ function updateCamera(){
   // Zeitkonstante bei 60, 45, 30 und 20 fps konstant bei 25,1 ms.
   const k = frameLerp(Math.min(0.5, cfg.lerp * (1 + camSpd/120)), dtCam);
   // Bezug ist die ANGEZEIGTE Position (siehe planeCamRef) — beim schwimmenden Canadair weicht sie
-  // von state.pos ab, sonst sind beide gleich.
-  const ref = planeCamRef();
+  // von state.pos ab, sonst sind beide gleich. Am Boden auf Rumpfhoehe (camRefKamera).
+  const ref = camRefKamera();
   // Den Abstand aus dem VORIGEN Bild nehmen, nicht camera.position - ref: camera.position stammt aus dem vorigen Bild,
   // ref schon aus diesem – darin steckte die Flugstrecke eines Bildes, und weil k bei hohem Tempo auf 0,5 gedeckelt ist,
   // blieb im Gleichgewicht genau diese Strecke als Rueckstand stehen. Gemessen bei Warp (12.000 m/s, 60 fps): Kamera

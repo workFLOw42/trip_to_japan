@@ -91,6 +91,11 @@ const WIND_DIR = { x: 0, z: 1 };
 function nass4(x, z, rand){ return !!(story.flucht4 && story.flucht4.nass(x, z, rand)); }
 const LAND_Y = KAI_Y;
 const BODEN_BETON = new THREE.Color(0x5f5b55);
+// Grund im Hafen, Kanal und davor (Live-Befund 23.10.2026: "im Hafenbecken kann ich unter den Beckenboden tauchen" – gezeichnet
+// lag er bei -3 m, fuer Samu und Boote galt -6 m). Jetzt eine Tiefe fuer beides und Sand wie der Meeresboden statt Beton.
+const HAFEN_GRUND = -6;                       // Becken/Kanal; draussen tiefer (etappe4b.js grund)
+const grund4 = (x, z) => story.flucht4 && story.flucht4.grund ? story.flucht4.grund(x, z) : HAFEN_GRUND;
+const BODEN_SAND = new THREE.Color(0x5e5640);   // dunkel: unter Wasser hellt die Engine stark auf (0x9c8c62 war grell gelb)
 let bodenX4 = NaN, bodenZ4 = NaN;
 function bodenRaster4(){ ground.position.x = Math.round(ground.position.x / SEA_STEP) * SEA_STEP; ground.position.z = Math.round(ground.position.z / SEA_STEP) * SEA_STEP; }
 // Live-Test (X-Wing): bei Mach 2 ruckelte der Hafen (36 von 355 Bildern ueber 33 ms) – je Rasterschritt 9409 Punkte
@@ -116,9 +121,9 @@ function updateBoden4(erzwingen){
       const rr = r + dr, cc = c + dc;
       if(rr >= 0 && rr < N && cc >= 0 && cc < N && _nass4[rr * N + cc]) nah = true;
     }
-    const y = nah ? -3 : LAND_Y;
+    const y = nah ? grund4(seaBaseX[i] + ox, seaBaseZ[i] + oz) : LAND_Y, f = nah ? BODEN_SAND : BODEN_BETON;
     if(seaPos.getY(i) !== y){ seaPos.setY(i, y); neu = true; }
-    seaCol.setXYZ(i, BODEN_BETON.r, BODEN_BETON.g, BODEN_BETON.b);
+    seaCol.setXYZ(i, f.r, f.g, f.b);
   }
   seaPos.needsUpdate = true; seaCol.needsUpdate = true;
   if(neu || erzwingen) seaGeo.computeVertexNormals();
@@ -136,7 +141,7 @@ function hookWelt4(){
   evaFootY    = function(x, z){ return hier() ? (nass4(x, z) ? 0 : LAND_Y) : evaFootYOrig.apply(this, arguments); };
   seaYAt      = function(x, z, t){ return hier() ? 0 : seaYAtOrig.apply(this, arguments); };
   seaSurfaceY = function(dx, dz, t){ return hier() ? 0 : seaSurfaceYOrig.apply(this, arguments); };
-  seabedY     = function(x, z){ return hier() ? -6 : seabedYOrig.apply(this, arguments); };
+  seabedY     = function(x, z){ return hier() ? grund4(x, z) : seabedYOrig.apply(this, arguments); };
   seaFloorNeeded = function(){ return hier() ? false : seaFloorNeededOrig(); };
   updateSea   = function(dt){ if(!hier()) return updateSeaOrig.apply(this, arguments); updateBoden4(); };
   const recycleOrig = recycleWorld;
@@ -180,8 +185,7 @@ function baueHafen(){
   const w = story.welt(4);
   // Kai: Betonflaeche
   const beton = new THREE.MeshLambertMaterial({ color: 0x6e6a64 });
-  const kai = new THREE.Mesh(new THREE.BoxGeometry(132, KAI_Y + 3, 320), beton);
-  kai.position.set(KAI_X - 66, (KAI_Y - 3) / 2, 0); w.add(kai);
+  w.add(story.bisInGrund.klotz(grund4, 132, 320, KAI_Y, KAI_X - 66, 0, beton));   // bis in den Grund (story.js)
   // Kaikante gelb markiert
   const kante = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, 320), new THREE.MeshBasicMaterial({ color: 0xf2c200 }));
   kante.position.set(KAI_X - 0.4, KAI_Y + 0.06, 0); w.add(kante);
@@ -304,8 +308,7 @@ function baueHinterland(w){
   baueAltstadt(w, rnd);
   // Containerlager: jede Instanz ein Quader (objekte.js) – man laeuft durch die Gassen, nicht durch die Container
   // Betonflaeche bis zur Stadt (der Kai-Klotz endet bei x -120)
-  const flaeche = new THREE.Mesh(new THREE.BoxGeometry(1700, KAI_Y + 3, 2400), new THREE.MeshLambertMaterial({ color: 0x6e6a64 }));
-  flaeche.position.set(-120 - 850, (KAI_Y - 3) / 2, 300); w.add(flaeche);
+  w.add(story.bisInGrund.klotz(grund4, 1700, 2400, KAI_Y, -120 - 850, 300, new THREE.MeshLambertMaterial({ color: 0x6e6a64 })));
 }
 
 // Altstadt-Viertel zwischen Lager und Hochhaeusern (x -128..-250, z -360..600): Strassenraster, Shophouses (haeuser.js 'asien')
@@ -825,6 +828,38 @@ function kranKamera(){
 
 // ---- Ankunft ---------------------------------------------------------------------------------
 const ANKUNFT = { x: -30, z: -30 };
+// Leiter an der Kaikante (Live-Wunsch 22.10.2026: "am Hafen sollte es eine Leiter geben"): ueber die Kante geht Samu ins Wasser
+// (Engine: er schwimmt), hinaus kommt er nur hier – sonst ist die Kaimauer eine Wand (story.schwimmAusstieg)
+// Drei Leitern (Live-Wunsch 23.10.2026: "noch 2 Leitern, eine hinten beim Speedboot und eine in der Mitte"): an der Ankunft,
+// beim Ring des Rennboots (das Boot liegt 12 m vor dem Kai) und in der Mitte dazwischen
+const LEITER_R = 1.8;
+const LEITERN = [{ x: KAI_X, z: ANKUNFT.z }, { x: KAI_X, z: -67 }, { x: KAI_X, z: -104 }];
+const leiterBei = (x, z, r) => LEITERN.find(L => Math.hypot(x - L.x, z - L.z) < r) || null;
+let leiterObj = null;
+// Holme bis ueber die Kante, dann als Griff (Live-Wunsch 23.10.2026: "der Griff ist etwas seltsam" – vorher zwei Halbkreise)
+// waagerecht ein Stueck auf den Kai und senkrecht in den Boden: ein Buegel je Seite wie an echten Kaileitern
+function baueLeiter(){
+  if(leiterObj && leiterObj.parent) return;
+  const alle = new THREE.Group(), m = new THREE.MeshLambertMaterial({ color: 0x9aa3ab });
+  const unten = -1.6, oben = KAI_Y + 0.9, h = oben - unten, GRIFF = 0.55;
+  for(const L of LEITERN){
+    const g = new THREE.Group();
+    for(const v of [-0.3, 0.3]){
+      const h1 = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, h, 6), m); h1.position.set(0.08, unten + h / 2, v); g.add(h1);
+      const q = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, GRIFF + 0.07, 6), m); q.rotation.z = Math.PI / 2; q.position.set(0.08 - GRIFF / 2, oben, v); g.add(q);
+      const s = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, oben - KAI_Y, 6), m); s.position.set(0.08 - GRIFF, (oben + KAI_Y) / 2, v); g.add(s);
+    }
+    for(let y = unten + 0.3; y < KAI_Y + 0.1; y += 0.3){ const s = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.6, 5), m); s.rotation.x = Math.PI / 2; s.position.set(0.08, y, 0); g.add(s); }
+    g.position.set(L.x, 0, L.z); alle.add(g);
+  }
+  alle.userData.deko = true;
+  story.welt(4).add(alle); leiterObj = alle;
+}
+story.schwimmAusstieg = function(x, z){
+  if(!hier()) return undefined;
+  const L = leiterBei(x, z, LEITER_R); if(L) return { x: L.x - 1.2, z: L.z };   // die Leiter hinauf auf den Kai
+  return false;
+};
 const SCHNELLBOOT = { x: 12, z: -110 };           // Ring am Kai, das Boot liegt davor im Becken (etappe4b.js)
 function hafenStart(){
   _islandInfoCalc = function(){ return null; };
@@ -922,6 +957,12 @@ function hookKran(){
 }
 
 function updateE4(dt){
+  if(hier()) baueLeiter();
+  // an der Leiter: hinaufklettern, sobald Samu dort ist (ohne gegen die Mauer druecken zu muessen)
+  const lt = hier() && eva && story.schwimm && story.schwimm.aktiv ? leiterBei(eva.group.position.x, eva.group.position.z, 1.5) : null;
+  if(lt){
+    story.schwimm.aktiv = false; const x = lt.x - 1.2, z = lt.z;
+    eva.group.position.set(x, evaFootY(x, z), z); eva.vy = 0; eva.onGround = true; eva.yaw = Math.PI / 2; eva.group.rotation.y = eva.yaw; }
   story.etappenMusik(4, window.MUSIK_SND && window.MUSIK_SND.e4, dt || 0);   // story.js: zu Beginn leise, wie Etappe 2
   if(!e4()) return;
   updateMarken();

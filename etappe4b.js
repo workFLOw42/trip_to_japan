@@ -44,8 +44,14 @@ function imArm(x, z){
 const MEER = { z0: KANAL_Z1 + 20, z1: KANAL_Z1 - 4200, halb: 3600 };
 function imMeer(x, z){ return z < MEER.z0 && z > MEER.z1 && Math.abs(x - mitteX(KANAL_Z1)) < MEER.halb; }
 const ZIEL_Z = KANAL_Z1 - 260;                     // Ziel draussen auf dem Meer
+const ZIEL_BOJEN = 44;                              // m von der Mitte: die zwei gelben Bojen (Live-Wunsch 23.10.2026: doppelt so weit auseinander)
 function nass(x, z, rand){ return imBecken(x, z) || imKanal(x, z, rand) || imArm(x, z) || imMeer(x, z); }
-story.flucht4 = { nass, imKanal, mitteX };          // fuer etappe4.js (Wasser) und Tests
+// Grund (Live-Wunsch 23.10.2026): im Becken, Kanal und Seitenarm 6 m tief (das Frachtschiff am Kai reicht bis 3,2 m), vor der
+// Muendung ueber MEER_HANG m auf MEER_GRUND – die Schiffe draussen (Container, Kreuzfahrt, Liberty) gehen 8 bis 9 m tief
+const HAFEN_TIEF = -6, MEER_GRUND = -22, MEER_HANG = 300;
+function grund(x, z){ if(!imMeer(x, z) || imKanal(x, z)) return HAFEN_TIEF;
+  return HAFEN_TIEF + (MEER_GRUND - HAFEN_TIEF) * Math.max(0, Math.min(1, (KANAL_Z1 - z) / MEER_HANG)); }
+story.flucht4 = { nass, imKanal, mitteX, grund };   // fuer etappe4.js (Wasser, Grund) und Tests
 
 // ---- Felsen: aussen in den Kurven, Kurve 1 so, dass Vollgas haarscharf aussen streift ---------
 const FELSEN = [];
@@ -101,7 +107,7 @@ function wand(d, mat, z0, z1){
   const STEP = 6, zs = []; for(let z = z0; z >= z1; z -= STEP) zs.push(z);
   const pos = new Float32Array(zs.length * 6), idx = [];
   zs.forEach((z, i) => { const L = lage(mitteX(z), z), x = mitteX(z) - L.rz * d, zz = z + L.rx * d;
-    pos.set([x, -1, zz, x, KAI_Y4, zz], i * 6);
+    pos.set([x, story.bisInGrund.unten(grund, x, zz), zz, x, KAI_Y4, zz], i * 6);
     if(i > 0){ const a = (i - 1) * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } });
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
   return new THREE.Mesh(g, mat);
@@ -188,15 +194,13 @@ function baueKulisse(){
   // Seitenarm: Mauern links und rechts, damit man die Abzweigung sieht (das Kanalufer ist dort offen)
   const armMauer = new THREE.MeshLambertMaterial({ color: 0x8a857c });
   for(const s of [-1, 1]){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(ARM.laenge + 4, KAI_Y4 + 3, 3), armMauer);
-    m.position.set(mitteX(ARM.z) + KANAL_B / 2 + ARM.laenge / 2, (KAI_Y4 - 3) / 2, ARM.z + s * (ARM.b / 2 + 1.5)); w.add(m);
+    w.add(story.bisInGrund.klotz(grund, ARM.laenge + 4, 3, KAI_Y4, mitteX(ARM.z) + KANAL_B / 2 + ARM.laenge / 2, ARM.z + s * (ARM.b / 2 + 1.5), armMauer));
   }
   // Warnschild an der Einfahrt (rot-weiss)
   const schild = new THREE.Mesh(new THREE.BoxGeometry(1, 5, 4), new THREE.MeshLambertMaterial({ color: 0xd23c2c }));
   schild.position.set(mitteX(ARM.z) + KANAL_B / 2 + 2, 2.5 + KAI_Y4, ARM.z - ARM.b / 2 - 4); w.add(schild);
   // Beckenrand gegenueber dem Kai (Landzunge bis zur Kanaleinfahrt)
-  const zunge = new THREE.Mesh(new THREE.BoxGeometry(80, KAI_Y4 + 3, BECKEN.z0 - BECKEN.z1 + 40), beton);
-  zunge.position.set(BECKEN.x1 + 40, (KAI_Y4 - 3) / 2, (BECKEN.z0 + BECKEN.z1) / 2); w.add(zunge);
+  w.add(story.bisInGrund.klotz(grund, 80, BECKEN.z0 - BECKEN.z1 + 40, KAI_Y4, BECKEN.x1 + 40, (BECKEN.z0 + BECKEN.z1) / 2, beton));
   // Felsen
   const fels = new THREE.MeshLambertMaterial({ color: 0x5e5a54 });
   for(const f of FELSEN){ const m = new THREE.Mesh(new THREE.DodecahedronGeometry(f.r, 0), fels);
@@ -231,17 +235,14 @@ function baueKulisse(){
   const L = lage(mitteX(KANAL_Z1), KANAL_Z1), nx = -L.rz, nz = L.rx;
   const mole = new THREE.MeshLambertMaterial({ color: 0x77736c }), feuer = [0xd23c2c, 0x2c9e4a];
   [-1, 1].forEach((s, i) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(8, 3, 8), mole);
-    m.position.set(mitteX(KANAL_Z1) + nx * s * (KANAL_B / 2 + 4), 1.5, KANAL_Z1 + nz * s * (KANAL_B / 2 + 4)); w.add(m);
+    const m = story.bisInGrund.klotz(grund, 8, 8, 3, mitteX(KANAL_Z1) + nx * s * (KANAL_B / 2 + 4), KANAL_Z1 + nz * s * (KANAL_B / 2 + 4), mole); w.add(m);
     const t = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.4, 7, 10), new THREE.MeshLambertMaterial({ color: feuer[i] }));
-    t.position.set(m.position.x, 6.5, m.position.z); w.add(t);
+    t.position.set(m.position.x, 6.5, m.position.z); w.add(t);   // Leuchtturm auf der Mole (Oberkante 3 m)
   });
   const boje = new THREE.MeshLambertMaterial({ color: 0xffd23f });
   for(const s of [-1, 1]){ const b = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 2.6, 10), boje);
-    b.position.set(mitteX(KANAL_Z1) + s * 22, 1.3, ZIEL_Z); w.add(b); }
-  const saeule = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 30, 12, 1, true),            // 30 m (Live-Wunsch)
-    new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  saeule.position.set(mitteX(KANAL_Z1), 15, ZIEL_Z); saeule.renderOrder = 995; w.add(saeule);
+    b.position.set(mitteX(KANAL_Z1) + s * ZIEL_BOJEN, 1.3, ZIEL_Z); w.add(b); }
+  // (Lichtsaeule ueber dem Ziel entfernt – Live-Wunsch 23.10.2026: "braucht es nicht"; das Ziel zeigen die beiden Bojen)
   baueHaeuser(w);
   baueMeerSchiffe(w);
   // Schnellboot am Kai (Kulisse, solange man nicht drin ist)
@@ -403,7 +404,7 @@ function fluchtUpdate(dt){
     fl.t += dt;
     polizeiUpdate(dt);
     // Ziel: Muendung
-    if(state.pos.z < ZIEL_Z + 10 && Math.abs(state.pos.x - mitteX(KANAL_Z1)) < 40){ fluchtEnde(true, 'entkommen'); return; }
+    if(state.pos.z < ZIEL_Z + 10 && Math.abs(state.pos.x - mitteX(KANAL_Z1)) < ZIEL_BOJEN + 18){ fluchtEnde(true, 'entkommen'); return; }
   }
   fluchtHud();
 }

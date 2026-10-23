@@ -39,7 +39,9 @@ function hindQuer(luecke){ return luecke < 0 ? [-SCH.b / 2 + LUECKE, SCH.b / 2] 
 // Bogen: frei bis 30 m ueber Grund. Mit 22 m war er nicht passierbar: die Engine haelt das U-Boot (Wasserlinie) mindestens
 // 12 m ueber Grund (SUB_FLOOR_CLR), bei Nase unten mehr – gemessen blieb es bei 20 m, der Turm (+4) stiess an.
 // So bleibt ein Korridor von ~12-26 m (Wasserlinie), man muss tief, kommt aber durch.
-const BOGEN_UNTEN = 34, BOGEN_DICK = 16;              // +4 m gegen die Glaettung des Grunds (Kuppen)
+// 42 seit 22.10.2026 (neues U-Boot, Turm 9,5 m ueber der Wasserlinie, die Engine haelt es 22 m ueber dem Grund): darunter
+// bleibt ein Korridor von ~10 m wie vorher (mit 34 m waeren es 2,5 m gewesen)
+const BOGEN_UNTEN = 42, BOGEN_DICK = 16;              // +4 m gegen die Glaettung des Grunds (Kuppen)
 const RIPPE_OBEN = 24, RIPPE_DICK = 14;              // Rippe: 24 m hoch, 14 m dick
 // Risikofahrt: zuegig UND genau. Strecke 2,95 km, 5 Engstellen (2 davon mit Bogen/Rippe), Bot C:\tmp\sfg\test_e5sbot.js:
 // Vollgas 230 s ohne Kontakt, 80 % > 240 s. 250 s -> Vollgas mit 20 s Puffer; wer vorsichtig langsam faehrt, ist zu langsam.
@@ -86,6 +88,30 @@ function grundY(u){                                   // echter Meeresgrund auf 
   return _grund.get(k);
 }
 story.e5schlucht = { lage, mitteV, punkt, lokal, HIND, SCH, ENG, grenzen, grundY: (u) => grundY(u) };   // fuer Tests
+// Die Felsen der Schlucht sind Hindernisse im Wasser (Engine wasserTiefe/imWasser, Live-Befund 22.10.2026: Wale schwammen bei
+// der Schluchtfahrt durch die Felsen). Fels = Waende und Felsnasen neben dem Kanal, die Decke darueber, Boegen und Rippen –
+// alles bis DECKE (+ FELS_DACH) ueber dem Grund; darueber und im Kanal ist Wasser. An die Oberflaeche reicht nichts.
+const FELS_DACH = 15, FELS_SEITE = 70;                   // m Dicke der Decke, m Felsbreite neben dem Kanal
+const sperreVorher = window.wasserSperre;
+window.wasserSperre = function(x, y, z){
+  if(sperreVorher && sperreVorher(x, y, z)) return true;
+  if(!e5() || !bau.fertig || !lage.ok || y === undefined) return false;
+  const [u, v] = lokal(x, z);
+  if(u < SCH.u0 - 40 || u > SCH.u1 + 40) return false;
+  const gy = grundY(u), quer = v - mitteV(u), [li, re] = grenzen(u);
+  if(quer < li - FELS_SEITE || quer > re + FELS_SEITE) return false;   // weit neben der Schlucht: offenes Wasser
+  if(y > gy + DECKE + FELS_DACH) return false;                          // ueber dem Felsdach
+  if(quer < li || quer > re) return true;                               // Wand / Felsnase
+  if(u > SCH.u0 + 40 && y > gy + DECKE) return true;                    // Decke
+  for(const [uh, art, luecke] of HIND){
+    const dick = art === 'bogen' ? BOGEN_DICK : RIPPE_DICK;
+    if(Math.abs(u - uh) > dick / 2) continue;
+    const [qa, qb] = hindQuer(luecke); if(quer < qa || quer > qb) continue;
+    if(art === 'bogen' && y > gy + BOGEN_UNTEN) return true;
+    if(art === 'rippe' && y < gy + RIPPE_OBEN) return true;
+  }
+  return false;
+};
 
 // ---- Bau --------------------------------------------------------------------------------------
 const bau = { fertig: false };
@@ -259,7 +285,9 @@ function schluchtStart(){
 // die Oberkante mit Turm ~4 m darueber (Bot-Test: mit Hoehe 6 um den Ursprung meldete er Rippen, die es dort nicht gab).
 // Hoehen von Rippe, Bogen und Decke gelten in der RUMPFMITTE: das U-Boot steuert die Tiefe ueber die Nase, die beim Halten
 // 8-10 Grad pendelt – bei 95 m Laenge streifte sonst der Bug, obwohl das Boot passte.
-const RUMPF_L = 47, RUMPF_B = 11, KIEL = 12, OBEN = 4;
+// Masse des U-Boots fuer die Kollision (seit 22.10.2026 das neue: 83,4 m lang, 23,2 m breit, Schraube 20,9 m unter und
+// Turm 9,5 m ueber der Wasserlinie)
+const RUMPF_L = 41.7, RUMPF_B = 11.6, KIEL = 20.9, OBEN = 9.5;
 function treffer(){
   const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);
   const y = state.pos.y;

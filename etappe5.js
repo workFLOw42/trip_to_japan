@@ -274,7 +274,6 @@ function mustangEinsteigen(){
   state.quat.setFromEuler(new THREE.Euler(0, MUSTANG.yaw, 0, 'YXZ'));
   state.vel.set(0, 0, 0); state.throttle = START_GAS; state.onGround = true; state.crashed = false;
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat); planeGroup.visible = true;
-  if(park.obj) park.obj.visible = false;
   snapCamera();
   story.hinweis('');
   ar.rede = story.sprich(AR_TEXT, () => {
@@ -450,18 +449,6 @@ function arHud(){
 }
 
 // ---- Kulisse: geparkte Mustang, Marken, Ringe ---------------------------------------------------
-const park = { obj: null };
-function ladeParkMustang(){
-  if(park.obj || !glbTemplates['Mustang']) return;
-  const g = new THREE.Group(), m = glbTemplates['Mustang'].clone(true);
-  m.rotation.y = TRAFFIC_ROT.Mustang || 0; g.add(m);
-  g.position.set(MUSTANG.x, ISLAND_Y, MUSTANG.z); g.rotation.y = MUSTANG.yaw;
-  g.userData.fremd = true;                        // Modell geteilt (Engine-Vorlage): nur abhaengen
-  story.welt(5).add(g); park.obj = g;
-  // Grenze (objekte.js, Live-Wunsch 16.10.2026): Samu laeuft nicht durch die geparkte Mustang; eingestiegen wird wie
-  // bisher aus 12 m (mustangNah). Steigt er ein, ist die Kulisse unsichtbar und ihre Grenze aus (park.ding.aus).
-  if(story.ding) park.ding = story.ding(g, { welt: 5, typ: 'mustang' });
-}
 const marken = [];
 function updateMarken(){
   if(!marken.length && story.baueMarke){
@@ -471,7 +458,7 @@ function updateMarken(){
   const zeigen = e5() && !!eva && locale === 'earth' && !story.phase;
   for(const o of marken) story.setzeMarke(o.m, o.x, ISLAND_Y, o.z, o.h, zeigen);
 }
-function mustangNah(){ return !!(e5() && !story.phase && eva && !(park.obj && !park.obj.visible)
+function mustangNah(){ return !!(e5() && !story.phase && eva
   && Math.hypot(eva.group.position.x - MUSTANG.x, eva.group.position.z - MUSTANG.z) < 12); }
 
 // ---- Start der Etappe -------------------------------------------------------------------------
@@ -502,7 +489,10 @@ function etappe5Start(){
   state.quat.setFromEuler(new THREE.Euler(0, MUSTANG.yaw, 0, 'YXZ'));
   state.vel.set(0, 0, 0); state.throttle = 0; state.onGround = true; state.crashed = false;
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
-  planeGroup.visible = false;                       // die geparkte Mustang ist Kulisse, bis man einsteigt
+  // Es gibt nur EINE Mustang (Live-Wunsch 22.10.2026): die echte steht von Anfang an sichtbar am Platz (ihre Grenze kommt aus
+  // objekte.js, 'fahrzeug'), man steigt ein, fliegt, landet – oder nimmt sie gar nicht. Vorher stand dort eine Kulisse, und
+  // nach der Landung erschien sie zusaetzlich zur geflogenen.
+  planeGroup.visible = true;
   evaExit();
   const an = ankunft(), rg = ubootRing();
   eva.group.position.set(an.x, ISLAND_Y, an.z);
@@ -512,8 +502,6 @@ function etappe5Start(){
   // Ring immer neu an den (Etappe-5-)Ringplatz; vorher blieb ein frueher gebauter am alten Platz stehen
   if(!welt.ringUboot) welt.ringUboot = story.einstiegsRing(rg.x, ISLAND_Y, rg.z);
   baueUferdorf(DORF5);
-  ladeParkMustang();
-  if(park.obj) park.obj.visible = true;
   marken.length = 0;
   ar.aktiv = false; ar.fertig = false;
   story.phase = null;
@@ -601,8 +589,6 @@ function updateE5(dt){
   }
   story.etappenMusik(5, window.MUSIK_SND && window.MUSIK_SND.e5, dt || 0);   // story.js: zu Beginn leise, wie Etappe 2
   if(!e5()) return;
-  ladeParkMustang();
-  if(park.obj) park.obj.visible = locale === 'earth' && !(story.phase === 'airrace');
   updateMarken();
   if(welt.ringUboot) welt.ringUboot.zeigen(!!eva && locale === 'earth' && !story.phase);
   if(welt.gebaut) torSichtbar();

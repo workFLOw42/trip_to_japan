@@ -282,6 +282,27 @@ story.tierListe = function(){
   return tierCache;
 };
 story.tierQuelleOrt = (ort, f) => { f.ort = ort; tierQuellen.push(f); };
+// Orcas und Rochen der Engine (Live-Wunsch 22.10.2026: "durch ihre Objektgrenzen kann man nicht mehr durchschwimmen"):
+// Samu schwimmt nicht durch sie hindurch. Orcas: drei Kreise laengs des Koerpers; nur die nahe der Oberflaeche (die
+// Tiefsee-Tiere ziehen weit darunter). Rochen: ein Kreis. Fuer das U-Boot gilt das nicht – dort schwimmen die Tiere
+// einfach weg (Engine bootWeichen), und eine Beruehrung in der engen Schlucht ist kein Fehler.
+story.tierQuelle(() => {
+  if(locale !== 'earth' || !eva) return null;                                                     // global-ok: Engine
+  const p = eva.group.position, out = [];                                                         // global-ok: Engine
+  if(typeof orcas !== 'undefined') for(const o of orcas){                                          // global-ok: Engine
+    if(!o.group || !o.group.visible || o.deep || Math.hypot(o.x - p.x, o.z - p.z) > 40) continue;
+    const fx = -Math.sin(o.heading), fz = -Math.cos(o.heading), y = o.group.position.y;
+    for(const v of [-2.4, 0, 2.4]) out.push({ x: o.x + fx * v, z: o.z + fz * v, y: y - 0.5, r: 1.3, h: 2.6 }); }
+  // Seeloewen und Robben am Strand: zwei Kreise laengs des Koerpers (Live-Wunsch 22.10.2026)
+  if(typeof strandleben !== 'undefined') for(const t of strandleben.loewen){                       // global-ok: Engine
+    if(!t.obj.visible || Math.hypot(t.x - p.x, t.z - p.z) > 30) continue;
+    const fx = -Math.sin(t.kurs), fz = -Math.cos(t.kurs), y = t.obj.position.y, l = t.art === 'seeloewe' ? 0.55 : 0.4;
+    for(const v of [-l, l]) out.push({ x: t.x + fx * v, z: t.z + fz * v, y: y - 0.2, r: t.art === 'seeloewe' ? 0.5 : 0.42, h: 1.0 }); }
+  if(typeof strandleben !== 'undefined') for(const r of strandleben.rochen){                       // global-ok: Engine
+    if(!r.da || !r.obj.visible || Math.hypot(r.x - p.x, r.z - p.z) > 30) continue;
+    out.push({ x: r.x, z: r.z, y: r.y - 0.3, r: 0.9, h: 0.8 }); }
+  return out;
+});
 // > 0 = steckt drin (wie tiefe)
 function tierTiefe(x, z, fuss, r){
   let t = -Infinity;
@@ -493,6 +514,16 @@ function hookAussen(){
     // Tiere / Aliens auf Mond und Mars (story.tierQuelleOrt)
     const tt = tierTiefe(x, z, fuss, FIGUR.r);
     return !(tt > 0 && tt > tierTiefe(von.x, von.z, fuss, FIGUR.r) + 1e-6);
+  };
+  // Schwimmen (story.js schwimmUpdate): dieselben Grenzen wie beim Gehen – Boote, Tiere (Orcas, Rochen, Krokodile) – wer
+  // drinsteckt, darf hinaus (Live-Befund 22.10.2026: Samu schwamm durch das Feuerwehrboot)
+  story.schwimmSperre = function(von, x, z){
+    if(locale !== 'earth' || !dinge.length && !story.tierListe().length) return false;
+    const fuss = von.y;
+    const t = tiefe(x, z, fuss, FIGUR.h, FIGUR.r, FIGUR.stufe);
+    if(t > 0 && t > tiefe(von.x, von.z, fuss, FIGUR.h, FIGUR.r, FIGUR.stufe) + 1e-6) return true;
+    const tt = tierTiefe(x, z, fuss, FIGUR.r);
+    return tt > 0 && tt > tierTiefe(von.x, von.z, fuss, FIGUR.r) + 1e-6;
   };
   // Zaehler je Bild (bewegliche Grenzen)
   const loopOrig = loop;

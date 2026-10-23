@@ -1000,6 +1000,7 @@ function springeZu(n, tageBisher){
   const text = tageVergangen(letzte) + ' (Test-Sprung) · noch ' + (42 - story.tage) + ' von 42 Tagen';
   story.globusReise(n - 1, text, () => {
     story.etappe = n;
+    story.spaeter(0, () => { if(typeof blendenSofort === 'function') blendenSofort(); });   // Licht am neuen Ort gleich richtig (Engine)
     if(n === 2 && story.etappe2Start){ hinweis(''); story.etappe2Start(); return; }
     if(n === 3 && story.etappe3Start){ hinweis(''); story.etappe3Start(); return; }
     if(n === 4 && story.etappe4Start){ hinweis(''); story.etappe4Start(); return; }
@@ -1216,7 +1217,9 @@ function hookIntro(){
       return updateEvaOrig(dt, { pitch: geht ? -INTRO_GEH : 0 });
     }
     if(sw.aktiv){ schwimmUpdate(dt, inp); return; }
-    return updateEvaOrig(dt, samuEingabe(inp));
+    const r = updateEvaOrig(dt, samuEingabe(inp));
+    insWasserVoraus(inp);
+    return r;
   };
   // Einsteigen (Y) und Reset (R) erst nach der Ansage. Y abseits der Fahrzeuge = Twirl (samuTasten).
   const introAktiv = () => intro.phase !== 'aus';     // Einsteigen erst, wenn die Ansage fertig ist
@@ -1280,8 +1283,23 @@ const TAUCH_V     = 1.4;     // m/s auf und ab
 // Koerper in der Schwimm-Haltung 0,2 bis 0,9 m ueber dem Ursprung (Mitte 0,6) – mit 0,9 m Tiefe reichte selbst der hoechste Punkt
 // nur bis an die Oberflaeche. 0,65: Koerpermitte knapp unter Wasser, Ruecken und Kopf (obere 20 %) 0,1 bis 0,25 m darueber.
 const SCHWIMM_TIEF = 0.65;   // m: so tief liegt der Ursprung an der Oberflaeche im Wasser
+const SCHWIMM_GRUND = 0.6;  // m: so dicht taucht er an den Grund (Koerper in der Schwimmhaltung ab 0,2 m ueber dem Ursprung; vorher 1,0)
+const SCHWIMM_STEH = 0.8;   // m: so flach (Grund unter der Oberflaeche) steht er wieder (wie WAT_TIEF / WAT3)
+const SCHWIMM_STEG = 0.4;   // m: liegt der Boden hoeher ueber dem Wasser, ist es ein Steg ueber ihm (Planken 0,75 m)
 const sw = story.schwimm = { aktiv: false };
 
+// Geht er weiter, und der naechste Schritt ist tiefes Wasser: gleich schwimmen (Live-Befund 23.10.2026: "Samu laeuft noch ewig
+// auf der Stelle, bevor es zum Schwimmen umschaltet" – die Engine schaltet erst um, wenn er ganz feststeckt; schraeg zum Ufer
+// rutschte er gemessen 9 s an der Kante der Watzone entlang). Nicht von oben (Steg, Kai): dort faellt er wie bisher hinunter.
+function insWasserVoraus(inp){
+  if(!eva || sw.aktiv || eva.boat || eva.rover || !eva.onGround || locale !== 'earth' || -(inp.pitch || 0) < 0.1) return;
+  const g = eva.group.position, px = g.x - Math.sin(eva.yaw) * 0.6, pz = g.z - Math.cos(eva.yaw) * 0.6;
+  if(evaSolid(px, pz) || !isOpenWater(px, pz)) return;
+  // von oben (Kai, Steg): ueber die Kante setzen und fallen lassen – die Engine faengt ihn an der Wasserlinie auf (schwimmt);
+  // vorher lief er dort gegen eine unsichtbare Wand, bis er genau senkrecht zur Kante stand (Live-Befund 23.10.2026)
+  if(g.y > seaYAt(px, pz) + 0.4){ g.x = px; g.z = pz; eva.onGround = false; if(eva.vy > 0) eva.vy = 0; return; }
+  evaEnterDinghy(px, pz);
+}
 function schwimmStart(x, z){
   sw.aktiv = true;
   const g = eva.group;
@@ -1310,24 +1328,43 @@ function schwimmUpdate(dt, inp){
   eva.yaw -= (inp.yaw || 0) * EVA_TURN * dt;
   g.rotation.y = eva.yaw;
   const v = -(inp.pitch || 0) * SCHWIMM_V;
-  const nx = g.position.x - Math.sin(eva.yaw) * v * dt;
-  const nz = g.position.z - Math.cos(eva.yaw) * v * dt;
+  let nx = g.position.x - Math.sin(eva.yaw) * v * dt;
+  let nz = g.position.z - Math.cos(eva.yaw) * v * dt;
   tricks.ausschlag = Math.abs(inp.pitch || 0);
-  // Ans Ufer: wieder zu Fuss
-  if(evaSolid(nx, nz) && !isOpenWater(nx, nz) || isOnBeach(nx, nz) || isOnLand(nx, nz) || (!story.watEigeneWelt() && story.watGrund(nx, nz) !== null)){
-    sw.aktiv = false;
-    g.position.set(nx, evaFootY(nx, nz), nz);
-    eva.vy = 0; eva.onGround = true;
-    return;
+  // Ans Ufer: wieder zu Fuss – eine Etappe kann den Ausstieg festlegen (story.schwimmAusstieg(x, z) -> { x, z } = dort hinaus,
+  // false = Mauer: nicht weiter; undefined = wie immer). Hafen (Etappe 4): nur an der Leiter (Live-Wunsch 22.10.2026)
+  // Grenzen (objekte.js): nicht durch Boote und Tiere hindurch
+  if(story.schwimmSperre && story.schwimmSperre(g.position, nx, nz)){ nx = g.position.x; nz = g.position.z; }
+  let mx = nx, mz = nz;
+  // Flaches Wasser mit festem Grund (Fluss in Etappe 3, Watzone am Strand): dort steht er wieder (Live-Befund 23.10.2026: im
+  // Fluss kam er dort nicht heraus, schwamm ueber dem ansteigenden Grund und am Ufer unter dem Steg sogar ueber den
+  // Planken). Ein Steg ueber ihm (Grund hoeher als SCHWIMM_STEG ueber dem Wasser) ist kein Ausstieg – darunter schwimmt er durch.
+  const seichtHier = () => { if(!evaSolid(nx, nz)) return false; const w = seaYAt(nx, nz, dt), f = evaFootY(nx, nz);
+    return f > w - SCHWIMM_STEH && f < w + SCHWIMM_STEG; };
+  // Watzone und seichtes Wasser nur, wenn er zum Ufer hin schwimmt (der Grund wird flacher): gleich nach dem Hineingehen
+  // pendelte er sonst an schraegen Ufern zwischen Schwimmen und Waten und lief auf der Stelle (Live-Befund 23.10.2026, ~10 s)
+  const zumUfer = seabedY(nx, nz) >= seabedY(g.position.x, g.position.z) - 0.005;
+  if(evaSolid(nx, nz) && !isOpenWater(nx, nz) || isOnBeach(nx, nz) || isOnLand(nx, nz) || zumUfer && ((!story.watEigeneWelt() && story.watGrund(nx, nz) !== null) || seichtHier())){
+    const a = story.schwimmAusstieg ? story.schwimmAusstieg(nx, nz) : undefined;
+    if(a === false){ mx = g.position.x; mz = g.position.z; }      // an der Mauer: bleibt im Wasser
+    else {
+      const ax = a ? a.x : nx, az = a ? a.z : nz;
+      sw.aktiv = false;
+      g.position.set(ax, evaFootY(ax, az), az);
+      eva.vy = 0; eva.onGround = true;
+      return;
+    }
   }
+  nx = mx; nz = mz;
   g.position.x = nx; g.position.z = nz;
   const oben = seaYAt(nx, nz, dt) - SCHWIMM_TIEF;
-  const unten = seabedY(nx, nz) + 1.0;
+  const unten = seabedY(nx, nz) + SCHWIMM_GRUND;
   let y = g.position.y + tauchEingabe() * TAUCH_V * dt;
   // ohne Tauch-Eingabe treibt er langsam nach oben – an der Oberflaeche (bis 0,4 m darunter) liegt er aber FEST auf der Sollhoehe:
   // die Duenung hebt und senkt das Wasser schneller als 0,4 m/s, er hing sonst staendig unter der Linie (Live-Befund 20.10.2026)
   if(tauchEingabe() === 0 && y < oben) y = (oben - y < 0.4) ? oben : Math.min(oben, y + 0.4 * dt);
-  g.position.y = Math.max(unten, Math.min(oben, y));
+  // die Oberflaeche geht vor: im flachen Wasser liegt "1 m ueber Grund" hoeher als sie – er schwamm dann in der Luft
+  g.position.y = Math.min(oben, Math.max(unten, y));
   eva.onGround = true;
   state.pos.copy(eva.planeAt);
   evaKmh = Math.abs(v) * 3.6;
@@ -1336,7 +1373,9 @@ function schwimmUpdate(dt, inp){
 // Waten (Live-Wunsch 09.10.2026, global): an Ufern mit Sandrand (Engine-Inseln, Festland mit isOnBeach) ist das Wasser auf
 // den ersten WAT_W m flach. Dort steht Samu auf dem Grund; erst wo es tiefer als WAT_TIEF ist, schwimmt er (der Koerper
 // ist dann etwa zur Haelfte im Wasser, Samu 1,55 m).
-const WAT_W = 14, WAT_TIEF = 0.8;
+// 6 m breit wie im Geheimland (22.10.2026: das Kuestenprofil kommt fuer beide Spiele aus der Engine, kuesteTiefe; mit 14 m
+// stand Samu weit draussen noch ueber 3 m tiefem Grund); 0,8 m tief statt 0,6, weil Samu groesser ist als Joshi
+const WAT_W = 6, WAT_TIEF = 0.8;
 // Abstand zur naechsten Sandkante, nur nahe am Ufer gesucht (0 = an der Kante, > WAT_W = tiefes Wasser)
 function watAbstand(x, z){
   if(isOnLand(x, z) || isOnBeach(x, z)) return 0;
@@ -1365,6 +1404,27 @@ function hookSchwimmen(){
     const g = watGrund(x, z); return g !== null ? Math.min(r, g) : r; };
 }
 story.watEigeneWelt = () => story.etappe >= 2 && story.etappe <= 4;
+
+// ---- Bis in den Grund (Live-Wunsch 23.10.2026) -----------------------------------------------------------------------
+// Bauten im Wasser (Kai, Kaimauern, Molen ...) reichen immer GRUND_EIN m in den Boden – gemessen an der Bodenfunktion der
+// Etappe (boden(x, z) -> y), wie die Pfaehle am Steg und die Felsen im Fluss (etappe3.js). Wird der Grund tiefer gelegt,
+// wachsen sie von selbst mit. Die Bodenfunktion wird mitgegeben (beim Aufbau ist locale nicht immer schon 'earth').
+const GRUND_EIN = 0.5;
+function grundUnter(boden, x0, z0, x1, z1){
+  const n = Math.max(4, Math.min(40, Math.ceil(Math.max(x1 - x0, z1 - z0) / 20)));   // etwa alle 20 m messen
+  let m = Infinity;
+  for(let i = 0; i <= n; i++) for(let k = 0; k <= n; k++) m = Math.min(m, boden(x0 + (x1 - x0) * i / n, z0 + (z1 - z0) * k / n));
+  return m - GRUND_EIN;
+}
+story.bisInGrund = {
+  // Unterkante an einer Stelle (z. B. fuer die Punkte einer senkrechten Mauer)
+  unten: (boden, x, z) => boden(x, z) - GRUND_EIN,
+  // Klotz b (laengs x) mal t (laengs z), Oberkante oben, Mitte x/z: unten bis unter den tiefsten Grund seiner Grundflaeche
+  klotz(boden, b, t, oben, x, z, mat){
+    const u = Math.min(oben - 0.1, grundUnter(boden, x - b / 2, z - t / 2, x + b / 2, z + t / 2));
+    const m = new THREE.Mesh(new THREE.BoxGeometry(b, oben - u, t), mat); m.position.set(x, (oben + u) / 2, z); return m;
+  },
+};
 
 // ---- Warp: Bewegungsstreifen statt Ring ------------------------------------------------------
 // Ab Warp 1 rasen Lichtstreifen von vorn an der Kamera vorbei. Mit dem Warpfaktor (1 -> 10) wachsen
@@ -1457,6 +1517,9 @@ function hookSchatten(){
       const px = eva.group.position.x, pz = eva.group.position.z;
       // Boden unter Samu (auf Wasser/Strand bleibt die Engine-Hoehe)
       if(locale === 'earth' && isOnLand(px, pz)) ovalShadow.position.y = evaFootY(px, pz) + SHADOW_LIFT;   // knapp drueber, wie die Engine (hoeher wirkt er versetzt, tiefer verschwindet er unter Wiesen)
+      // Auf einem Steg ueber dem Wasser (etappe3.js): auf die Planken, wie im Geheimland
+      const steg = story.stegBoden && story.stegBoden(ovalShadow.position.x, ovalShadow.position.z);
+      if(steg !== null && steg !== undefined) ovalShadow.position.y = steg + 0.03;
     }
     return r;
   };
@@ -2390,6 +2453,7 @@ function etappeEnde(tage, wie){
   const text = tageVergangen(tage) + ' (' + wie + ') · noch ' + (42 - story.tage) + ' von 42 Tagen';
   story.globusReise(story.etappe, text, () => {
     story.etappe++;
+    story.spaeter(0, () => { if(typeof blendenSofort === 'function') blendenSofort(); });   // Licht am neuen Ort gleich richtig (Engine)
     if(story.etappe === 2 && story.etappe2Start){ hinweis(''); story.etappe2Start(); return; }
     if(story.etappe === 3 && story.etappe3Start){ hinweis(''); story.etappe3Start(); return; }
     if(story.etappe === 4 && story.etappe4Start){ hinweis(''); story.etappe4Start(); return; }
