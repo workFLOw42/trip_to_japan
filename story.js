@@ -1992,7 +1992,7 @@ function hookRadar(){
   const footOrig = footTargets;
   footTargets = function(){
     if(story.etappe !== 1 || locale !== 'earth') return footOrig();
-    const out = [{ x: eva.planeAt.x, z: eva.planeAt.z, col: COL_XWING }];
+    const out = [{ x: eva.planeAt.x, z: eva.planeAt.z, col: COL_XWING, art: 'flieger', kurs: radarKurs(state.quat) }];   // Flieger-Symbol (Engine)
     const rg = ubootRingPlatz();
     if(rg) out.push({ x: rg.x, z: rg.z, col: COL_SUB });
     return out;
@@ -2006,17 +2006,11 @@ function hookRadar(){
   };
 }
 
-// Radar-Anzeige: die SPITZE des Dreiecks ist der eigene Standort. Ist man am Ziel, sitzt der Punkt
-// genau auf der Spitze (vorher hielt die Engine 8-10 px Mindestabstand zur Mitte, man musste das
-// Ziel "ins Dreieck" bringen). Sonst wie in der Engine; das Periskop (U-Boot) bleibt unveraendert.
+// Radar und Sonar: Symbole, Spitze = Standort und Abstaende macht seit 23.10.2026 die Engine (radarSymbol). Hier nur noch:
+// das Periskop zeigt nur nach einem Sonar-Ping (B) ein Bild – voll fuer PERI_HALT s, dann blendet es aus, bis es nach
+// PERI_ZEIT s weg ist (Engine-Hook periscopeSicht). Jeder Ping baut es neu auf und startet die Zeit von vorn. So gewoehnt
+// man sich an, den Ping zu benutzen.
 function hookRadarAnzeige(){
-  // Periskop: die Engine malt ihr Dreieck mittig (Spitze 7 px ueber der Mitte). Danach das alte
-  // Dreieck mit Wasserfarbe abdecken (unter dem U-Boot ist nie Land) und das neue mit der Spitze auf
-  // der Mitte malen – gleiches Prinzip wie beim Radar.
-  //
-  // Ausserdem zeigt das Periskop nur nach einem Sonar-Ping (B) ein Bild: voll fuer PERI_HALT s, dann
-  // blendet es aus, bis es nach PERI_ZEIT s weg ist. Jeder Ping baut es neu auf und startet die Zeit
-  // von vorn. So gewoehnt man sich an, den Ping zu benutzen.
   const PERI_ZEIT = 10, PERI_HALT = 2;
   let periPingT = -1;                                      // s seit dem letzten Ping (-1 = keiner)
   const pingOrig = sonarPing;
@@ -2026,76 +2020,22 @@ function hookRadarAnzeige(){
     if(neu){ periPingT = 0; periT = 0; }                   // periT = 0: Umgebung jetzt neu abtasten
     return r;
   };
+  periscopeSicht = function(){
+    return periPingT < 0 ? 0 : Math.max(0, Math.min(1, 1 - (periPingT - PERI_HALT) / (PERI_ZEIT - PERI_HALT)));
+  };
   const periOrig = updatePeriscope;
   updatePeriscope = function(dt){
     const r = periOrig.apply(this, arguments);
     if(!r){ periPingT = -1; return r; }
     if(periPingT >= 0) periPingT += dt || 0;
-    const W = radarCv.width, H = radarCv.height, cx = W/2, cy = H/2, R = W/2 - 6, g = radarCtx;
-    // Deckkraft des Sonarbilds: 1 bis PERI_HALT, dann linear auf 0 bei PERI_ZEIT
-    const sicht = periPingT < 0 ? 0
-      : Math.max(0, Math.min(1, 1 - (periPingT - PERI_HALT) / (PERI_ZEIT - PERI_HALT)));
-    // Bild mit (1 - sicht) leerer Scheibe ueberdecken
-    if(sicht < 1){
-      g.save();
-      g.globalAlpha = 1 - sicht;
-      g.fillStyle = 'rgb(20,70,90)';
-      g.beginPath(); g.arc(cx, cy, R - 1, 0, Math.PI*2); g.fill();
-      g.restore();
-    }
-    // altes, mittiges Dreieck abdecken und das U-Boot malen wie in der Schlucht (etappe5b.js, Live-Wunsch 18.10.2026):
-    // gleiche Rumpfform, die Spitze (Bug) sitzt genau auf der Mitte = eigener Standort. Fest 22 px lang (massstaeblich
-    // waere es bei 1.400 m Reichweite nur 2 px).
-    g.fillStyle = 'rgb(20,70,90)';
-    g.beginPath(); g.moveTo(cx, cy - 8); g.lineTo(cx - 6.5, cy + 7); g.lineTo(cx + 6.5, cy + 7); g.closePath(); g.fill();
-    const L = 22, hb = 5;
-    g.fillStyle = '#ffffff'; g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + hb, cy + L * 0.225); g.lineTo(cx + hb, cy + L * 0.925);
-    g.lineTo(cx, cy + L); g.lineTo(cx - hb, cy + L * 0.925); g.lineTo(cx - hb, cy + L * 0.225); g.closePath(); g.fill(); g.stroke();
     // ohne Bild: kleiner Hinweis auf den Ping – nur in Etappe 1 (spaeter ist die Scheibe ohne Ping einfach dunkel, Live-Wunsch)
-    if(sicht <= 0 && story.etappe === 1){
+    if(periscopeSicht() <= 0 && story.etappe === 1){
+      const g = radarCtx, cx = radarCv.width / 2, cy = radarCv.height / 2;
       g.fillStyle = 'rgba(255,255,255,0.55)';
       g.font = '11px system-ui,sans-serif'; g.textAlign = 'center';
-      g.fillText('B: Ping', cx, cy + 30);
+      g.fillText('B: Ping', cx, cy + 34);
     }
     return r;
-  };
-  updateRadar = function(){
-    if(updatePeriscope(dtCam)) return;
-    const W = radarCv.width, H = radarCv.height, cx = W/2, cy = H/2, R = W/2 - 6;
-    const g = radarCtx;
-    g.clearRect(0, 0, W, H);
-    g.fillStyle = 'rgba(10,25,40,0.55)';
-    g.beginPath(); g.arc(cx, cy, R, 0, Math.PI*2); g.fill();
-    g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2;
-    g.beginPath(); g.arc(cx, cy, R, 0, Math.PI*2); g.stroke();
-    g.fillStyle = '#ffffff';
-    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx - 5, cy + 13); g.lineTo(cx + 5, cy + 13);
-    g.closePath(); g.fill();
-    const blips = (locale === 'space') ? spaceTargets()
-                : eva ? footTargets()
-                : (() => { const a = activeTarget(); return a ? [a] : []; })();
-    if(!blips.length) return;
-    const selfX = eva ? eva.group.position.x : state.pos.x;
-    const selfZ = eva ? eva.group.position.z : state.pos.z;
-    const head = eva ? eva.yaw + Math.PI
-               : (() => { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat); return Math.atan2(f.x, f.z); })();
-    const RMAX = R - 8;
-    const radiusFor = (dist) => {
-      if(eva) return Math.min(RMAX, dist/500*RMAX);
-      if(locale !== 'space') return Math.min(RMAX, dist/2500*RMAX);
-      const NEAR = 1000, FAR = 900000;
-      const d = Math.max(NEAR, Math.min(FAR, dist));
-      return 12 + Math.log(d/NEAR) / Math.log(FAR/NEAR) * (RMAX - 12);
-    };
-    for(const t of blips){
-      const dx = t.x - selfX, dz = t.z - selfZ;
-      const rel = head - Math.atan2(dx, dz);
-      const rr = radiusFor(Math.hypot(dx, dz));
-      g.fillStyle = t.col;
-      g.beginPath(); g.arc(cx + Math.sin(rel)*rr, cy - Math.cos(rel)*rr, 5, 0, Math.PI*2); g.fill();
-      g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 1; g.stroke();
-    }
   };
 }
 

@@ -383,25 +383,26 @@ function hud(){
 // Live-Wunsch: Schlucht und Hindernisse per Ping sehen. Das Periskop der Engine zeigt Land in 1.400 m Reichweite – der
 // 60-m-Kanal waere dort 3 Pixel breit. In der Schlucht malt diese Karte darueber: SONAR_R m Reichweite, gedreht in
 // Fahrtrichtung (oben = vorne, wie das Periskop), Waende als Linien, Bogen blau, Rippe orange. Nach jedem Ping (B)
-// voll sichtbar, dann blendet sie aus (wie in Etappe 1).
+// voll sichtbar, dann blendet sie aus (wie in Etappe 1). Seit 23.10.2026 ueber die Engine-Hooks: die Karte deckt das
+// Periskopbild (Land 1.400 m) ganz ab, das Ausblenden macht die Engine (periscopeSicht) – vorher schimmerte beim
+// Ausblenden das Periskop mit einem zweiten, kleinen U-Boot durch. Mitte der Scheibe = Bug (Spitze = Standort).
 const SONAR_R = 300, SONAR_HALT = 3, SONAR_ZEIT = 12;
 let sonarT = -1;
-function sonarKarte(dt){
-  if(!sb.aktiv || !sb.laeuft || !lage.ok || sonarT < 0) return;
-  sonarT += dt || 0;
-  const sicht = Math.max(0, Math.min(1, 1 - (sonarT - SONAR_HALT) / (SONAR_ZEIT - SONAR_HALT)));
-  if(sicht <= 0) return;
-  const W = radarCv.width, H = radarCv.height, cx = W / 2, cy = H / 2, R = W / 2 - 6, g = radarCtx;
+function schluchtSonar(){ return hier() && sb.aktiv && sb.laeuft && lage.ok; }
+function sonarSicht(){ return sonarT < 0 ? 0 : Math.max(0, Math.min(1, 1 - (sonarT - SONAR_HALT) / (SONAR_ZEIT - SONAR_HALT))); }
+function sonarKarte(g, cx, cy, R){
+  if(!schluchtSonar()) return;
+  const W = radarCv.width, H = radarCv.height;
   const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat), kurs = Math.atan2(f.x, f.z);
   const cosK = Math.cos(kurs), sinK = Math.sin(kurs);
-  // Weltpunkt -> Bildpunkt (dieselbe Drehung wie updatePeriscope der Engine)
-  const bild = (x, z) => { const rx = x - state.pos.x, rz = z - state.pos.z;
+  const bugX = state.pos.x + f.x * RUMPF_L, bugZ = state.pos.z + f.z * RUMPF_L;   // state.pos ist die Rumpfmitte
+  // Weltpunkt -> Bildpunkt (dieselbe Drehung wie updatePeriscope der Engine), bezogen auf den Bug
+  const bild = (x, z) => { const rx = x - bugX, rz = z - bugZ;
     const dx = sinK * rz - cosK * rx, dz = cosK * rz + sinK * rx;
     return [cx + (dx / SONAR_R) * (R - 2), cy - (dz / SONAR_R) * (R - 2)]; };
   g.save();
-  g.globalAlpha = sicht;
   g.beginPath(); g.arc(cx, cy, R - 1, 0, Math.PI * 2); g.clip();
-  g.fillStyle = 'rgba(10,40,55,0.92)'; g.fillRect(0, 0, W, H);   // Engine-Bild abdecken
+  g.fillStyle = 'rgb(10,40,55)'; g.fillRect(0, 0, W, H);          // Engine-Bild ganz abdecken
   const [u0] = lokal(state.pos.x, state.pos.z);
   // Waende
   g.strokeStyle = '#8fc7d6'; g.lineWidth = 2;
@@ -430,12 +431,6 @@ function sonarKarte(dt){
     g.fillStyle = '#ffd23f'; g.beginPath(); g.arc(bx, by, 4, 0, Math.PI * 2); g.fill();
   }
   g.restore();
-  // U-Boot massstaeblich (Live-Wunsch: Spitze = echter Bug, sonst kann man nicht verlaesslich navigieren).
-  // state.pos ist die Rumpfmitte; Bug/Heck RUMPF_L davor/dahinter, halbe Breite 11,5 m.
-  const s = (R - 2) / SONAR_R, bug = RUMPF_L * s, hb = Math.max(2, 11.5 * s);
-  g.fillStyle = '#ffffff'; g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(cx, cy - bug); g.lineTo(cx + hb, cy - bug * 0.55); g.lineTo(cx + hb, cy + bug * 0.85);
-  g.lineTo(cx, cy + bug); g.lineTo(cx - hb, cy + bug * 0.85); g.lineTo(cx - hb, cy - bug * 0.55); g.closePath(); g.fill(); g.stroke();
 }
 
 // ---- Hooks ------------------------------------------------------------------------------------
@@ -464,7 +459,16 @@ function hookE5b(){
   const pingOrig = sonarPing;
   sonarPing = function(){ const neu = sonarCool <= 0; const r = pingOrig.apply(this, arguments); if(neu && hier() && sb.aktiv) sonarT = 0; return r; };
   const periOrig = updatePeriscope;
-  updatePeriscope = function(dt){ const r = periOrig.apply(this, arguments); if(r && hier()) sonarKarte(dt); return r; };
+  updatePeriscope = function(dt){ if(hier() && sonarT >= 0) sonarT += dt || 0; return periOrig.apply(this, arguments); };
+  const dazuOrig = periscopeDazu;
+  periscopeDazu = function(g, cx, cy, R){ dazuOrig.apply(this, arguments); sonarKarte(g, cx, cy, R); };
+  const sichtOrig = periscopeSicht;
+  periscopeSicht = function(){ return schluchtSonar() ? sonarSicht() : sichtOrig.apply(this, arguments); };
+  // U-Boot massstaeblich (Live-Wunsch: Spitze = echter Bug, sonst kann man nicht verlaesslich navigieren): ganze Laenge
+  // 2 x RUMPF_L, halbe Breite RUMPF_B / 2
+  const laengeOrig = periscopeSymbolLaenge;
+  periscopeSymbolLaenge = function(){ if(!schluchtSonar()) return laengeOrig.apply(this, arguments);
+    const s = (radarCv.width / 2 - 8) / SONAR_R; return [2 * RUMPF_L * s, Math.max(2, RUMPF_B / 2 * s)]; };
   const bOrig = buttonB;
   buttonB = function(){ if(hier() && pad.offen) return; return bOrig.apply(this, arguments); };
 }

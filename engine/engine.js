@@ -12816,7 +12816,9 @@ function readInput() {
 }
 
 // ---- Verfolgerkamera fuer Kunstflug (Erde) – Engine-Standard seit 23.10.2026 (vorher nur in Trip to Japan) ---------------------
-// Nur fuer kunstflugfaehige Flieger (spec.aero: Mustang, Eurofighter …) – die anderen fliegen keinen Looping. Abschalten: kunstflugAus
+// Nur fuer kunstflugfaehige Flieger (spec.aero: Mustang, Eurofighter, X-Wing …) – die anderen fliegen keinen Looping. Ueber
+// der Erde und seit 23.10.2026 auch ueber Mond und Mars (dort fliegt der X-Wing; im Weltall rollt die Kamera weiter mit).
+// Abschalten: kunstflugAus
 // (oder STORY.kunstflugAus eines Spiels, z. B. in der Vulkanhoehle mit eigener Kamera).
 // Live-Wunsch: im Steilflug verdrehte sich die Kamera, bei 90 Grad sprang sie einmal um den Flieger
 // herum (gemessen 125 Grad in einem Bild), im Looping klappte das Bild oben um (178 Grad). Ursache in der
@@ -12837,7 +12839,7 @@ const kam = { an: false, up: new THREE.Vector3(0, 1, 0), back: new THREE.Vector3
 const _kF = new THREE.Vector3(), _kU = new THREE.Vector3(), _kW = new THREE.Vector3(), _kD = new THREE.Vector3(), _kX = new THREE.Vector3();
 let kunstflugAus = false;
 function kunstflugMoeglich(){
-  return !kunstflugAus && !(window.STORY && window.STORY.kunstflugAus) && spec && spec.aero && !eva && !parachute && sideView === 0 && locale === 'earth' && !isSub() && !spec.boat && !state.crashed && !state.onGround;
+  return !kunstflugAus && !(window.STORY && window.STORY.kunstflugAus) && spec && spec.aero && !eva && !parachute && sideView === 0 && (locale === 'earth' || locale === 'moon' || locale === 'mars') && !isSub() && !spec.boat && !state.crashed && !state.onGround;
 }
 // true = diese Kamera hat das Bild gemacht (dann die Engine-Kamera nicht rufen)
 function kunstflugKamera(camOrig){
@@ -14229,17 +14231,37 @@ function setTxt(el, val){
   if(el.textContent !== s) el.textContent = s;
 }
 // ---- Schubbalken (rechts, unter Radar und Gyro) -----------------------------------------------------
-// Uebernommen aus "Trip to Japan": in allen Fahrzeugen ein senkrechter Schubbalken. 11 Segmente von unten:
-//   1 rot = Umkehrschub (Bremse) · 2 senfgelb = 10 % · 3 gelbgruen = 20 % · 4 gruen = 30 % · 5-11 = 40-100 %, fliessend
-//   von gruen nach blau. Bei 0 % ist der Balken leer. Zu Fuss (auch am Jetpack) nicht.
+// Uebernommen aus "Trip to Japan": in allen Fahrzeugen ein senkrechter Schubbalken. Seit 23.10.2026 10 Segmente von unten
+// (das rote Umkehrschub-Segment ist weg): 1 senfgelb = 10 % · 2 gelbgruen = 20 % · 3 gruen = 30 % · 4-10 = 40-100 %,
+// fliessend von gruen nach blau. Bei 0 % ist der Balken leer. Bremse (Umkehrschub: C, A am Controller, X beim
+// Kurzschluss) = ALLE Segmente rot. Abstaende: im Flugzeug zwischen 10/20 % und 30/40 % um die Haelfte groesser, im X-Wing
+// zwischen 10/20 % und 20/30 %, im Boot/U-Boot alle gleich (schubLuecken). Zu Fuss (auch am Jetpack) nicht.
 // Die Prozentzahl steht schon oben links im HUD (nicht doppelt).
-const SCHUB_N = 11;
-const SCHUB_FEST = ['#e8352b', '#d4a017', '#9acd32', '#2ecc40'];   // rot, senfgelb, gelbgruen, gruen
-function schubFarbe(i){                                    // i = 0..10 (Segment von unten)
+const SCHUB_N = 10;
+const SCHUB_FEST = ['#d4a017', '#9acd32', '#2ecc40'];     // senfgelb, gelbgruen, gruen
+const SCHUB_BREMSE = '#e8352b';                            // rot: alle Segmente beim Bremsen
+function schubFarbe(i){                                    // i = 0..9 (Segment von unten, i = (i + 1) * 10 %)
   if(i < SCHUB_FEST.length) return SCHUB_FEST[i];
-  const k = (i - 3) / 7;                                   // 40 % -> 0,14 .. 100 % -> 1
+  const k = (i - 2) / 7;                                   // 40 % -> 0,14 .. 100 % -> 1
   const a = [46, 204, 64], b = [40, 110, 255];             // gruen -> blau
   return 'rgb(' + a.map((v, j) => Math.round(v + (b[j] - v) * k)).join(',') + ')';
+}
+// Segmente, unter denen der Abstand groesser ist (Index von unten: 1 = zwischen 10 und 20 %). art: 'boot' | 'xwing' |
+// 'flieger', sonst aus dem aktuellen Fahrzeug
+function schubLuecken(art){
+  art = art || (isWaterCraft() ? 'boot' : isXWing() ? 'xwing' : 'flieger');
+  return art === 'boot' ? [] : art === 'xwing' ? [1, 2] : [1, 3];
+}
+// Segmente einfaerben (auch fuer die eigenen Balken der Spiele): seg = Elemente von unten, g = Schub (-1..1), gap =
+// normaler Abstand in px. Gibt einen Schluessel zurueck (aendert sich nur, wenn sich etwas Sichtbares aendert).
+function schubSegmente(seg, g, gap, art){
+  const bremse = g < -0.01, an = bremse ? seg.length : Math.round(Math.max(0, Math.min(1, g)) * 10), l = schubLuecken(art);
+  seg.forEach((s, i) => {
+    s.style.background = bremse ? SCHUB_BREMSE : schubFarbe(i);
+    s.style.opacity = i < an ? '1' : '.15';
+    s.style.marginBottom = l.includes(i) ? (gap * 0.5) + 'px' : '0px';   // column-reverse: Abstand zum Segment darunter
+  });
+  return (bremse ? 'b' : an) + '|' + l.join(',');
 }
 let schubEl = null, schubSeg = [], schubAlt = '';
 function schubBalken(){
@@ -14258,14 +14280,13 @@ function schubBalken(){
   if(!zeigen){ if(schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; } return; }
   // Boote/U-Boot haben keinen Gyro (er wird ausgeblendet): dann direkt unter dem Radar
   const gyro = document.getElementById('gyro'), oben = gyro && gyro.style.display !== 'none' ? 292 : 154;
-  const g = state.throttle;
-  const an = g < 0 ? -1 : Math.round(g * 10);              // -1 = Umkehrschub, sonst 0..10 Stufen
-  const k = an + '|' + oben;
+  const g = state.throttle, gap = parseFloat(schubEl.style.gap) || 2;   // Spiele setzen den Abstand teils groesser
+  const bremse = g < -0.01, an = bremse ? -1 : Math.round(Math.max(0, Math.min(1, g)) * 10);
+  const k = an + '|' + oben + '|' + gap + '|' + schubLuecken().join(',');
   if(k === schubAlt) return;
   schubAlt = k;
   schubEl.style.display = 'flex'; schubEl.style.top = oben + 'px';
-  // Segment 0 leuchtet nur beim Umkehrschub; Segment i (1..10) ab i*10 %
-  schubSeg.forEach((s, i) => { s.style.opacity = (i === 0 ? an < 0 : i <= an) ? '1' : '.15'; });
+  schubSegmente(schubSeg, g, gap);
 }
 // ---- Y im Flug: Maschine gerade richten ---------------------------------------------------------------
 // Uebernommen aus "Trip to Japan": Y hatte in der Luft keine Funktion (aussteigen geht nur am Boden). Jetzt richtet
@@ -14488,8 +14509,8 @@ function footTargets(){
   // steht schon in updateRadar/spaceTargets; sie greift automatisch, weil der Ort stimmt.
   if(locale === 'moon' || locale === 'mars'){
     const xs = xwingSpot[locale];
-    if(xs) out.push({ x:xs.x, z:xs.z, col:FOOT_COL.xwing });
-    else out.push({ x:eva.planeAt.x, z:eva.planeAt.z, col:FOOT_COL.xwing });
+    if(xs) out.push({ x:xs.x, z:xs.z, col:FOOT_COL.xwing, art:'flieger', kurs:radarKurs(state.quat) });
+    else out.push({ x:eva.planeAt.x, z:eva.planeAt.z, col:FOOT_COL.xwing, art:'flieger', kurs:radarKurs(state.quat) });
     // das Fahrzeug nur, solange man NICHT darin sitzt
     if(!eva.rover){
       const rs = roverSpot[locale];
@@ -14497,7 +14518,7 @@ function footTargets(){
     }
     return out;
   }
-  return [{ x:eva.planeAt.x, z:eva.planeAt.z, col:FOOT_COL.xwing }];
+  return [{ x:eva.planeAt.x, z:eva.planeAt.z, col:FOOT_COL.xwing, art:(isWaterCraft() ? 'boot' : 'flieger'), kurs:radarKurs(state.quat) }];
 }
 function activeTarget(){
   // Draußen unterwegs: das Radar zeigt, wo die Fahrzeuge stehen. Sonst findet man sie nach ein paar
@@ -14524,6 +14545,52 @@ function activeTarget(){
   if(isAirbus() && paxTarget) return {x:paxTarget.x, z:paxTarget.z, col:(paxLoad>=PAX_MAX?'#e8c020':'#cc4444')};
   return null;
 }
+// ---- Radar- und Sonar-Symbole (Engine-Standard seit 23.10.2026) --------------------------------
+// Gewuenscht: "die sehen naemlich immer etwas anders aus ... generell gilt die vordere spitze ist die pos des fzg ... boote
+// haben ueberall das oval (wie bei Etappe 5 uboot sfg) ... ueberwasser als radar oder unter wasser bei sonar das selbe
+// symbol ... im radar sollen flugzeuge eine mini siluette der p51 erhalten".
+// Ein Symbol je Art, im Radar und im Sonar (Periskop) dasselbe. Die vordere Spitze ist immer die Position: das eigene Symbol
+// steht mit der Spitze genau in der Mitte der Scheibe und reicht nach hinten, ein Ziel steht mit der Spitze auf seinem Ort.
+//   flieger – Mini-Silhouette einer P-51 Mustang (Draufsicht, selbst gezeichnet) · boot – laengliches Oval (Bug spitz, wie das
+//   U-Boot im Sonar) · person – schmales Dreieck (zu Fuss, Rover, Jetpack)
+// Spiele waehlen ihr eigenes Symbol mit radarEigenArt (z. B. im Segelboot 'boot').
+const P51_FORM = [[0,0],[42,60],[50,150],[55,315],[200,360],[700,385],[712,450],[700,540],[80,660],[45,780],[25,995],
+                  [250,1035],[255,1135],[25,1155],[0,1240]];   // halbe Umrisslinie, Nase oben, Laenge 1.240 Einheiten
+const RADAR_LAENGE = { flieger:20, boot:22, person:13 };       // px (eigenes Symbol); Ziele etwas kleiner
+function radarSymbol(g, x, y, art, rot, laenge, col, halbBreite){   // halbBreite: nur Boot (px, massstaeblich)
+  const L = laenge || RADAR_LAENGE[art] || 13;
+  g.save(); g.translate(x, y); g.rotate(rot || 0);              // rot im Uhrzeigersinn, 0 = Spitze nach oben
+  g.fillStyle = col || '#ffffff'; g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 1;
+  g.beginPath();
+  if(art === 'flieger'){
+    const k = L / 1240;
+    P51_FORM.forEach(([a, b], i) => i ? g.lineTo(a*k, b*k) : g.moveTo(a*k, b*k));
+    for(let i = P51_FORM.length - 2; i > 0; i--) g.lineTo(-P51_FORM[i][0]*k, P51_FORM[i][1]*k);
+  } else if(art === 'boot'){
+    const hb = halbBreite || Math.max(2, L * 0.23);
+    g.moveTo(0, 0); g.lineTo(hb, L*0.225); g.lineTo(hb, L*0.925); g.lineTo(0, L); g.lineTo(-hb, L*0.925); g.lineTo(-hb, L*0.225);
+  } else {
+    g.moveTo(0, 0); g.lineTo(L*0.38, L); g.lineTo(-L*0.38, L);
+  }
+  g.closePath(); g.fill(); g.stroke();
+  g.restore();
+}
+// Welches Symbol hat man selbst? Ueberschreibbar (Spiele: eigene Boote, Figuren).
+let radarEigenArt = function(){
+  if(eva) return eva.boat ? 'boot' : 'person';
+  return isWaterCraft() ? 'boot' : 'flieger';
+};
+// Kurs eines Fliegers/Boots aus seiner Lage (Bildwinkel = head - kurs)
+function radarKurs(q){ const f = new THREE.Vector3(0,0,-1).applyQuaternion(q); return Math.atan2(f.x, f.z); }
+// Hooks fuers Sonar (Periskop): periscopeDazu malt ein Zusatzbild (z. B. die Karte einer Schlucht) ueber Land und Wracks,
+// periscopeSicht gibt an, wie viel davon zu sehen ist (1 = alles, 0 = leere Scheibe – Ausblenden nach dem Ping),
+// periscopeSymbolLaenge die Laenge des eigenen Boots in px oder [Laenge, halbe Breite] (massstaeblich, wenn ein Spiel
+// naeher heranzoomt).
+// Das eigene Symbol liegt immer obenauf, auch bei leerer Scheibe – so ueberlagert sich beim Ausblenden nichts.
+let periscopeDazu = function(g, cx, cy, R, kurs){};
+let periscopeSicht = function(){ return 1; };
+let periscopeSymbolLaenge = function(){ return RADAR_LAENGE.boot; };
+
 // ---- PERISKOP-ANSICHT statt Radar, solange man getaucht ist ------------------------------------
 // Gewuenscht: "wäre es nett wenn unter wasser das radar aus ist, aber man an der stelle vielleicht
 // wie bei einem periskop klein sieht was oben ist. man weiß nicht, ist man im offenen meer, steuert
@@ -14625,13 +14692,18 @@ function updatePeriscope(dt){
       g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 1; g.stroke();
     }
   }
-  // Rand und eigenes Boot in der Mitte, wie beim Radar.
+  // Zusatzbild eines Spiels, dann das Ausblenden (eine leere Scheibe in der Grundfarbe darueber)
+  periscopeDazu(g, cx, cy, R, periKurs);
+  const sicht = Math.max(0, Math.min(1, periscopeSicht()));
+  if(sicht < 1){
+    g.save(); g.globalAlpha = 1 - sicht; g.fillStyle = 'rgb(20,70,90)';
+    g.beginPath(); g.arc(cx,cy,R-1,0,Math.PI*2); g.fill(); g.restore();
+  }
+  // Rand und eigenes Boot: Bug (Spitze) genau in der Mitte, dasselbe Symbol wie im Radar
   g.strokeStyle='rgba(255,255,255,0.6)'; g.lineWidth=2;
   g.beginPath(); g.arc(cx,cy,R,0,Math.PI*2); g.stroke();
-  g.fillStyle='#ffffff';
-  g.beginPath();
-  g.moveTo(cx,cy-7); g.lineTo(cx-5,cy+6); g.lineTo(cx+5,cy+6);
-  g.closePath(); g.fill();
+  const symL = periscopeSymbolLaenge();
+  radarSymbol(g, cx, cy, 'boot', 0, Array.isArray(symL) ? symL[0] : symL, null, Array.isArray(symL) ? symL[1] : 0);
   // Periskop-Symbol, damit klar ist, dass hier etwas anderes steht als sonst.
   g.font='11px system-ui,sans-serif';
   g.fillStyle='rgba(255,255,255,0.85)';
@@ -14651,11 +14723,8 @@ function updateRadar(){
   radarCtx.beginPath(); radarCtx.arc(cx,cy,R,0,Math.PI*2); radarCtx.fill();
   radarCtx.strokeStyle='rgba(255,255,255,0.6)'; radarCtx.lineWidth=2;
   radarCtx.beginPath(); radarCtx.arc(cx,cy,R,0,Math.PI*2); radarCtx.stroke();
-  // Flieger-Dreieck (Mitte, zeigt nach oben = Flugrichtung)
-  radarCtx.fillStyle='#ffffff';
-  radarCtx.beginPath();
-  radarCtx.moveTo(cx,cy-7); radarCtx.lineTo(cx-5,cy+6); radarCtx.lineTo(cx+5,cy+6);
-  radarCtx.closePath(); radarCtx.fill();
+  // Eigenes Symbol: Spitze in der Mitte, zeigt nach oben = Fahrtrichtung (radarSymbol)
+  radarSymbol(radarCtx, cx, cy, radarEigenArt(), 0);
   // Ziel-Blips relativ zum Flieger-Kurs. Im Weltall sind es mehrere (Mond, Mars, Erde, ISS,
   // Todesstern), in der Inselwelt genau einer: die nächste brennende Stelle.
   // Der Maßstab unterscheidet sich stark — Inseln liegen Hunderte Meter, Himmelskörper
@@ -14683,8 +14752,10 @@ function updateRadar(){
       // Zu Fuß ist der Maßstab viel kleiner: 500 m sind hier weit (Laufen 6 m/s), während ein
       // Flieger in derselben Zeit Kilometer macht. Ohne eigenen Maßstab klebte das Flugzeug-Blip
       // direkt in der Mitte und man sah nicht, in welche Richtung man laufen muss.
-      if(eva) return Math.min(RMAX, dist/500*RMAX + 8);
-      if(locale !== 'space') return Math.min(RMAX, dist/2500*RMAX + 10);
+      // Seit 23.10.2026 ohne Versatz: die Spitze des eigenen Symbols ist die Position, ein Ziel direkt davor liegt also
+      // wirklich an der Spitze (vorher +8/+10 px, damit nichts unter dem mittigen Dreieck verschwand)
+      if(eva) return Math.min(RMAX, dist/500*RMAX);
+      if(locale !== 'space') return Math.min(RMAX, dist/2500*RMAX);
       const NEAR = 1000, FAR = 900000;                     // 1 km ... 900 km (Sonne)
       const d = Math.max(NEAR, Math.min(FAR, dist));
       const f = Math.log(d/NEAR) / Math.log(FAR/NEAR);     // 0 (nah) .. 1 (fern)
@@ -14698,6 +14769,8 @@ function updateRadar(){
       const rr=radiusFor(Math.hypot(dx,dz));
       const bx=cx + Math.sin(rel)*rr;
       const by=cy - Math.cos(rel)*rr;
+      // Fahrzeuge mit ihrem Symbol (Spitze auf dem Ort, in ihrer Richtung), alles andere als Punkt
+      if(tgt.art){ radarSymbol(radarCtx, bx, by, tgt.art, tgt.kurs === undefined ? 0 : head - tgt.kurs, Math.round((RADAR_LAENGE[tgt.art] || 13) * 0.8), tgt.col); continue; }
       radarCtx.fillStyle=tgt.col;
       radarCtx.beginPath(); radarCtx.arc(bx,by,5,0,Math.PI*2); radarCtx.fill();
       radarCtx.strokeStyle='rgba(0,0,0,0.5)'; radarCtx.lineWidth=1; radarCtx.stroke();
