@@ -3103,54 +3103,8 @@ function updateMarken(){
 const JET_LANDE_ANTEIL = 0.33;
 function jetLandung(){ const m = MODEL_NAMES[currentModel]; return m === 'AlphaJet' || m === 'Airbus'; }
 // ---- Flugzeuge: rollen um die Rumpfachse, beim Lenken leicht neigen (Live-Wunsch 18.10.2026) ---------------------------
-// Die Engine dreht den Flieger um state.pos = Unterkante des Fahrwerks (die Modelle stehen mit y = 0 auf dem Boden). Die
-// Rumpfmitte liegt 1,5 (Mustang) bis 4 m (Airbus) darueber – beim Rollen schwang sie wie ein Pendel zur Seite, es sah aus,
-// als rolle er ueber die Fluegelspitze. In der Luft wird state.pos nach jedem Physikschritt um den Anteil zurueckgeschoben,
-// den nur die Drehung (nicht die Fahrt) der Rumpfmitte gegeben hat: h * (Oben nachher - Oben vorher). Am Boden bleibt alles.
-// Lenken (L-Stick / Pfeile = Gieren): dazu eine leichte Querlage in Kurvenrichtung (bis NEIG_MAX); beim Loslassen richtet
-// die Auto-Rueckstellung der Engine sie wieder auf.
-const NEIG_MAX = 0.35, NEIG_RATE = 0.9;      // rad (~20 Grad) Querlage, Rollrate-Anteil beim Hineinlegen
-const _obenV = new THREE.Vector3(), _obenN = new THREE.Vector3();
-let rumpfH = 0, rumpfMesh = null;
-function rumpfHoehe(){
-  const m = modelHolder.children[0] || null;
-  if(m !== rumpfMesh){
-    rumpfMesh = m; rumpfH = 0;
-    if(m){
-      // einmal je Modell: Box in den Koordinaten des Fliegers (Lage kurz auf null, gleich wieder zurueck)
-      const q = planeGroup.quaternion.clone(), p = planeGroup.position.clone();
-      planeGroup.quaternion.identity(); planeGroup.position.set(0, 0, 0); planeGroup.updateMatrixWorld(true);
-      const bb = new THREE.Box3().setFromObject(m); if(!bb.isEmpty()) rumpfH = (bb.min.y + bb.max.y) / 2;
-      planeGroup.quaternion.copy(q); planeGroup.position.copy(p); planeGroup.updateMatrixWorld(true);
-    }
-  }
-  return rumpfH;
-}
-story.rumpfHoehe = rumpfHoehe;                // fuer Tests
-function hookRumpfachse(){
-  const physOrig = stepPhysics;
-  stepPhysics = function(dt, inp){
-    const fliegt = !eva && !state.onGround && !state.crashed && locale !== 'space' && !spec.boat && !spec.sub;
-    if(!fliegt) return physOrig.apply(this, arguments);
-    // leicht in die Kurve legen: Lenken ohne eigenes Rollen gibt etwas Rollrate, bis NEIG_MAX
-    let ein = inp;
-    if(inp && inp.yaw && !inp.roll){
-      const bank = new THREE.Euler().setFromQuaternion(state.quat, 'YXZ').z;   // > 0 = links haengend
-      const soll = -Math.sign(inp.yaw) * NEIG_MAX * Math.min(1, Math.abs(inp.yaw));   // rechts lenken -> rechts neigen (bank < 0)
-      const r = Math.max(-1, Math.min(1, (bank - soll) * 3)) * NEIG_RATE;      // roll > 0 rollt nach rechts (bank sinkt)
-      if(Math.abs(r) > 0.02) ein = Object.assign({}, inp, { roll: r });
-    }
-    const h = rumpfHoehe();
-    _obenV.set(0, 1, 0).applyQuaternion(state.quat);
-    const r = physOrig.call(this, dt, ein);
-    if(h && !state.onGround && !state.crashed && !eva){
-      _obenN.set(0, 1, 0).applyQuaternion(state.quat);
-      state.pos.addScaledVector(_obenN.sub(_obenV), -h);                      // Rumpfmitte statt Fahrwerk als Drehpunkt
-      planeGroup.position.copy(state.pos);
-    }
-    return r;
-  };
-}
+// Seit 23.10.2026 in der Engine (stepPhysicsNeigung, rumpfHoehe) – fuer beide Spiele gleich.
+story.rumpfHoehe = () => rumpfHoehe();        // fuer Tests (Engine)
 function hookJetLandung(){
   const physOrig = stepPhysics;
   stepPhysics = function(dt, inp){
@@ -3522,6 +3476,15 @@ function hookUbootNeigen(){
   neigenWieDrehrate('stepBoat', B_ROLL_MAX, B_ROLL_PRO);
 }
 
+// Der Todesstern (Lizenz CC-BY-NC-ND) gehoert nicht zu diesem Spiel (Live-Wunsch 23.10.2026): tools/build_engine.ps1 laesst die
+// Datei weg, und hier faellt er auch als Himmelskoerper der Engine heraus – sonst stuende er unsichtbar im All, mit Hangar-Landung.
+function ohneTodesstern(){
+  if(typeof bodies === 'undefined' || typeof BODY_DEFS === 'undefined') return;   // global-ok: Engine
+  for(const L of [bodies, BODY_DEFS]){ const i = L.findIndex(b => (b.def ? b.def.key : b.key) === 'death'); if(i >= 0) L.splice(i, 1); }
+  // ... und nirgends im Hangar landen (Live-Wunsch 23.10.2026): weder am Todesstern noch an Star Destroyer oder ISS, auch kein
+  // Start im Hangar. Das Hangar-Modell laesst build_engine.ps1 ebenfalls weg.
+  if(typeof enterHangar === 'function') enterHangar = function(){ return false; };   // global-ok: Engine
+}
 window.STORY_HOOK = function(){
   if(typeof strandleben !== 'undefined') strandleben.an = true;   // Forellen im Flachwasser, Seeloewen am Strand (Engine)
   // Live-Wunsch (08.10.2026): Alpha Jet bis 3000 m (Engine: 2200) – der Fuji ist 2 km hoch, der Lavaschacht endet darueber
@@ -3546,7 +3509,7 @@ window.STORY_HOOK = function(){
   hookModellHalter();
   hookSchubGerade();
   hookJetLandung();
-  hookRumpfachse();
+  ohneTodesstern();
   hookLoop();
   hookUbootNeigen();
   hookAbflugErde();

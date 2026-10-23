@@ -986,5 +986,7 @@ window.STORY_HOOK = function(){
   if(hookOrig) hookOrig();
   hookWelt4();
   hookKran();
+  // Untergrund (Engine untergrundAt, Staub seit 23.10.2026): der Hafen ist Beton (vorher gar kein Staub)
+  if(typeof untergrundAt === 'function'){ const u = untergrundAt; untergrundAt = function(x, z, y){ if(hier() && isOnLand(x, z)) return 'beton'; return u.apply(this, arguments); }; }   // global-ok: Engine
 };
 })();

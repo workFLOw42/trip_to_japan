@@ -543,6 +543,9 @@ function hookE6b(){
   // In der Hoehle zaehlt nur die eigene Kollision (Fuji-Kegel ist dort hohl)
   const hitsOrig = hitsBuilding;
   hitsBuilding = function(){ if(hier() && ho.aktiv) return false; return hitsOrig.apply(this, arguments); };
+  // Schatten des Jets auf dem Boden der Felsroehre (Engine schattenBoden): auch hier ab 20 m ueber Grund
+  if(typeof schattenBoden === 'function'){ const sbOrig = schattenBoden;                                     // global-ok: Engine
+    schattenBoden = function(x, z){ if(hier() && ho.aktiv){ const l = lokal(x, z); if(im(l.u, l.v, 1)) return HOEHE_Y; } return sbOrig.apply(this, arguments); }; }
   const resetOrig = resetPlane;
   resetPlane = function(){ if(hier() && (ho.aktiv || ho.landen)) return; return resetOrig.apply(this, arguments); };
   // Waehrend der Szene kein Flugzeugton (Live-Wunsch)

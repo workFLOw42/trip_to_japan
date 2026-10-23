@@ -38,8 +38,13 @@ $engine = "// AUTOMATISCH ERZEUGT aus ../Flugspiel/Flugspiel.html (tools/build_e
 $head = @()
 $assets = @()
 foreach($ln in $lines[0..($start-1)]){
-  # Transall-Modell: im Spiel die C-400 (c400_glb.js im Projekt-Root) statt der C-160 – die alte Datei wird gar nicht erst kopiert
-  if($ln -match '<script src="transall_glb\.js"></script>'){ $head += '<script src="c400_glb.js"></script>'; continue }
+  # Engine-Modelle, die dieses Spiel nie zeigt (Analyse 23.10.2026: kein Weltall, kein Modellwechsel ...) - nicht mitliefern,
+  # dann passen auch die Danksagungen (README) genau zu dem, was im Spiel ist. Alle Lader der Engine pruefen, ob die Datei da ist.
+  if($ln -match '<script src="([a-z0-9_]+)_glb\.js"></script>' -and (' parachute astronaut ford harbor spacedrive rover lunar ' -match (' ' + $Matches[1] + ' '))){ continue }
+  # Todesstern (Lizenz CC-BY-NC-ND): gehoert nicht zu diesem Spiel - die Datei wird gar nicht erst kopiert (story.js ohneTodesstern)
+  if($ln -match '<script src="deathstar_glb\.js"></script>'){ continue }
+  # Hangar: in diesem Spiel landet man nirgends im Hangar (story.js ohneTodesstern) - das Modell wird nicht kopiert
+  if($ln -match '<script src="hangar_glb\.js"></script>'){ continue }
   if($ln -match '<script src="([^"]+)"></script>'){ $assets += $Matches[1]; $head += ($ln -replace 'src="', 'src="engine/'); continue }
   $ln = $ln -replace '<title>Flugspiel</title>', '<title>Reise nach Japan</title>'
   $ln = $ln -replace 'content="Flugspiel"', 'content="Reise nach Japan"'
@@ -69,7 +74,7 @@ $out = ($head -join "`n") + "`n" +
   '<script src="wueste_snd.js"></script>' + "`n" +
   '<script src="kamel_glb.js"></script>' + "`n" +
   '<script src="etappe2.js"></script>' + "`n" +
-  '<script src="schildkroete_glb.js"></script>' + "`n" +
+  '<script src="meeresschildkroete_glb.js"></script>' + "`n" +
   '<script src="fluss_snd.js"></script>' + "`n" +
   '<script src="krokodil_glb.js"></script>' + "`n" +
   '<script src="etappe3.js"></script>' + "`n" +

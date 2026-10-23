@@ -634,10 +634,17 @@ function flussStart(){
 story.etappe3Start = flussStart;
 
 // ---- Schildkroeten: kleine Gruppen auf der Wiese (wie die Kamele in Etappe 2) ------------------
-// Modell: Tortoise - turtle by Daniel Zuleta Art, CC-BY-4.0 (schildkroete_glb.js). Normal-Maps entfernt, Farbtexturen als
-// 512er JPEG und aufgehellt (im Original fast schwarz, Mittel ~25/255) -> 1,2 statt 5,2 MB. Ohne Animation: sie stehen.
+// Live-Wunsch 23.10.2026: statt der unbeweglichen Riesenschildkroeten die animierten Meeresschildkroeten wie im Geheimland
+// (Sea Turtle und Seaturtle Baby, Low Poly von WildPoly3D, CC-BY-NC-4.0, meeresschildkroete_glb.js) – grosse und kleine.
+// Sie bummeln in ihrer Gruppe herum (gehen, stehen). Einige aus den Gruppen nah am Ufer laufen ab und zu in den Fluss,
+// schwimmen ein Stueck und kommen wieder heraus. Kommt das Feuerwehrboot, tauchen sie ab wie die Krokodile (KROKO_TAUCH_R).
+// Feste Grenzen (story.tierQuelle); abgetaucht keine (das Boot faehrt darueber).
 // Gruppe: z am Fluss, seite wie FEUER_DEF (+1 = Ufer mit Steg und Samu), ab = m hinter dem Sandstreifen.
-const SK_LAENGE = 1.4;        // m Riesenschildkroete (~0,6 m hoch; Samu 1,55 m)
+const SK_LAENGE = 1.3;        // m grosse Meeresschildkroete (Samu 1,55 m)
+const SK_BABY = 0.42;         // m Baby
+const SK_LAUF = 0.4, SK_BABY_LAUF = 0.22, SK_SCHWIMM = 0.7;   // m/s
+const SK_OBEN = 0.35, SK_TAUCH = 2.2;                         // m unter der Wasserlinie: schwimmend, abgetaucht zusaetzlich
+const SK_FLUSS_AB = 40;       // Gruppen hoechstens so weit vom Sand: einige gehen ab und zu in den Fluss
 // Live-Wunsch "mehr Schildkroeten": 16 Gruppen mit je 3-6 Tieren (vorher 9 mit 3-4), drei davon nah am Start.
 const SK_GRUPPEN = [
   { z: 330, seite: -1, ab: 30, n: 5 }, { z: 150, seite: 1, ab: 60, n: 5 }, { z: -250, seite: -1, ab: 25, n: 4 },
@@ -648,8 +655,10 @@ const SK_GRUPPEN = [
   { z: -1950, seite: -1, ab: 60, n: 5 },
   { vorSamu: true, n: 6 },    // direkt vor Samu, auf dem Weg zum Boot
 ];
-const SK_SICHT = 700;         // m: weiter weg nicht zeichnen (je Tier 26.000 Dreiecke)
+const SK_SICHT = 700;         // m: weiter weg nicht zeichnen
+const SK_NAH = 160;           // m: naeher bewegt und animiert
 const schildkroeten = [];
+story.e3sk = () => schildkroeten;                       // fuer Tests
 function skMitte(gr){
   if(gr.vorSamu){
     const an = ankunft(), bp = bootPlatz();
@@ -665,37 +674,113 @@ function skFrei(x, z){
   const xp = xwingPlatz(), rp = ringPlatz(), an = ankunft();
   return Math.hypot(x - xp.x, z - xp.z) > 12 && Math.hypot(x - rp.x, z - rp.z) > 8 && Math.hypot(x - an.x, z - an.z) > 5;
 }
-function ladeSchildkroeten(){
-  schildkroeten.length = 0;
-  if(!window.SCHILDKROETE_GLB || !THREE.GLTFLoader) return;
-  const b64 = window.SCHILDKROETE_GLB.split(',')[1], bin = atob(b64), bytes = new Uint8Array(bin.length);
+// Vorlage: Groesse in der Lauf-Haltung gemessen (mit Skinning, Engine orcaPunkte), Nase nach -z, lift = wie tief der Koerper
+// beim Laufen unter den Ursprung reicht
+function skVorlage(win, lang, lauf, fertig){
+  if(!window[win] || !THREE.GLTFLoader) return;
+  const b64 = window[win].split(',')[1], bin = atob(b64), bytes = new Uint8Array(bin.length);
   for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   new THREE.GLTFLoader().parse(bytes.buffer, '', (gltf) => {
-    if(!e3()) return;
-    const obj = gltf.scene;
-    obj.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(obj), size = new THREE.Vector3(); box.getSize(size);
-    obj.scale.setScalar(SK_LAENGE / Math.max(size.x, size.z));
-    obj.updateMatrixWorld(true);
-    const b2 = new THREE.Box3().setFromObject(obj), c = new THREE.Vector3(); b2.getCenter(c);
-    obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= b2.min.y;
-    const tpl = new THREE.Group(); tpl.add(obj);
-    let s = 41;
-    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    for(const gr of SK_GRUPPEN){
-      const m = skMitte(gr), blick = rnd() * Math.PI * 2;
-      for(let i = 0; i < gr.n; i++){
-        const a = rnd() * Math.PI * 2, r = 1.5 + rnd() * m.r;
-        const x = m.x + Math.cos(a) * r, z = m.z + Math.sin(a) * r;
-        if(!skFrei(x, z)) continue;
-        const k = tpl.clone(true);
-        k.position.set(x, bodenY(x, z), z);
-        k.rotation.y = blick + (rnd() - 0.5) * 2;
-        k.scale.setScalar(0.85 + rnd() * 0.3);
-        story.welt(3).add(k); schildkroeten.push(k);
-      }
+    const o = gltf.scene; o.rotation.y = Math.PI;
+    const clips = gltf.animations || [], clip = (n) => clips.find(a => a.name.endsWith('|' + n)) || null;
+    const mess = () => { const c = clip(lauf), mx = new THREE.AnimationMixer(o); if(c){ mx.clipAction(c).play(); mx.setTime(c.duration * 0.3); }
+      const b = new THREE.Box3().setFromPoints(orcaPunkte(o)); mx.stopAllAction(); mx.uncacheRoot(o); return b; };   // global-ok: Engine
+    const s = mess().getSize(new THREE.Vector3()); o.scale.multiplyScalar(lang / Math.max(0.001, s.x, s.z));
+    const lift = Math.max(0, -mess().min.y);
+    o.traverse(m => { if(m.isMesh){ m.frustumCulled = false; m.castShadow = false; } });
+    const tpl = new THREE.Group(); tpl.add(o);
+    fertig({ tpl, clip, lift, lang });
+  }, (e) => console.warn('Schildkroeten-GLB', win, e));
+}
+function ladeSchildkroeten(){
+  schildkroeten.length = 0;
+  const V = {};
+  const weiter = () => { if(!V.gross || !V.baby || !e3()) return; skSetzen(V); };
+  skVorlage('MEERESSCHILDKROETE_GLB', SK_LAENGE, 'Turtle_walk', (v) => { V.gross = Object.assign(v, { swim: 'Turtle_swim', walk: 'Turtle_walk', idle: 'Turtle_idle', v: SK_LAUF }); weiter(); });
+  skVorlage('MEERESSCHILDKROETE_BABY_GLB', SK_BABY, 'walk', (v) => { V.baby = Object.assign(v, { swim: 'swim', walk: 'walk', idle: 'idle', v: SK_BABY_LAUF }); weiter(); });
+}
+function skSetzen(V){
+  let s = 41;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for(const gr of SK_GRUPPEN){
+    const m = skMitte(gr), blick = rnd() * Math.PI * 2;
+    let fluss = !gr.vorSamu && gr.ab <= SK_FLUSS_AB ? 1 + (rnd() < 0.5 ? 1 : 0) : 0;   // so viele gehen ab und zu in den Fluss
+    for(let i = 0; i < gr.n; i++){
+      const a = rnd() * Math.PI * 2, r = 1.5 + rnd() * m.r;
+      const x = m.x + Math.cos(a) * r, z = m.z + Math.sin(a) * r;
+      if(!skFrei(x, z)) continue;
+      const art = i % 3 === 2 ? V.baby : V.gross, k = cloneSkinned(art.tpl);           // global-ok: Engine
+      const sc = 0.85 + rnd() * 0.3; k.scale.setScalar(sc);
+      k.position.set(x, bodenY(x, z) + art.lift * sc, z); k.rotation.y = blick + (rnd() - 0.5) * 2;
+      story.welt(3).add(k);
+      const t = { k, art, sc, mx: new THREE.AnimationMixer(k), acts: {}, cur: null, x, z, y: k.position.y, heim: m, phase: 'stehen',
+        warte: 1 + rnd() * 6, ziel: null, fluss: art === V.gross && fluss > 0, runden: 0, tauch: 0, rnd };
+      if(t.fluss) fluss--;
+      skClip(t, art.idle); if(t.acts[art.idle]) t.acts[art.idle].time = rnd() * 3;
+      schildkroeten.push(t);
     }
-  }, (e) => console.warn('Schildkroeten-GLB', e));
+  }
+}
+function skClip(t, n){
+  if(t.cur === n) return;
+  const c = t.art.clip(n); if(!c) return;
+  const a = t.acts[n] || (t.acts[n] = t.mx.clipAction(c)), alt = t.cur && t.acts[t.cur];
+  a.reset().play(); if(alt) alt.crossFadeTo(a, 0.5, false); t.cur = n;
+}
+// Punkt im Fluss quer vor der Gruppe (Abstand dq von der Mitte, Anteil der halben Breite), ein Stueck flussauf/-ab versetzt
+function skFlussPunkt(t, q, versatz){
+  const z = t.heim.z + versatz, L = flussLage(mitteX(z), z), nx = -L.rz, nz = L.rx, seite = Math.sign(flussLage(t.heim.x, t.heim.z).d) || 1;
+  const d = q * FLUSS_B / 2;
+  return { x: mitteX(z) + nx * seite * d, z: z + nz * seite * d };
+}
+function skHin(t, zx, zz, v, dt){
+  const dx = zx - t.x, dz = zz - t.z, d = Math.hypot(dx, dz);
+  if(d < 0.1) return true;
+  const st = Math.min(d, v * dt); t.x += dx / d * st; t.z += dz / d * st;
+  const soll = Math.atan2(-dx, -dz), w = Math.atan2(Math.sin(soll - t.k.rotation.y), Math.cos(soll - t.k.rotation.y));
+  t.k.rotation.y += Math.max(-1.6 * dt, Math.min(1.6 * dt, w));
+  return d - st < 0.1;
+}
+const skImWasser = (x, z) => imFluss(x, z) && WASSER_Y - bodenY(x, z) > 0.6;
+function updateSchildkroeten(dt){
+  dt = dt || 0;
+  const cp = camera.position, auf = locale === 'earth';
+  for(const t of schildkroeten){
+    const dCam = Math.hypot(t.x - cp.x, t.z - cp.z);
+    t.k.visible = auf && dCam < SK_SICHT;
+    if(!t.k.visible || dCam > SK_NAH) continue;                                    // weit weg: stehen bleiben (spart Rechnen)
+    const A = t.art, v = A.v * t.sc;
+    if(t.phase === 'stehen'){
+      skClip(t, A.idle); t.warte -= dt;
+      if(t.warte <= 0){
+        t.runden++;
+        if(t.fluss && t.runden % 3 === 0){ t.ziel = skFlussPunkt(t, 0.55, (t.rnd() - 0.5) * 30); t.phase = 'zumFluss'; }
+        else { for(let i = 0; i < 8; i++){ const a = t.rnd() * Math.PI * 2, r = 1 + t.rnd() * t.heim.r, x = t.heim.x + Math.cos(a) * r, z = t.heim.z + Math.sin(a) * r;
+            if(skFrei(x, z)){ t.ziel = { x, z }; t.phase = 'gehen'; break; } }
+          if(t.phase === 'stehen') t.warte = 2; }
+      }
+    } else if(t.phase === 'gehen'){
+      skClip(t, A.walk); if(skHin(t, t.ziel.x, t.ziel.z, v, dt)){ t.phase = 'stehen'; t.warte = 3 + t.rnd() * 6; }
+    } else if(t.phase === 'zumFluss'){
+      skClip(t, skImWasser(t.x, t.z) ? A.swim : A.walk);
+      if(skHin(t, t.ziel.x, t.ziel.z, skImWasser(t.x, t.z) ? SK_SCHWIMM : v, dt)){ t.phase = 'schwimmen'; t.zeit = 12 + t.rnd() * 12; t.ziel = skFlussPunkt(t, 0.4 + t.rnd() * 0.3, (t.rnd() - 0.5) * 40); }
+    } else if(t.phase === 'schwimmen'){
+      skClip(t, A.swim); t.zeit -= dt;
+      if(skHin(t, t.ziel.x, t.ziel.z, SK_SCHWIMM, dt)) t.ziel = skFlussPunkt(t, 0.4 + t.rnd() * 0.3, (t.rnd() - 0.5) * 40);
+      if(t.zeit <= 0){ t.phase = 'raus'; const a = t.rnd() * Math.PI * 2; t.ziel = { x: t.heim.x + Math.cos(a) * 3, z: t.heim.z + Math.sin(a) * 3 }; }
+    } else if(t.phase === 'raus'){
+      skClip(t, skImWasser(t.x, t.z) ? A.swim : A.walk);
+      if(skHin(t, t.ziel.x, t.ziel.z, skImWasser(t.x, t.z) ? SK_SCHWIMM : v, dt)){ t.phase = 'stehen'; t.warte = 4 + t.rnd() * 5; }
+    }
+    // Hoehe: im Fluss schwimmend knapp unter der Wasserlinie (Boot nah: abtauchen wie die Krokodile), sonst auf dem Boden
+    const nass = skImWasser(t.x, t.z);
+    const bootNah = nass && isBoat() && !eva && Math.hypot(state.pos.x - t.x, state.pos.z - t.z) < KROKO_TAUCH_R;   // global-ok: Engine
+    t.tauch += ((bootNah ? 1 : 0) - t.tauch) * Math.min(1, dt * (bootNah ? 1.6 : 0.5));
+    const ziel = nass ? Math.max(bodenY(t.x, t.z) + 0.3, WASSER_Y - SK_OBEN - t.tauch * SK_TAUCH) : bodenY(t.x, t.z) + A.lift * t.sc;
+    t.y += (ziel - t.y) * Math.min(1, dt * 2);
+    t.k.position.set(t.x, t.y, t.z);
+    if(dCam < 120) t.mx.update(dt);
+  }
 }
 // ---- Krokodile im Fluss -----------------------------------------------------------------------------------------
 // Modell: Nile Crocodile Swimming by Monster, CC-BY-NC-ND-4.0 (krokodil_glb.js) – ND: das Modell bleibt unveraendert
@@ -766,15 +851,13 @@ function updateKrokodile(dt){
 if(story.tierQuelle) story.tierQuelle(() => story.etappe !== 3 ? null
   : krokodile.filter(o => o.k.visible && (o.tauch || 0) < 0.3).flatMap(o => { const s = o.k.scale.x, fx = -Math.sin(o.k.rotation.y), fz = -Math.cos(o.k.rotation.y), a = KROKO_L * 0.27 * s;
     return [-1, 1].map(v => ({ x: o.k.position.x + fx * a * v, z: o.k.position.z + fz * a * v, y: o.k.position.y - 0.3, r: 0.75 * s, h: 1.0 })); }));
-// Grenze (objekte.js, Live-Wunsch 18.10.2026): nicht durch die Schildkroeten (niedrig, aber zu hoch zum Drueberlaufen)
+// Grenze (objekte.js, Live-Wunsch 18.10.2026): nicht durch die Schildkroeten (niedrig, aber zu hoch zum Drueberlaufen); feste
+// Grenze, die mit ihnen wandert – abgetaucht keine (das Boot faehrt darueber, wie bei den Krokodilen)
 if(story.tierQuelle) story.tierQuelle(() => story.etappe !== 3 ? null
-  : schildkroeten.filter(k => k.visible && k.parent).map(k => {
-    if(!k.userData.schatten && story.tierSchatten) story.tierSchatten(k, SK_LAENGE * 1.1 * k.scale.x, SK_LAENGE * 0.8 * k.scale.x);   // Schatten (18.10.2026)
-    return { x: k.position.x, z: k.position.z, y: k.position.y, r: SK_LAENGE * 0.42 * k.scale.x, h: 0.8 }; }));
-function updateSchildkroeten(){
-  const cp = camera.position, auf = locale === 'earth';
-  for(const k of schildkroeten) k.visible = auf && Math.hypot(k.position.x - cp.x, k.position.z - cp.z) < SK_SICHT;
-}
+  : schildkroeten.filter(t => t.k.visible && t.k.parent && t.tauch < 0.3).map(t => {
+    const k = t.k, L = t.art.lang * t.sc;
+    if(!k.userData.schatten && story.tierSchatten) story.tierSchatten(k, L * 1.1, L * 0.8);   // Schatten (18.10.2026)
+    return { x: t.x, z: t.z, y: t.y - t.art.lift * t.sc, r: L * 0.42, h: Math.max(0.3, L * 0.45) }; }));
 
 // Radarziel nach geschaffter Startsequenz: flussabwaerts weit voraus
 const zielVorher = story.zielFuer;
@@ -1039,7 +1122,7 @@ function updateE3(dt){
   story.etappenMusik(3, window.FLUSS_SND && window.FLUSS_SND.musik, dt || 0);   // story.js, wie Etappe 2
   if(!e3()) return;
   updateMarken();
-  updateSchildkroeten();
+  updateSchildkroeten(dt);
   updateKrokodile(dt || 0);
   if(enden.length) updateFlussEnden();
   if(park.boot) park.boot.visible = !boot.aktiv;
@@ -1059,5 +1142,7 @@ window.STORY_HOOK = function(){
   hookWelt3();
   hookRadar3();
   hookBoot();
+  // Untergrund (Engine untergrundAt, Staub seit 23.10.2026): der Steg ist Holz (wie Beton); Wiese, Sandstreifen und Fluss kennt die Engine
+  if(typeof untergrundAt === 'function'){ const u = untergrundAt; untergrundAt = function(x, z, y){ if(hier() && aufSteg3(x, z) && (y === undefined || y > STEG3.H - 0.45)) return 'steg'; return u.apply(this, arguments); }; }   // global-ok: Engine
 };
 })();

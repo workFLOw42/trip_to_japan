@@ -713,5 +713,7 @@ window.STORY_HOOK = function(){
   if(hookOrig) hookOrig();
   hookWelt2();
   hookFlugschule();
+  // Untergrund (Engine untergrundAt, Staub seit 23.10.2026): die Wueste ist Sand
+  if(typeof untergrundAt === 'function'){ const u = untergrundAt; untergrundAt = function(x, z, y){ if(e2() && locale === 'earth' && isOnLand(x, z)) return 'sand'; return u.apply(this, arguments); }; }   // global-ok: Engine
 };
 })();

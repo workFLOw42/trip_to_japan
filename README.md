@@ -170,7 +170,7 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `hafen_glb.js` | Frachtschiff (verkleinert), Container und Kran als Base64 |
 | `samu_glb.js` | Samu als eingebettetes GLB (aus `models/samu.glb`) |
 | `samu_kopf.js` | Samus Gesicht auf dem Globus (aus der Figur-Zeichnung) |
-| `schildkroete_glb.js` | Schildkröten für Etappe 3 (verkleinert und aufgehellt, 1,5 MB) |
+| `meeresschildkroete_glb.js` | Meeresschildkröten und Babys für Etappe 3 (animiert, unverändert, 2 MB) |
 | `krokodil_glb.js` | Krokodile im Fluss (Etappe 3), unverändert (Lizenz ND), 7,7 MB |
 | `tiere.js` | Tiere und Inseln: fliegende Möwen (Etappe 1, 4, 5, 6 und an jeder Insel), **sitzende Möwen** (`story.sitzMoewen`: kommt Samu zu nahe, fliegen sie als fliegende Möwen auf, ziehen einen Bogen und landen wieder auf ihrem Platz – bisher am Kai in Etappe 4), Hunde (1), Pandas (5), Godzillas und Samurai (6), Mount Fuji statt der Kegel-Hügel |
 | `begleiter.js` | **Hund als Begleiter** (Shiba Inu, wie der Fuchs im Geheimland): in jeder Etappe zu Fuß dabei, begleitet Samu frei, kommt und setzt sich neben ihn, wenn er stehen bleibt, tollt vor ihm herum, wenn er lange steht oder Hip Hop tanzt; **B** = Samu kniet, der Hund kommt, springt vor Freude und setzt sich daneben. Er ist ein Körper (Samu läuft nicht durch ihn), läuft nicht durch Grenzen, nicht ins Wasser und um die anderen Tiere herum, scheucht sitzende Möwen auf und bellt ab und zu (leiser mit der Entfernung, beim Tollen doppelt so oft, beim Aufscheuchen). Im Fahrzeug wartet er sitzend; im Finale bleibt er am Fukuoka-Beach |
@@ -195,7 +195,7 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `sw.js`, `manifest.json` | Offline-Cache und App-Installation (PWA) |
 | `ENGINE_RISIKEN.md` | bekannte Stolperstellen der Engine-Übernahme |
 
-Ladeordnung: `samu_glb.js` → `samu_kopf.js` → `story.js` → `objekte.js` → `haeuser.js` → `spuren.js` → `etappe1.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `schildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `shiba_glb.js` → `bellen_snd.js` → `begleiter.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `surfboard_glb.js` → `campfire_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `etappe6c.js` → `snowboard_glb.js` → `wolf_glb.js` → `finale_snd.js` → `finale.js` → `abspann.js` → `statistik.js` → `engine/engine.js`. Die Engine ruft am Ende
+Ladeordnung: `samu_glb.js` → `samu_kopf.js` → `story.js` → `objekte.js` → `haeuser.js` → `spuren.js` → `etappe1.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `meeresschildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `shiba_glb.js` → `bellen_snd.js` → `begleiter.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `surfboard_glb.js` → `campfire_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `etappe6c.js` → `snowboard_glb.js` → `wolf_glb.js` → `finale_snd.js` → `finale.js` → `abspann.js` → `statistik.js` → `engine/engine.js`. Die Engine ruft am Ende
 ihres Boot-Blocks `STORY_HOOK` (Wrapper setzen) und `STORY_START` (Startszene) auf – die zwei Zeilen fügt das Build-Skript ein.
 
 **Welten:** Jede Etappe baut ihre Kulisse in eine eigene Gruppe – `story.welt(n).add(obj)`, nie `scene.add(obj)`.
@@ -229,95 +229,124 @@ einem eigenen Cache, dessen Version nur bei geänderten Modellen hochgeht – so
 
 Schule, Wüste, Oase, Flugfeld, Fluss, Hafenbecken, Kanal und Globus sind aus Code gebaut.
 
-## 🙏 Danksagungen
+## 🙏 Danksagungen und Lizenzen
 
 Dieses Spiel wäre ohne die großartige Arbeit vieler Künstlerinnen und Künstler nicht möglich. Herzlichen Dank!
+Alle 3D-Modelle stammen von **[Sketchfab](https://sketchfab.com)**, alle Töne (soweit nicht anders angegeben) von
+**[Pixabay](https://pixabay.com)** ([Pixabay-Lizenz](https://pixabay.com/service/license-summary/)).
+NC-Lizenzen bedeuten: **nicht kommerziell** – das Spiel darf mit diesen Werken nicht verkauft werden.
 
-**Eigens für dieses Spiel:**
+### 3D-Modelle – eigens für Reise nach Japan
 
-| Modell / Sound | Künstler/in | Lizenz |
-|---|---|---|
-| Orca (Low Poly, animiert) · Seelöwe (Furseal) · Robbe (Seal) – in der Engine | **WildPoly3D** (Sketchfab) | [CC BY-NC 4.0](http://creativecommons.org/licenses/by-nc/4.0/) – unverändert (nicht kommerziell) |
-| T-65 X-Wing Starfighter (mit Fahrwerk und Flügeln) – in der Engine | **Quiznos323** (Sketchfab) | [CC BY-NC-SA 4.0](http://creativecommons.org/licenses/by-nc-sa/4.0/) – unverändert (nicht kommerziell) |
-| Low Poly Rainbow Trout (Forelle) – in der Engine | **Natural History Museum of Los Angeles County** (Sketchfab) | [CC BY-NC-SA 4.0](http://creativecommons.org/licenses/by-nc-sa/4.0/) – unverändert (nicht kommerziell) |
-| [Prancha de Surf / Surfboard](https://sketchfab.com/3d-models/prancha-de-surf-surfboard-bafbc865dc8642b1bacc484dd9a5f1fc) | **Leandro Cruz** (Sketchfab) | [CC BY-SA 4.0](http://creativecommons.org/licenses/by-sa/4.0/) – ausgerichtet und skaliert |
-| [Wolf](https://sketchfab.com/3d-models/wolf-e319f122c2474d3186b841b019fb0edd) | **OLEKSO** (Sketchfab) | [CC BY-NC 4.0](http://creativecommons.org/licenses/by-nc/4.0/) – unverändert (nicht kommerziell) |
-| [Intermediate Advanced Snowboard](https://sketchfab.com/3d-models/intermediate-advanced-snowboard-267e04a025434d7d8587ec2ee60ad62e) | **Final Render Animation Studio** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – skaliert, Material auf PBR umgestellt |
-| Arabic Islamic Music (46 s) | **bombinsound** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
-| Desert Wind 2 | **tanweraman** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
-| Atlas Maldives (2:35, Etappe 3) · Atlas Thailand (Etappe 4) | **vadim_makes_sound** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
-| Chinese Flute Relaxing Music (short, Etappe 5) | **nourishedbymusic** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
-| Summer Vacation (Etappe 1) | **kulakovka** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
-| Ancient Japan (Etappe 6) | **alec_koff** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
-| [Shiba Inu Doggy](https://sketchfab.com/3d-models/shiba-inu-doggy-87a3ef91e9074ba996176d91f6863e6b) | **aaadragon** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – unverändert (Hund-Begleiter) |
-| Friendly Big Dog Bark 1 (Hund) | **yodguard** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
-| Intense Skiing Carving (Finale, Snowboard) | **u_sda88n6jzm** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
-| Can Sliding Across Wooden Desk (Finale, Rail-Grind) | **freesound_community** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
-| Soft Wind (Finale, Fallschirm/Snowboard) | **storegraphic** ([Pixabay](https://pixabay.com)) | [Pixabay-Lizenz](https://pixabay.com/service/license-summary/) |
-| [Building crane low poly](https://sketchfab.com/3d-models/building-crane-low-poly-52d3ffdc37f844a892bebbd7e76f1939) | **Mostafa Hamed** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – Haken und Laufkatze ersetzt |
-| [Cargo Ship 06 without containers](https://sketchfab.com/3d-models/cargo-ship-06-without-containers-c73ae6cc314941069a0e3a7ca6acc26d) | **gogiart** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – verkleinert (Dreiecke, Texturen) |
-| [Container](https://sketchfab.com/3d-models/container-92bd84031ebc4ddcbf3b3d3689c4bf31) | **H.A.K_Niazi** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – skaliert, eingefärbt |
-| [Speedboat n°2](https://sketchfab.com/3d-models/speedboat-n2-66da3d79c45c41719c19fb80d0009bef) | **Jonathan Geoffroy** (Sketchfab) | [CC BY-NC 4.0](http://creativecommons.org/licenses/by-nc/4.0/) – verkleinert. **Nicht-kommerziell:** das Spiel darf mit diesem Modell nicht verkauft werden |
-| [Police Boat](https://sketchfab.com/3d-models/police-boat-959e50ef12a546d8a203182c4ccef17a) | **gogiart** (Sketchfab) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) – verkleinert, Blaulicht ergänzt |
+| Werk | Urheber/in | Lizenz | wofür |
+|---|---|---|---|
+| [C-400](https://sketchfab.com/3d-models/c-400-ef4c7b9f505646b7a1d6704d245b9a3e) | **42manako** | CC-BY-NC-4.0 | Transportflugzeug (Nase gedreht) |
+| [Ghost classic](https://sketchfab.com/3d-models/ghost-classic-f02308be0bd74ee99aeffef7eb41e170) | **skalson** | CC-BY-4.0 | Geist an der Schultür (Etappe 1) |
+| [Bactrian Camel (Low Poly)](https://sketchfab.com/3d-models/bactrian-camel-low-poly-1fb4d897df2e4d12ab185302a36b3d5f) | **Nyilonelycompany** | CC-BY-NC-SA-4.0 | Kamel (Wüste, Etappe 2) |
+| [Sea Turtle – Animated Low Poly](https://sketchfab.com/3d-models/sea-turtle-animated-low-poly-d2c766bc36724d5998b62f8b2150acb9) | **WildPoly3D** | CC-BY-NC-4.0 | Meeresschildkröte (Fluss, Etappe 3, unverändert) |
+| [SeaTurtle Baby – Animated Low Poly](https://sketchfab.com/3d-models/seaturtle-baby-animated-low-poly-d6a5a74b67df418585c33ed37873531a) | **WildPoly3D** | CC-BY-NC-4.0 | Schildkröten-Baby (Etappe 3, unverändert) |
+| [Nile Crocodile Swimming](https://sketchfab.com/3d-models/nile-crocodile-swimming-8bdc3a1551fb4d9d9a58e56b9385bd22) | **Monster** | CC-BY-NC-ND-4.0 | Krokodil im Fluss (unverändert) |
+| [Cargo Ship 06 without containers](https://sketchfab.com/3d-models/cargo-ship-06-without-containers-c73ae6cc314941069a0e3a7ca6acc26d) | **gogiart** (agt14032013) | CC-BY-4.0 | Frachtschiff im Hafen (verkleinert) |
+| [Container](https://sketchfab.com/3d-models/container-92bd84031ebc4ddcbf3b3d3689c4bf31) | **H.A.K_Niazi** | CC-BY-4.0 | Container im Hafen (skaliert, eingefärbt) |
+| [Building crane low poly](https://sketchfab.com/3d-models/building-crane-low-poly-52d3ffdc37f844a892bebbd7e76f1939) | **Mostafa Hamed** | CC-BY-4.0 | Hafenkran (Haken/Laufkatze ersetzt) |
+| [Ring-Billed Gull](https://sketchfab.com/3d-models/ring-billed-gull-3df7913df7f34b90b152b05e12737c43) | **Oregon State University Ecampus** (osuecampus) | CC-BY-4.0 | sitzende Möwen (Etappe 4) |
+| [Ring-Billed Gull – in Flight](https://sketchfab.com/3d-models/ring-billed-gull-in-flight-fba809cd4766411bb8c4236e9da606bc) | **Oregon State University Ecampus** (osuecampus) | CC-BY-4.0 | fliegende Möwen |
+| [Labrador Dog](https://sketchfab.com/3d-models/labrador-dog-1f56cfbab07e4fe49b5d9e521c82073a) | **kenchoo** | CC-BY-4.0 | Hund (Etappe 1, verkleinert) |
+| [Panda](https://sketchfab.com/3d-models/panda-388c3230515848cb9c07724f2230af43) | **firoh** (Assets 4 Games) | CC-BY-4.0 | Panda (Etappe 5) |
+| [Mount Fuji – Honshu, Japan](https://sketchfab.com/3d-models/mount-fuji-honshu-japan-b081cb6aed1043cbab1818e071c5b3e3) | **Rafael Kenji Horota** | CC-BY-4.0 | Fuji-Berg (vereinfacht) |
+| [Shiba Inu Doggy](https://sketchfab.com/3d-models/shiba-inu-doggy-87a3ef91e9074ba996176d91f6863e6b) | **aaadragon** | CC-BY-4.0 | Hund-Begleiter |
+| [Alien Hip Hop Dancing](https://sketchfab.com/3d-models/alien-hip-hop-dancing-fac7a402b9f940aa955da87f8eb0619c) | **nonny** | CC-BY-4.0 | großes tanzendes Alien auf dem Mond |
+| [Funky Alien (Rigged & Animated)](https://sketchfab.com/3d-models/funky-alien-rigged-animated-09150cbfee3148748a8ea15e9066a1cb) | **jungle_jim** | CC-BY-4.0 | kleines tanzendes Alien auf dem Mond |
+| [Speedboat n°2](https://sketchfab.com/3d-models/speedboat-n2-66da3d79c45c41719c19fb80d0009bef) | **Jonathan Geoffroy** | CC-BY-NC-4.0 | Schnellboot der Flucht (Etappe 4, verkleinert) |
+| [Police Boat](https://sketchfab.com/3d-models/police-boat-959e50ef12a546d8a203182c4ccef17a) | **gogiart** (agt14032013) | CC-BY-4.0 | Polizeiboot (verkleinert, Blaulicht ergänzt) |
+| [N700-3000 Series Shinkansen](https://sketchfab.com/3d-models/n700-3000-series-shinkansen-f70820be44e0467d8b1614f2aa3045bd) | **Layo** (bciarfello) | CC-BY-4.0 | Shinkansen (Etappe 6, gekürzt) |
+| [Prancha de Surf / surfboard](https://sketchfab.com/3d-models/prancha-de-surf-surfboard-bafbc865dc8642b1bacc484dd9a5f1fc) | **Leandro Cruz** | CC-BY-SA-4.0 | Surfbrett (ausgerichtet, skaliert) |
+| [Stage Campfire](https://sketchfab.com/3d-models/stage-campfire-82f37f8bf0f645768e32ab7185df13ca) | **daedaljs** | CC-BY-4.0 | Lagerfeuer (unverändert) |
+| [Godzilla](https://sketchfab.com/3d-models/godzilla-ca862e19cad04f95af49263405ee04dd) | **savounited** | CC-BY-4.0 | Godzilla (Etappe 6, verkleinert, aufgehellt) |
+| [Susanoo](https://sketchfab.com/3d-models/susanoo-15d8821b6d0842c48eb2652639287fdd) | **tranb95** | CC-BY-4.0 | Samurai (Etappe 6) |
+| [Intermediate Advanced Snowboard](https://sketchfab.com/3d-models/intermediate-advanced-snowboard-267e04a025434d7d8587ec2ee60ad62e) | **Final Render Animation Studio** | CC-BY-4.0 | Snowboard (Finale, skaliert) |
+| [Wolf](https://sketchfab.com/3d-models/wolf-e319f122c2474d3186b841b019fb0edd) | **OLEKSO** | CC-BY-NC-4.0 | Wolf (unverändert) |
 
-Rigging und Animationen der Spielfigur: **[Mixamo](https://www.mixamo.com)** (Adobe).
+### 3D-Modelle – Fahrzeuge, Meer und Weltall
 
-**Aus dem Flugspiel übernommen** (3D-Modelle über **[Sketchfab](https://sketchfab.com)** unter Creative-Commons-Lizenzen, Namensnennung gemäß Lizenz):
+| Werk | Urheber/in | Lizenz | wofür |
+|---|---|---|---|
+| [Canadair CL-215](https://sketchfab.com/3d-models/canadair-cl-215-85a01bcfe0834228bd5261ad5754ecca) | **AlessioPassera** | CC-BY-4.0 | Löschflugzeug |
+| [Lowpoly Eurofighter Typhoon F2](https://sketchfab.com/3d-models/lowpoly-eurofighter-typhoon-f2-e870911a25f84f67a65201ae5de9cea1) | **SIpriv** | CC-BY-4.0 | Düsenjet |
+| [Airbus A380-800](https://sketchfab.com/3d-models/airbus-a380-800-9cc4aa572fa745f19d19ec8ee9826c21) | **OUTPISTON** | CC-BY-NC-SA-4.0 | Verkehrsflugzeug / Flugverkehr |
+| [P-51 Mustang](https://sketchfab.com/3d-models/p-51-mustang-36f0f3e71d2a4c18b479db1ae8f9e7a7) | **UlissesVinicios** | CC-BY-4.0 | Propellerflugzeug |
+| [Parachute Simple](https://sketchfab.com/3d-models/parachute-simple-030a235d6f314a86bebc33f322c0e71c) | **TopNotch Assets** (Sketchfab-Konto Sxnneh) | CC-BY-4.0 | einfacher Fallschirm |
+| [Millenium Falcon](https://sketchfab.com/3d-models/millenium-falcon-64a83c7671274870889d19e1ecfb8ea6) | **jay2307** | CC-BY-4.0 | Raumschiff |
+| [Fire Rescue Boat](https://sketchfab.com/3d-models/fire-rescue-boat-066ad028822c42eab411df40f5dc70d9) | **gogiart** (Sketchfab-Konto agt14032013) | CC-BY-4.0 | Feuerwehrboot |
+| [Schlauchboot](https://sketchfab.com/3d-models/schlauchboot-9b0fc1ad28fc49da90aa135cfb89e414) | **Mike0916** | CC-BY-NC-SA-4.0 | Schlauchboot |
+| [Cruise Ship](https://sketchfab.com/3d-models/cruise-ship-bb782326932e4c179e34f3d6c8e36b86) | **farhad.Guli** | CC-BY-4.0 | Kreuzfahrtschiff |
+| [Liberty ship](https://sketchfab.com/3d-models/liberty-ship-a1db8e8414464c5d8b11383e202fcf26) | **AlanTinka** | CC-BY-4.0 | Frachter |
+| [Container Ship](https://sketchfab.com/3d-models/container-ship-aaa41cca946b4a08bc08cf692b7757be) | **RM02** | CC-BY-4.0 | Containerschiff |
+| [Empty Ship](https://sketchfab.com/3d-models/empty-ship-f254f07be1324a138da32833b32486d8) | **Liaval** | CC-BY-4.0 | Großsegler |
+| [Orthoceras – Steampunk Abyssal Cruiser](https://sketchfab.com/3d-models/orthoceras-steampunk-abyssal-cruiser-1d3278516cad4f28a9d2d46fe823304d) | **Red Kaiser** | CC-BY-NC-4.0 | U-Boot |
+| [Mercedes Atego Fire Engine](https://sketchfab.com/3d-models/mercedes-atego-fire-engine-7e798389467d4e15a070459c016c52c8) | **Aeroux Games 3D** | CC-BY-4.0 | Feuerwehrauto |
+| [T-65 X-wing Starfighter – Star Wars](https://sketchfab.com/3d-models/t-65-x-wing-starfighter-star-wars-993d2920342f46f7b92baf3aea1c3cf3) | **Quiznos323** | CC-BY-NC-SA-4.0 | X-Wing (Raumjäger) |
+| [Xwing 2.0](https://sketchfab.com/3d-models/xwing-20-cae716a9d92c4d56825ffb1dc1ea3525) | **GaryPhelps** | CC-BY-4.0 | zweiter X-Wing |
+| [[Extracted] Minecraft Java Edition's Stars](https://sketchfab.com/3d-models/extracted-minecraft-java-editions-stars-c8868b7ffc4a473eb5cd9203a59e3650) | **AjaxGb** | CC-BY-4.0 | Sternenhimmel |
+| [Sky Pano – Milkyway](https://sketchfab.com/3d-models/sky-pano-milkyway-0016725c047a4ea18cd0b5e5ef2fe441) | **MozillaHubs** (mozillareality) | CC-BY-NC-SA-4.0 | Milchstraße am Himmel |
+| [Earth](https://sketchfab.com/3d-models/earth-41fc80d85dfd480281f21b74b2de2faa) | **Akshat** | CC-BY-4.0 | Erde (Weltall, Globus) |
+| [Moon](https://sketchfab.com/3d-models/moon-4db2273f6dd943b8ad7fa5e3b1b2431a) | **Akshat** | CC-BY-4.0 | Mond |
+| [Mars](https://sketchfab.com/3d-models/mars-9c7bbc64d8c74acfa9ec344c0fc10e1a) | **Akshat** | CC-BY-4.0 | Mars |
+| [Moon – Giordano Bruno Crater](https://sketchfab.com/3d-models/moon-giordano-bruno-crater-1f49ab263ba1403f8874ae92743bb654) | **Sebastian Sosnowski** | CC-BY-4.0 | Mondoberfläche |
+| [Mars – Aram Chaos region](https://sketchfab.com/3d-models/mars-aram-chaos-region-5c9b99de0405465f81ff0ba244ef69e2) | **Sebastian Sosnowski** | CC-BY-4.0 | Marsoberfläche |
+| [Sun](https://sketchfab.com/3d-models/sun-9ef1c68fbb944147bcfcc891d3912645) | **Sebastian Sosnowski** | CC-BY-4.0 | Sonne |
+| [Asteroid 01](https://sketchfab.com/3d-models/asteroid-01-df95d3da67aa4c769ec81394e0b0ffef) | **exabyte** | CC-BY-4.0 | Asteroiden |
+| [MoonBase](https://sketchfab.com/3d-models/moonbase-6b2c2a4bdd554fb2a00d70d8274856e3) | **eggshell.d** | CC-BY-4.0 | Mondbasis |
+| [ISS](https://sketchfab.com/3d-models/iss-867d22ce560b466e9ff7a16455fc453b) | **colinf** | CC-BY-4.0 | Raumstation ISS |
+| [spaceshuttle](https://sketchfab.com/3d-models/spaceshuttle-b0c3acde450a441aa9da6403fd1e13e5) | **Jan Tesař** | CC-BY-NC-4.0 | Space Shuttle |
+| [Razor Crest – Star Wars](https://sketchfab.com/3d-models/razor-crest-star-wars-172cb62cc1e141cfae4c48440c348de0) | **Quiznos323** | CC-BY-NC-SA-4.0 | Raumschiff (verkleinert) |
+| [Serenity](https://sketchfab.com/3d-models/serenity-28edf4f757454dab84787e8df59228d5) | **mohamedhussien** | CC-BY-4.0 | Raumschiff (verkleinert) |
+| [Star Destroyer](https://sketchfab.com/3d-models/star-destroyer-aaa18e14129a461c839877389bd28504) | **rubaun** | CC-BY-4.0 | Sternenzerstörer |
+| [Star Trek Online – USS Enterprise D](https://sketchfab.com/3d-models/star-trek-online-uss-enterprise-d-595123c3348646a4a7e6871ebf0e9fae) | **LoganRolphh** | CC-BY-4.0 | Raumschiff Enterprise (verkleinert) |
+| ESA Ariane 6 (64) – Rakete und Startturm | **Clarence365** | CC-BY-4.0 | Raketen auf den Inseln (verkleinert, Turm abgetrennt) |
+| [Orca – Animated Low Poly](https://sketchfab.com/3d-models/orca-animated-low-poly-1033151e98dd4152a9c10cc91ff90586) | **WildPoly3D** | CC-BY-NC-4.0 | Orcas im Meer |
+| [Low poly rainbow trout (Oncorhynchus mykiss)](https://sketchfab.com/3d-models/low-poly-rainbow-trout-oncorhynchus-mykiss-e2c052bd12fd492d9abf0a1c05cff175) | **Natural History Museum of Los Angeles County** | CC-BY-NC-SA-4.0 | Forellen / Fische |
+| [Stingray – Animated Low Poly](https://sketchfab.com/3d-models/stingray-animated-low-poly-e3847b39eb9943b48df614e74e95a71f) | **WildPoly3D** | CC-BY-NC-4.0 | Rochen |
+| [Furseal – Animated Low Poly](https://sketchfab.com/3d-models/furseal-animated-low-poly-c667fd35da0f4922a0f9321b9d250543) | **WildPoly3D** | CC-BY-NC-4.0 | Seelöwe |
+| [Seal – Animated Low Poly](https://sketchfab.com/3d-models/seal-animated-low-poly-38b4c159b1b649cd9e65839b14d7de41) | **WildPoly3D** | CC-BY-NC-4.0 | Robbe |
 
-| Modell | Künstler/in (Sketchfab) |
-|---|---|
-| X-Wing 2.0 | **GaryPhelps** |
-| C-400 (als Transall) · Dornier Alpha Jet A | **42manako** |
-| Bactrian Camel (Low Poly), CC-BY-NC-SA-4.0 | **Nyilonelycompany** |
-| Tortoise - turtle, CC-BY-4.0 | **Daniel Zuleta Art** |
-| Ring-Billed Gull · Ring-Billed Gull – in Flight, CC-BY-4.0 | **Oregon State University Ecampus** |
-| Panda, CC-BY-4.0 | **firoh** (Assets 4 Games) |
-| Labrador Dog, CC-BY-4.0 | **kenchoo** |
-| Nile Crocodile Swimming, CC-BY-NC-ND-4.0 (unverändert) | **Monster** |
-| Mount Fuji – Honshu, Japan, CC-BY-4.0 (vereinfacht) | **Rafael Kenji Horota** |
-| N700-3000 Series Shinkansen, CC-BY-4.0 (gekürzt) | **Layo** (bciarfello) |
-| Godzilla, CC-BY-4.0 (verkleinert) | **savounited** |
-| Susanoo (Samurai), CC-BY-4.0 | **tranb95** |
-| Stage Campfire, CC-BY-4.0 (unverändert) | **daedaljs** |
-| P-51 Mustang | **UlissesVinicios** |
-| Canadair CL-215 | **AlessioPassera** |
-| Airbus A380-800 | **OUTPISTON** |
-| U-Boot (Submarine) | **Helindu** |
-| Liberty-Frachter | **AlanTinka** |
-| Großsegler | **Liaval** |
-| Containerschiff | **RM02** |
-| Kreuzfahrtschiff | **farhad.Guli** |
-| Fire Rescue Boat | **gogiart** |
-| Mercedes Atego Fire Engine | **Aeroux Games 3D** |
-| Schlauchboot | **Mike0916** |
-| Killerwal (Killer Whale) | **Trouvaille** |
-| Parachute | **stroodledoodle** |
-| Parachute Simple | **TopNotch Assets** |
-| Gerald R. Ford Aircraft Carrier | **Usman Zia** |
-| The Wharf – Fishing Harbor | **Mehdi Shahsavan** |
-| Ariane 6 (ESA) | **Clarence365** |
-| Earth · Moon · Mars | **Akshat** |
-| Moon – Giordano Bruno Crater · Mars – Aram Chaos Region · Sun · Death Star | **Sebastian Sosnowski** |
-| Moonbase | **eggshell.d** |
-| Perseverance (NASA Mars Landing 2021) | **Thomas Flynn** |
-| Minecraft Java Edition Stars | **AjaxGb** |
-| Spacedrive | **tamminen** |
-| Asteroid 01 | **exabyte** |
-| ISS | **colinf** |
-| Space Shuttle | **Jan Tesař** |
-| Razor Crest (Star Wars) | **Quiznos323** |
-| Serenity | **mohamedhussien** |
-| Star Wars Hangar Interior | **Aditya Voxel** |
-| Star Destroyer (Star Wars) | **rubaun** |
-| USS Voyager (Star Trek) | **CGI Tutorials** |
-| USS Enterprise-D (Star Trek) | **LoganRolphh** |
-| Millennium Falcon (Star Wars) | **jay2307** |
-| Astronaut im Raumanzug | **LasquetiSpice** |
+### Musik
 
-Weitere verwendete Technik:
-- **[three.js](https://threejs.org)** (r128) — 3D-Rendering, inkl. GLTFLoader.
-- **Motor-/Crash-Sounds** aus dem **FMS (Flug-Modell-Simulator)**, Freeware von Möller (2001).
-- **Sprachausgabe** über die Web Speech API des Browsers (z. B. Microsoft Katja/Stefan, in Edge Conrad/Killian).
+| Werk | Urheber/in | Lizenz | wofür |
+|---|---|---|---|
+| Summer Vacation (Pixabay-ID 308510) | **kulakovka** (Pixabay) | Pixabay-Lizenz | Musik Etappe 1 |
+| Arabic Islamic Music (46 s, Pixabay-ID 494148) | **bombinsound** (Pixabay) | Pixabay-Lizenz | Musik Wüste, Etappe 2 |
+| Atlas Maldives (2:35, Pixabay-ID 574470) | **vadim_makes_sound** (Pixabay) | Pixabay-Lizenz | Musik Fluss, Etappe 3 |
+| Atlas Thailand (Pixabay-ID 562340) | **vadim_makes_sound** (Pixabay) | Pixabay-Lizenz | Musik Hafen, Etappe 4 |
+| Chinese Flute Relaxing Music (short, Pixabay-ID 120917) | **nourishedbymusic** (Pixabay) | Pixabay-Lizenz | Musik Etappe 5 |
+| Ancient Japan (Pixabay-ID 492751) | **alec_koff** (Pixabay) | Pixabay-Lizenz | Musik Etappe 6 |
+
+### Geräusche
+
+| Werk | Urheber/in | Lizenz | wofür |
+|---|---|---|---|
+| Ghost Woo (Pixabay-ID 135543) | **shut_up_ghost** (Pixabay) | Pixabay-Lizenz | Geist an der Schultür |
+| Desert Wind 2 (Pixabay-ID 350417) | **tanweraman** (Pixabay) | Pixabay-Lizenz | Wüstenwind (Loop), Etappe 2 |
+| Friendly Big Dog Bark 1 (Pixabay-ID 535471) | **yodguard** (Pixabay) | Pixabay-Lizenz | Hundebellen |
+| Intense Skiing Carving (Pixabay-ID 447134) | **u_sda88n6jzm** (Pixabay) | Pixabay-Lizenz | Snowboard auf der Piste (Finale) |
+| Can Sliding Across Wooden Desk (Pixabay-ID 98693) | **freesound_community** (Pixabay) | Pixabay-Lizenz | Rail-Grind (Finale) |
+| Soft Wind (Pixabay-ID 477404) | **storegraphic** (Pixabay) | Pixabay-Lizenz | Fallschirm / Snowboard (Finale) |
+| Prop Plane (Pixabay-ID 14513) | **freesound_community** (Pixabay) | Pixabay-Lizenz | Propellermotor |
+| Jet Engine (Pixabay-ID 6753) | **freesound_community** (Pixabay) | Pixabay-Lizenz | Düsentriebwerk (X-Wing, Eurofighter) |
+| Thai Motor Boat (Pixabay-ID 64851) | **freesound_community** (Pixabay) | Pixabay-Lizenz | Motorboot (Feuerwehrboot, Schlauchboot) |
+| Car Crash Sound Effect (Pixabay-ID 376874) | **Dragon Studio** (Pixabay) | Pixabay-Lizenz | Absturz |
+| Seagulls in Coastal Village (Pixabay-ID 486871) | **jonathanslattermusic** (Pixabay) | Pixabay-Lizenz | Möwen am Meer |
+| Ocean Waves (Pixabay-ID 496030) | **magiaz** (Pixabay) | Pixabay-Lizenz | Meeresrauschen |
+| Deepsea Sonar (Pixabay-ID 386156) | **Dragon Studio** (Pixabay) | Pixabay-Lizenz | Sonar des U-Boots |
+
+### Sonstiges
+
+| Werk | Urheber/in | Lizenz | wofür |
+|---|---|---|---|
+| Spielfigur Samu | eigenes Foto (T-Pose), freigestellt und als Comic-Figur gezeichnet mit **Google Gemini**, daraus ein 3D-Modell mit dem Bild-zu-3D-Dienst von **[MakerWorld](https://makerworld.com)** (Bambu Lab), fürs Animieren aufbereitet | eigene Figur (nach den Nutzungsbedingungen der Dienste) | die Spielfigur Samu |
+| [Mixamo](https://www.mixamo.com) (Auto-Rigging und Animationen) | **Adobe** | Mixamo-Nutzungsbedingungen (lizenzfrei nutzbar) | Skelett und 17 Bewegungen der Spielfigur Samu |
+| [three.js](https://threejs.org) r128 inkl. GLTFLoader | **three.js authors** | MIT | 3D-Darstellung |
+| Web Speech API (Stimmen des Browsers/Betriebssystems) | Browser-/OS-Hersteller | – | Sprachausgabe |
 
 ## 📄 Lizenz
 

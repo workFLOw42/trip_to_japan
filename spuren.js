@@ -2,9 +2,8 @@
 // Laedt nach story.js.
 //   - Schatten: Samus Bodenschatten so klein und blass wie Joshis (im Verhaeltnis zur Groesse), auf der echten Bodenhoehe
 //     (der Rest steht in story.js hookSchatten – hier nur Groesse und Deckkraft).
-//   - Laufspuren: hebt sich beim Gehen/Laufen ein Fuss vom Boden, wirbelt dort ein kleines Staubwoelkchen auf (erkannt am
-//     Zehenknochen des Mixamo-Skeletts: war er unten und steigt ueber STAUB_HOCH). Farbe je Etappe (Sand, Wiese);
-//     nicht auf Beton/Kai, Bahn, im Wasser, beim Schwimmen oder in einem Fahrzeug.
+//   - Laufspuren und Wasserspuren macht seit 23.10.2026 die Engine (untergrundAt, spurQuelle: Staub je Untergrund, Ringe und
+//     Gischt im Wasser – fuer Samu von selbst; Tiere melden sich hier ueber tierSchatten/wasserTier an, Barki unten).
 //   - Bootsgischt: in jedem Wasserfahrzeug der Engine (Feuerwehrboot, Schnellboot, Schlauchboot, U-Boot an der
 //     Oberflaeche) spritzt es am Bug links und rechts, je schneller desto mehr (wie das Segelboot im Geheimland).
 (function(){
@@ -44,87 +43,13 @@ story.tierSchatten = function(obj, laenge, breite, deck){
   s.renderOrder = 1; s.userData.deko = true; s.frustumCulled = false;
   obj.add(s); obj.userData.schatten = s;
   if(typeof shadowFollowFeet === 'function') shadowFollowFeet(s, obj);   // folgt den Fuessen (Engine; flache Tiere bleiben starr)
-  tierSpuren.push({ o: obj, l: laenge, x: NaN, z: NaN, t: Math.random() * 0.3 });   // Staub beim Laufen (updateTierSpuren)
+  if(typeof spurQuelle === 'function') spurQuelle(obj, { groesse: laenge });   // global-ok: Engine (Staub/Wasserspuren)
   return s;
 };
 // Krokodile (etappe3.js): schwimmende Tiere melden sich hier an – sie ziehen eine Wasserspur wie ein kleines Boot
 // wasserY: Hoehe der Wasserflaeche (Fluss in Etappe 3 hat eine eigene), sonst das Meer der Engine
-story.wasserTier = function(obj, laenge, wasserY){ if(obj && !obj.userData.wasserSpur){ obj.userData.wasserSpur = true; tierSpuren.push({ o: obj, l: laenge, x: NaN, z: NaN, t: 0, wasser: true, wy: wasserY }); } };
-const tierSpuren = [];
+story.wasserTier = function(obj, laenge){ if(obj && typeof spurQuelle === 'function') spurQuelle(obj, { groesse: laenge }); };   // global-ok: Engine (Ringe/Gischt)
 
-// ---- Laufspuren (Staub) ------------------------------------------------------------------------------------------
-const STAUB_UNTEN = 0.08, STAUB_HOCH = 0.12, STAUB_DAUER = 0.8, STAUB_MAX = 30;
-// Farbe je Etappe (Sprites sind unbeleuchtet: gedeckte Toene); null = kein Staub
-// Bei Tag (heller Sand, helle Wiese) etwas dunkler als der Boden, sonst sieht man es nicht (im Geheimland ist es Nacht)
-const STAUB_FARBE = { 1: 0xa59570, 2: 0xb08850, 3: 0x9c8c66, 4: null, 5: 0x9a9070, 6: 0xa3946c };
-const staub = { teile: [], tex: null, fuesse: null, obj: null };
-function staubTextur(){
-  const c = document.createElement('canvas'); c.width = c.height = 64;
-  const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 2, 32, 32, 30);
-  gr.addColorStop(0, 'rgba(255,255,255,.9)'); gr.addColorStop(0.5, 'rgba(255,255,255,.4)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
-  return new THREE.CanvasTexture(c);
-}
-function staubPuff(p, stark, farbe){
-  if(!staub.tex) staub.tex = staubTextur();
-  let t = staub.teile.find(q => q.alter >= STAUB_DAUER);
-  if(!t){
-    if(staub.teile.length >= STAUB_MAX) return;
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: staub.tex, transparent: true, depthWrite: false, opacity: 0 }));
-    sp.renderOrder = 3; scene.add(sp);                // global-ok: folgt Samu in jede Etappe
-    t = { sp, alter: STAUB_DAUER }; staub.teile.push(t);
-  }
-  t.alter = 0; t.stark = stark; t.sp.visible = true; t.sp.material.color.setHex(farbe);
-  t.sp.position.set(p.x + (Math.random() - 0.5) * 0.06, p.y + 0.03, p.z + (Math.random() - 0.5) * 0.06);
-  t.dx = (Math.random() - 0.5) * 0.12; t.dz = (Math.random() - 0.5) * 0.12;
-}
-const _fp = new THREE.Vector3();
-function bodenOk(x, z){
-  if(locale !== 'earth' || !isOnLand(x, z)) return false;
-  if(typeof isOnRunway === 'function' && isOnRunway(x, z)) return false;      // Startbahn: Beton
-  if(seaYAt(x, z) > evaFootY(x, z) - 0.05) return false;                      // im Wasser / Waten
-  return true;
-}
-function updateStaub(dt){
-  for(const t of staub.teile){
-    if(t.alter >= STAUB_DAUER){ t.sp.visible = false; continue; }
-    t.alter += dt; const k = Math.min(1, t.alter / STAUB_DAUER);
-    t.sp.position.x += t.dx * dt; t.sp.position.z += t.dz * dt; t.sp.position.y += 0.35 * dt * (1 - k);
-    t.sp.scale.setScalar(0.28 + 0.9 * Math.sqrt(k) * t.stark);               // Samu ist groesser als Joshi
-    t.sp.material.opacity = 0.75 * t.stark * (1 - k) * Math.min(1, t.alter / 0.08);
-  }
-  const S = story.samu;
-  if(!S || !S.obj || !eva || eva.boat || eva.rover) return;
-  if(staub.obj !== S.obj){                            // Zehenknochen einmal suchen (und neu, falls Samu neu geladen)
-    staub.obj = S.obj; staub.fuesse = [];
-    S.obj.traverse(o => { if(o.isBone && /ToeBase$/.test(o.name)) staub.fuesse.push({ bone: o, unten: true }); });
-  }
-  const farbe = STAUB_FARBE[story.etappe];
-  const T = story.tricks, g = eva.group.position;
-  const geht = farbe != null && T && T.ausschlag > 0.05 && eva.onGround && !(story.schwimm && story.schwimm.aktiv) && bodenOk(g.x, g.z);
-  for(const f of staub.fuesse){
-    f.bone.getWorldPosition(_fp);
-    const boden = evaFootY(_fp.x, _fp.z), h = _fp.y - boden;
-    if(h < STAUB_UNTEN) f.unten = true;
-    else if(f.unten && h > STAUB_HOCH){ f.unten = false; if(geht && bodenOk(_fp.x, _fp.z)) staubPuff({ x: _fp.x, y: boden, z: _fp.z }, T.ausschlag > 0.5 ? 1 : 0.65, farbe); }
-  }
-}
-story.staub = staub;
-// ---- Spuren der Tiere (Live-Wunsch 18.10.2026: "bewegende Tiere wirbeln Staub auf, die Krokodile ziehen eine Wasserspur") ---
-// Jedes Tier mit Schatten (tierSchatten) wird beobachtet: bewegt es sich auf Land, steigen hinter ihm in kurzen Abstaenden
-// kleine Staubwoelkchen auf (Farbe der Etappe, je nach Groesse und Tempo), im Wasser entsteht eine Heckwelle (story.wasserTier).
-// Nur in der Naehe der Kamera (TIER_SPUR_SICHT) und hoechstens TIER_STAUB_MAX eigene Woelkchen gleichzeitig.
-const TIER_SPUR_SICHT = 90, TIER_STAUB_MAX = 40, _tw = new THREE.Vector3();
-function tierStaubPuff(p, stark, farbe){
-  if(staub.teile.filter(q => q.tier && q.alter < STAUB_DAUER).length >= TIER_STAUB_MAX) return;
-  if(!staub.tex) staub.tex = staubTextur();
-  let t = staub.teile.find(q => q.tier && q.alter >= STAUB_DAUER);
-  if(!t){ const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: staub.tex, transparent: true, depthWrite: false, opacity: 0 }));
-    sp.renderOrder = 3; scene.add(sp); t = { sp, alter: STAUB_DAUER, tier: true }; staub.teile.push(t); }   // global-ok
-  t.alter = 0; t.stark = stark; t.sp.visible = true; t.sp.material.color.setHex(farbe);
-  t.sp.position.set(p.x + (Math.random() - 0.5) * 0.3, p.y + 0.03, p.z + (Math.random() - 0.5) * 0.3);
-  t.dx = (Math.random() - 0.5) * 0.2; t.dz = (Math.random() - 0.5) * 0.2;
-}
 function tierWelle(x, z, rich, k, groesse, wy){
   gischtBauen();
   let w = gis.wellen.find(q => !q.m.visible);
@@ -176,30 +101,8 @@ function updateOrcaSpuren(dt){
 function updateTierSpuren(dt){
   if(locale !== 'earth') return;
   updateOrcaSpuren(dt);
-  // Barki (begleiter.js, eigener Schatten): auch er wirbelt beim Laufen Staub auf (Live-Wunsch 18.10.2026)
-  const H = story.hund; if(H && H.obj && !H.obj.userData.spur){ H.obj.userData.spur = true; tierSpuren.push({ o: H.obj, l: 0.9, x: NaN, z: NaN, t: 0 }); }
-  const farbe = STAUB_FARBE[story.etappe], cp = camera.position;
-  for(let i = tierSpuren.length - 1; i >= 0; i--){
-    const s = tierSpuren[i], o = s.o;
-    // abgehaengt (Welt entsorgt – oder Barki kurz zwischen zwei Welten): austragen; er meldet sich wieder an (userData.spur)
-    if(!o.parent){ tierSpuren.splice(i, 1); o.userData.spur = false; continue; }
-    if(!o.visible){ s.x = NaN; continue; }
-    o.getWorldPosition(_tw);
-    if(Math.hypot(_tw.x - cp.x, _tw.z - cp.z) > TIER_SPUR_SICHT){ s.x = _tw.x; s.z = _tw.z; continue; }
-    const v = isNaN(s.x) || dt <= 0 ? 0 : Math.hypot(_tw.x - s.x, _tw.z - s.z) / dt;
-    const rx = _tw.x - s.x, rz = _tw.z - s.z; s.x = _tw.x; s.z = _tw.z;
-    if(v < 0.3 || v > 30) { s.t = Math.min(s.t, 0.1); continue; }            // steht (oder wurde versetzt)
-    s.t -= dt; if(s.t > 0) continue;
-    const rl = Math.hypot(rx, rz) || 1, hx = -rx / rl, hz = -rz / rl;      // hinter dem Tier
-    if(s.wasser){
-      s.t = 0.22 / (0.4 + Math.min(1, v / 2));
-      tierWelle(_tw.x + hx * s.l * 0.45, _tw.z + hz * s.l * 0.45, Math.atan2(-hx, -hz), Math.min(1, v / 2), s.l / 6, s.wy);
-    } else if(farbe != null && bodenOk(_tw.x, _tw.z)){
-      s.t = 0.42 / (0.5 + Math.min(1.2, v / 2)) + Math.random() * 0.1;
-      const gross = Math.min(1.3, 0.35 + s.l * 0.3);                      // Moewe klein, Kamel gross
-      tierStaubPuff({ x: _tw.x + hx * s.l * 0.3, y: evaFootY(_tw.x, _tw.z), z: _tw.z + hz * s.l * 0.3 }, gross * Math.min(1, 0.45 + v / 4), farbe);
-    }
-  }
+  // Barki (begleiter.js, eigener Schatten): Staub beim Laufen macht die Engine
+  const H = story.hund; if(H && H.obj && typeof spurQuelle === 'function') spurQuelle(H.obj, { groesse: 0.9 });   // global-ok: Engine
 }
 
 // ---- Bootsgischt -------------------------------------------------------------------------------------------------
@@ -303,7 +206,7 @@ window.STORY_START = function(){
   loop = function(now){
     const r = loopOrig.apply(this, arguments);
     const t = performance.now(), dt = tVor ? Math.min(0.1, (t - tVor) / 1000) : 0; tVor = t;
-    if(!(document.getElementById('hint') && document.getElementById('hint').classList.contains('show'))){ updateStaub(dt); updateGischt(dt); updateTierSpuren(dt); }
+    if(!(document.getElementById('hint') && document.getElementById('hint').classList.contains('show'))){ updateGischt(dt); updateTierSpuren(dt); }
     return r;
   };
   if(startVorher) return startVorher.apply(this, arguments);

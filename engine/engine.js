@@ -4535,10 +4535,12 @@ function strandGLB(key, win){
     // Seeloewe/Robbe: wie tief reicht der Koerper je Haltung unter den Ursprung? (Live-Befund 22.10.2026: beim Liegen lagen sie
     // halb im Sand – die Liegehaltungen reichen tiefer als der Ursprung). Einmal je Clip in der Mitte gemessen, beim Liegen
     // an Land um genau so viel angehoben (updateLoewen)
-    if(key === 'seeloewe' || key === 'robbe'){ const unten = {}, mx = new THREE.AnimationMixer(w);
+    // ... und wie hoch (oben): beim Schwimmen schaut der Ruecken knapp heraus (Live-Befund 23.10.2026: mit festen 0,3 m lag er je
+    // nach Haltung zu hoch oder zu tief)
+    if(key === 'seeloewe' || key === 'robbe'){ const unten = {}, oben = {}, mx = new THREE.AnimationMixer(w);
       for(const c of w.userData.clips){ mx.stopAllAction(); mx.clipAction(c).play(); mx.setTime(c.duration * 0.5); w.updateMatrixWorld(true);
-        unten[c.name] = new THREE.Box3().setFromPoints(orcaPunkte(w)).min.y; }
-      mx.stopAllAction(); mx.uncacheRoot(w); w.userData.unten = unten; }
+        const bb = new THREE.Box3().setFromPoints(orcaPunkte(w)); unten[c.name] = bb.min.y; oben[c.name] = bb.max.y; }
+      mx.stopAllAction(); mx.uncacheRoot(w); w.userData.unten = unten; w.userData.oben = oben; }
     strandleben.tpl[key] = w;
   }, () => { strandleben.laedt[key] = false; });
 }
@@ -4676,6 +4678,7 @@ function loewenPlatz(F){
   }
   return null;
 }
+const LOEWE_SCHWIMM_AB = 0.6, LOEWE_RUECKEN = 0.1;   // m Wassertiefe: ab hier schwimmt er; m: so weit schaut der Ruecken heraus
 function updateLoewen(dt, F){
   for(const art of ['seeloewe', 'robbe']) if(!strandleben.tpl[art]) return;
   if(!strandleben.loewen.length){
@@ -4700,7 +4703,7 @@ function updateLoewen(dt, F){
       if(t.t <= 0){ t.zustand = 'insWasser'; t.zx = pl.wx + (Math.random() - 0.5) * 10; t.zz = pl.wz + (Math.random() - 0.5) * 10; strandAct(t, 'walk'); }
     } else if(t.zustand === 'insWasser' || t.zustand === 'heim'){
       const zx = t.zustand === 'heim' ? t.heim.x : t.zx, zz = t.zustand === 'heim' ? t.heim.z : t.zz;
-      const nass = strandTiefe(t.x, t.z) > 0.6;
+      const nass = strandTiefe(t.x, t.z) > LOEWE_SCHWIMM_AB;
       strandAct(t, nass ? 'swim' : 'walk');
       v = nass ? LOEWE_SPD_WASSER : LOEWE_SPD_LAND; zielKurs = Math.atan2(t.x - zx, t.z - zz);   // Nase -Z
       if(Math.hypot(zx - t.x, zz - t.z) < 1.2){
@@ -4715,15 +4718,20 @@ function updateLoewen(dt, F){
     }
     if(zielKurs !== null){ let d = zielKurs - t.kurs; d = Math.atan2(Math.sin(d), Math.cos(d)); t.kurs += Math.max(-1.5 * dt, Math.min(1.5 * dt, d)); }
     if(v){ t.x += -Math.sin(t.kurs) * v * dt; t.z += -Math.cos(t.kurs) * v * dt; }
-    // Hoehe: an Land auf dem Sand, im Wasser mit dem Ruecken knapp unter der Oberflaeche, beim Treten Kopf heraus
-    const tief = strandTiefe(t.x, t.z);
-    let y;
-    // an Land die Haltung ausgleichen (unten: so weit reicht der Koerper unter den Ursprung), weich beim Clipwechsel
-    const un = strandleben.tpl[t.art].userData.unten, soll = (un && t.clip && un[t.clip.name] !== undefined) ? Math.max(0, -un[t.clip.name]) : 0;
+    // Hoehe (Live-Befund 23.10.2026: "schwimmen nicht korrekt, am Uebergang zum Strand wissen sie nicht genau, wo sie sind"):
+    //   an Land und im Flachen auf dem Grund, auf dem auch die Spielfigur steht (evaFootY, nie unter dem Meeresboden), die Haltung
+    //   ausgeglichen (unten: so weit reicht der Koerper unter den Ursprung); im Tiefen schwimmend, der Ruecken LOEWE_RUECKEN ueber
+    //   dem Wasser (oben: Oberkante der Haltung). Dazwischen weich (LOEWE_SCHWIMM_AB +- 0,25 m), und die Hoehe folgt sanft.
+    const tief = strandTiefe(t.x, t.z), T = strandleben.tpl[t.art].userData, cn = t.clip && t.clip.name;
+    const soll = (T.unten && cn && T.unten[cn] !== undefined) ? Math.max(0, -T.unten[cn]) : 0;
     t.hub = (t.hub || 0) + (soll - (t.hub || 0)) * Math.min(1, dt * 2.5);
-    if(tief <= 0.6) y = Math.max(evaFootY(t.x, t.z) + (tief <= 0 ? t.hub : 0), tief > 0 ? seaYAt(t.x, t.z) - 0.25 : -1e9);
-    else y = seaYAt(t.x, t.z) - (t.zustand === 'planschen' && t.clip && /water_idle/.test(t.clip.name) ? 0.85 : 0.3);
-    t.obj.position.set(t.x, y, t.z); t.obj.rotation.set(0, t.kurs, 0);
+    const wy = seaYAt(t.x, t.z), grund = tief > 0 ? Math.max(seabedY(t.x, t.z), Math.min(evaFootY(t.x, t.z), wy)) : evaFootY(t.x, t.z);
+    const boden = grund + t.hub, oberk = (T.oben && cn && T.oben[cn] !== undefined) ? T.oben[cn] : 0.5;
+    const schwimm = wy - oberk + LOEWE_RUECKEN;
+    const w0 = Math.max(0, Math.min(1, (tief - (LOEWE_SCHWIMM_AB - 0.25)) / 0.5)), w = w0 * w0 * (3 - 2 * w0);
+    const ziel = Math.max(boden, boden + (schwimm - boden) * w);
+    t.y = t.y === undefined || Math.abs(t.y - ziel) > 3 ? ziel : t.y + (ziel - t.y) * Math.min(1, dt * 4);
+    t.obj.position.set(t.x, t.y, t.z); t.obj.rotation.set(0, t.kurs, 0);
   }
 }
 function clearStrandleben(){
@@ -4731,6 +4739,227 @@ function clearStrandleben(){
   for(const t of strandleben.loewen) scene.remove(t.obj);
   for(const r of strandleben.rochen) scene.remove(r.obj);
   strandleben.forellen.length = 0; strandleben.loewen.length = 0; strandleben.rochen.length = 0; strandleben.platz = null;
+}
+// ---- Spuren beim Gehen und Schwimmen: Staub je Untergrund, Ringe und Gischt im Wasser (Engine-Standard seit 23.10.2026) ----
+// Vorher hatte jedes Spiel eigenen Staub (Farbe je Etappe). Jetzt bestimmt der UNTERGRUND an der Stelle die Farbe, und Groesse
+// und Tempo dessen, der sich bewegt, bestimmen Menge, Hoehe, Groesse und Dauer:
+//   beton / steg – das bisherige Sandgrau · erde (Waldweg, Piste, Wiese) – leicht braeunlich · schnee – weiss ·
+//   sand – hell-gelblich · wasser – Ringe auf der Wasserflaeche und etwas Gischt (waten und schwimmen) · null – nichts
+// untergrundAt(x, z, y) gibt den Untergrund; die Engine erkennt Wasser, Strand, Bahn/Traeger und sonst Erde – jedes Spiel
+// ueberschreibt sie fuer seine Orte (Schnee, Steg, Waldweg ...). Die Spielfigur (eva) ist von selbst dabei (Schritte am
+// Zehenknochen, sonst im Takt), Tiere melden die Spiele mit spurQuelle(obj, { groesse }) an (groesse = Koerperlaenge in m).
+// Sprites sind unbeleuchtet: die Farbe wird mit dem Licht der Szene gedaempft (nachts kein leuchtender Staub).
+// Jede Oberflaeche hat EINE Definition (Live-Wunsch 23.10.2026): staub = Farbe der Woelkchen (null: keine), schatten = Faktor fuer
+// die Deckkraft des Figurenschattens (auf Wasser blass, auf hellem Schnee etwas weicher), wasser = Ringe/Gischt bzw. Luftblasen.
+// mond / mars: Staub in der Farbe ihres Bodens.
+const UNTERGRUND = {
+  beton:  { staub: 0xb9b2a0, schatten: 1.0 },
+  steg:   { staub: 0xb9b2a0, schatten: 1.0 },
+  erde:   { staub: 0xa88a62, schatten: 1.0 },
+  schnee: { staub: 0xf4f6f9, schatten: 0.8 },
+  sand:   { staub: 0xdcc890, schatten: 0.95 },
+  wasser: { staub: null,     schatten: 0.35, wasser: true },                  // an der Oberflaeche: Ringe und Gischt
+  unterwasser: { staub: null, schatten: 0,   blasen: true },                  // getaucht: ab und zu Luftblasen (Groesse, Tempo)
+  mond:   { staub: 0xa9a7a2, schatten: 1.0 },
+  mars:   { staub: 0xb8653d, schatten: 1.0 },
+};
+const STAUB_FARBEN = {}; for(const k in UNTERGRUND) if(UNTERGRUND[k].staub != null) STAUB_FARBEN[k] = UNTERGRUND[k].staub;
+function untergrundSchatten(x, z, y){ const u = UNTERGRUND[untergrundAt(x, z, y)]; return u ? u.schatten : 1; }
+// Untergrund fuer etwas der Groesse g, dessen Ursprung (Unterkante) bei y liegt: im Wasser und ganz untergetaucht = 'unterwasser'
+function untergrundFuer(x, z, y, g){
+  const a = untergrundAt(x, z, y);
+  if(a === 'wasser' && y !== undefined && y + Math.max(0.5, 0.8 * g) < seaYAt(x, z) - 0.1) return 'unterwasser';
+  return a;
+}
+const SPUR_SICHT = 90;                       // m um die Kamera: weiter weg keine Spuren
+const STAUB_N = 90, RING_N = 50, TROPFEN_N = 140, BLASEN_N = 80;
+function untergrundAt(x, z, y){
+  if(locale === 'moon') return 'mond';
+  if(locale === 'mars') return 'mars';
+  if(locale !== 'earth') return null;
+  // Wasser: ueber dem Fuss (waten) – oder tief ueber dem Grund (schwimmen: in eigenen Welten wie dem Fluss meldet evaFootY dort die
+  // Wasserhoehe selbst)
+  if(isOpenWater(x, z)){ const wy = seaYAt(x, z); if(wy > evaFootY(x, z) + 0.05 || wy > seabedY(x, z) + 0.3) return 'wasser'; }
+  if(isOnRunway(x, z) || isOnCarrier(x, z)) return 'beton';
+  if(isOnLand(x, z)) return 'erde';                    // zuerst: isOnBeach meldet auf manchen Inseln auch die Wiese
+  if(isOnBeach(x, z)) return 'sand';
+  return null;
+}
+const spurOrt = () => locale === 'earth' || locale === 'moon' || locale === 'mars';
+const spuren = { quellen: [], staub: [], ringe: [], tropfen: [], blasen: [], tex: null, ringTex: null, tropfMat: null, ringGeo: null, blaseMat: null, spieler: null };
+// Unter Wasser (Live-Wunsch 23.10.2026): keine Gischt, sondern ab und zu ein paar Luftblasen wie beim U-Boot – steigen auf,
+// schwanken leicht, platzen an der Oberflaeche. Je groesser und schneller, desto oefter und mehr.
+function luftblasen(x, y, z, g, k){
+  if(!spuren.blaseMat) spuren.blaseMat = new THREE.MeshBasicMaterial({ color: 0xdffbff, transparent: true, opacity: 0.75, depthWrite: false });
+  const n = 2 + Math.round(Math.random() * (1 + 2 * k) + Math.min(2, g * 0.5));
+  for(let i = 0; i < n; i++){
+    let b = spuren.blasen.find(q => !q.m.visible);
+    if(!b){ if(spuren.blasen.length >= BLASEN_N) return; b = { m: new THREE.Mesh(new THREE.SphereGeometry(1, 6, 4), spuren.blaseMat) }; b.m.userData.deko = true; scene.add(b.m); spuren.blasen.push(b); }
+    const r = (0.03 + Math.random() * 0.05) * (0.7 + 0.3 * Math.min(2, g));
+    b.m.scale.setScalar(r); b.m.position.set(x + (Math.random() - 0.5) * 0.2 * g, y + Math.random() * 0.2, z + (Math.random() - 0.5) * 0.2 * g);
+    b.m.visible = true; b.t = 0; b.v = 0.9 + Math.random() * 0.7; b.ph = Math.random() * 6.3; b.verz = i * (0.05 + Math.random() * 0.12);
+  }
+}
+const blasenTakt = (k) => 0.9 + Math.random() * 1.6 / (0.6 + k);
+function spurQuelle(obj, opt){
+  if(!obj || obj.userData.spurQuelle) return;
+  obj.userData.spurQuelle = true;
+  spuren.quellen.push({ o: obj, g: Math.max(0.15, (opt && opt.groesse) || 1), x: NaN, z: NaN, t: Math.random() * 0.3, rt: 0 });
+}
+function spurTexturen(){
+  if(spuren.tex) return;
+  const weich = (inn) => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, inn, 32, 32, 31);
+    if(inn){ gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.75, 'rgba(255,255,255,.85)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); }
+    else { gr.addColorStop(0, 'rgba(255,255,255,.9)'); gr.addColorStop(0.5, 'rgba(255,255,255,.4)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); }
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); };
+  spuren.tex = weich(0); spuren.ringTex = weich(22);
+  spuren.tropfMat = new THREE.MeshBasicMaterial({ color: 0xf2f7fb, transparent: true, opacity: 0.85, depthWrite: false });
+  spuren.ringGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+}
+const _spLicht = new THREE.Color();
+function spurLicht(){ return Math.max(0.35, Math.min(1, (hemiLight.intensity + sun.intensity) / 1.6)); }
+// Staub: g = Groesse (m), k = Tempo-Anteil 0..1 – kleine langsame Figuren: ein flaches Woelkchen, grosse schnelle: hoeher und mehr
+function staubPuff(x, y, z, art, g, k){
+  const farbe = STAUB_FARBEN[art]; if(farbe === undefined) return;
+  spurTexturen();
+  let t = spuren.staub.find(q => q.alter >= q.dauer);
+  if(!t){ if(spuren.staub.length >= STAUB_N) return;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: spuren.tex, transparent: true, depthWrite: false, opacity: 0 }));
+    sp.renderOrder = 3; sp.userData.deko = true; scene.add(sp); t = { sp, alter: 1, dauer: 0 }; spuren.staub.push(t); }
+  const s = Math.min(2.5, g);
+  t.alter = 0; t.dauer = 0.6 + 0.35 * s + 0.3 * k; t.sp.visible = true;
+  t.sp.material.color.setHex(farbe).multiplyScalar(spurLicht());
+  t.s0 = 0.08 + 0.1 * s; t.s1 = (0.25 + 0.45 * s) * (0.45 + 0.75 * k); t.hoch = (0.1 + 0.2 * s) * (0.4 + 0.9 * k); t.deck = art === 'schnee' ? 0.8 : 0.6 + 0.15 * k;
+  const st = 0.04 + 0.15 * s;
+  t.sp.position.set(x + (Math.random() - 0.5) * st, y + 0.03, z + (Math.random() - 0.5) * st);
+  t.dx = (Math.random() - 0.5) * (0.1 + 0.15 * s); t.dz = (Math.random() - 0.5) * (0.1 + 0.15 * s);
+}
+// Wasser: ein Ring auf der Flaeche (waechst und vergeht) und ein paar Tropfen
+function wasserRing(x, z, g, k){
+  spurTexturen();
+  let r = spuren.ringe.find(q => !q.m.visible);
+  if(!r){ if(spuren.ringe.length >= RING_N) return;
+    r = { m: new THREE.Mesh(spuren.ringGeo, new THREE.MeshBasicMaterial({ map: spuren.ringTex, transparent: true, depthWrite: false, opacity: 0 })) };
+    r.m.renderOrder = 2; r.m.userData.deko = true; scene.add(r.m); spuren.ringe.push(r); }
+  const s = Math.min(4, g);
+  r.m.visible = true; r.t = 0; r.dauer = 1.2 + 0.4 * s; r.r0 = 0.25 * s + 0.15; r.r1 = r.r0 + (0.6 + 0.9 * s) * (0.5 + k); r.deck = 0.35 + 0.35 * k;
+  r.m.material.color.setRGB(1, 1, 1).multiplyScalar(spurLicht());
+  r.m.position.set(x, seaYAt(x, z) + 0.04, z);
+}
+function wasserTropfen(x, z, g, k, n){
+  spurTexturen();
+  const wy = seaYAt(x, z), s = Math.min(3, g);
+  for(let i = 0; i < n; i++){
+    let t = spuren.tropfen.find(q => !q.m.visible);
+    if(!t){ if(spuren.tropfen.length >= TROPFEN_N) return; t = { m: new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 0), spuren.tropfMat), v: new THREE.Vector3() };
+      t.m.userData.deko = true; scene.add(t.m); spuren.tropfen.push(t); }
+    const a = Math.random() * Math.PI * 2, r = 0.1 + Math.random() * 0.35 * s;
+    t.m.position.set(x + Math.cos(a) * r, wy + 0.03, z + Math.sin(a) * r); t.m.visible = true; t.t = 0; t.sc = (0.6 + Math.random() * 0.8) * (0.6 + 0.5 * s);
+    const aus = (0.3 + Math.random() * 0.8) * (0.4 + k), hoch = (0.8 + Math.random() * 1.4) * (0.3 + k) * (0.7 + 0.3 * s);
+    t.v.set(Math.cos(a) * aus, hoch, Math.sin(a) * aus);
+  }
+}
+// Eine Spur an (x, z) fuer etwas der Groesse g mit Tempo v (m/s); hx/hz = hinter ihm (Einheitsvektor)
+function spurAn(x, z, y, g, v, hx, hz){
+  const art = untergrundFuer(x, z, y, g), k = Math.min(1, v / (2 + 2 * g));
+  if(!art) return 0;
+  if(UNTERGRUND[art] && UNTERGRUND[art].blasen){ luftblasen(x, y + 0.5 * g, z, g, k); return blasenTakt(k) * (0.8 + 0.3 * Math.min(3, g)); }
+  if(art === 'wasser'){ wasserRing(x + hx * g * 0.3, z + hz * g * 0.3, g, k); wasserTropfen(x - hx * g * 0.3, z - hz * g * 0.3, g, k, Math.round(1 + k * (2 + 2 * g)));
+    return 0.25 + 0.35 / (0.5 + k); }
+  staubPuff(x + hx * g * 0.3, evaFootY(x, z), z + hz * g * 0.3, art, g, k);
+  if(g > 1.5 && k > 0.5) staubPuff(x + hx * g * 0.5, evaFootY(x, z), z + hz * g * 0.5, art, g * 0.8, k);
+  return 0.35 / (0.5 + Math.min(1.2, v / (1 + g))) + Math.random() * 0.08;    // Takt bis zum naechsten Woelkchen
+}
+const _spW = new THREE.Vector3(), _spF = new THREE.Vector3();
+function spielerSpur(dt){
+  const S = spuren.spieler || (spuren.spieler = { o: null, fuesse: [], x: NaN, z: NaN, t: 0, rt: 0 });
+  if(!eva || eva.boat || eva.rover || eva.jet || eva.keineSpur || !spurOrt()){ S.x = NaN; return; }   // keineSpur: das Spiel schaltet ab (z. B. im Segelboot)
+  const g = eva.group, p = g.position;
+  if(S.o !== g){ S.o = g; S.fuesse = []; g.traverse(o => { if(o.isBone && /ToeBase$/.test(o.name)) S.fuesse.push({ bone: o, unten: true }); }); }
+  const v = isNaN(S.x) || dt <= 0 ? 0 : Math.hypot(p.x - S.x, p.z - S.z) / dt, rx = p.x - S.x, rz = p.z - S.z;
+  S.x = p.x; S.z = p.z;
+  if(v > 15) return;
+  // getaucht auch im Stand ab und zu Blasen (Untergrund 'unterwasser')
+  if(v < 0.25){ if(untergrundFuer(p.x, p.z, p.y, 1.2) === 'unterwasser'){ S.rt -= dt; if(S.rt <= 0) S.rt = spurAn(p.x, p.z, p.y, 1.2, 0, 0, 0) + 1; } return; }
+  const rl = Math.hypot(rx, rz) || 1, hx = -rx / rl, hz = -rz / rl, groesse = 1.2;
+  const art = untergrundFuer(p.x, p.z, p.y, groesse);
+  // im Wasser (waten, schwimmen: Ringe und Gischt; getaucht: Luftblasen) im Takt
+  if(art === 'wasser' || art === 'unterwasser'){ S.rt -= dt; if(S.rt <= 0) S.rt = spurAn(p.x, p.z, p.y, groesse, v, hx, hz); return; }
+  if(!eva.onGround) return;
+  // an Land: an jedem Schritt (der Zehenknochen hebt sich vom Boden), sonst im Takt
+  if(S.fuesse.length){
+    for(const f of S.fuesse){ f.bone.getWorldPosition(_spF); const h = _spF.y - evaFootY(_spF.x, _spF.z);
+      if(h < 0.08) f.unten = true;
+      else if(f.unten && h > 0.12){ f.unten = false; const a = untergrundAt(_spF.x, _spF.z, _spF.y); if(a && a !== 'wasser') staubPuff(_spF.x, evaFootY(_spF.x, _spF.z), _spF.z, a, groesse, Math.min(1, v / 5)); } }
+    return;
+  }
+  S.t -= dt; if(S.t <= 0) S.t = spurAn(p.x, p.z, p.y, groesse, v, hx, hz);
+}
+// Das eigene Flugzeug am Boden (rollen, starten, landen): Staub je Untergrund an den Hauptraedern links und rechts, beim
+// Aufsetzen eine kraeftige Wolke (Live-Wunsch 23.10.2026); Groesse aus dem Modell (halbe Spannweite), Menge aus dem Tempo
+const _flQ = new THREE.Vector3();
+function flugzeugSpur(dt){
+  const F = spuren.flug || (spuren.flug = { boden: true, t: 0, modell: null, g: 3 });
+  const amBoden = !eva && spurOrt() && state.onGround && !state.crashed && !spec.boat && !spec.sub && planeGroup.visible;
+  if(!amBoden){ F.boden = !!state.onGround; return; }
+  if(F.modell !== modelHolder.children[0]){ F.modell = modelHolder.children[0];
+    const bb = new THREE.Box3().setFromObject(modelHolder), sz = bb.getSize(new THREE.Vector3()); F.g = Math.max(1.5, Math.min(8, Math.max(sz.x, sz.z) / 4)); }
+  const v = Math.hypot(state.vel.x, state.vel.z), aufgesetzt = !F.boden; F.boden = true;
+  if(v < 3 && !aufgesetzt) return;
+  _flQ.set(0, 0, -1).applyQuaternion(state.quat); _flQ.y = 0; const l = Math.hypot(_flQ.x, _flQ.z) || 1, fx = _flQ.x / l, fz = _flQ.z / l;
+  const qx = -fz, qz = fx, sp = F.g * 0.35;                                         // quer: die Hauptraeder links/rechts
+  F.t -= dt; if(F.t > 0 && !aufgesetzt) return;
+  let takt = 1;
+  for(const seite of [-1, 1]){ const x = state.pos.x + qx * seite * sp - fx * F.g * 0.15, z = state.pos.z + qz * seite * sp - fz * F.g * 0.15;
+    takt = spurAn(x, z, state.pos.y, F.g, v, -fx, -fz);
+    if(aufgesetzt){ for(let i = 0; i < 3; i++) spurAn(x - fx * i * 0.8, z - fz * i * 0.8, state.pos.y, F.g * 1.3, Math.max(v, 25), -fx, -fz); } }
+  F.t = Math.max(0.05, takt * 0.5);
+}
+function updateSpuren(dt){
+  if(dt <= 0) return;
+  flugzeugSpur(dt);
+  // Seeloewen und Robben der Engine sind von selbst dabei
+  if(typeof strandleben !== 'undefined') for(const t of strandleben.loewen) if(t.obj && !t.obj.userData.spurQuelle) spurQuelle(t.obj, { groesse: t.art === 'seeloewe' ? 2.1 : 1.5 });
+  spielerSpur(dt);
+  const cp = camera.position;
+  for(let i = spuren.quellen.length - 1; i >= 0; i--){
+    const q = spuren.quellen[i], o = q.o;
+    if(!o.parent){ spuren.quellen.splice(i, 1); o.userData.spurQuelle = false; continue; }
+    let sicht = o.visible; for(let p = o.parent; p && sicht; p = p.parent) if(!p.visible) sicht = false;
+    if(!sicht || o.userData.keineSpur){ q.x = NaN; continue; }                // keineSpur: das Spiel schaltet ab (z. B. sitzt im Boot)
+    o.getWorldPosition(_spW);
+    if(Math.hypot(_spW.x - cp.x, _spW.z - cp.z) > SPUR_SICHT){ q.x = _spW.x; q.z = _spW.z; continue; }
+    const v = isNaN(q.x) ? 0 : Math.hypot(_spW.x - q.x, _spW.z - q.z) / dt, rx = _spW.x - q.x, rz = _spW.z - q.z;
+    q.x = _spW.x; q.z = _spW.z;
+    if(v < 0.2 || v > 30){ q.t = Math.min(q.t, 0.1); continue; }              // steht (oder wurde versetzt)
+    q.t -= dt; if(q.t > 0) continue;
+    const rl = Math.hypot(rx, rz) || 1;
+    q.t = spurAn(_spW.x, _spW.z, _spW.y, q.g, v, -rx / rl, -rz / rl);
+  }
+  for(const t of spuren.staub){
+    if(t.alter >= t.dauer){ t.sp.visible = false; continue; }
+    t.alter += dt; const k = Math.min(1, t.alter / t.dauer);
+    t.sp.position.x += t.dx * dt; t.sp.position.z += t.dz * dt; t.sp.position.y += t.hoch * dt * (1 - k) * 2;
+    t.sp.scale.setScalar(t.s0 + t.s1 * Math.sqrt(k));
+    t.sp.material.opacity = t.deck * (1 - k) * Math.min(1, t.alter / 0.08);
+  }
+  for(const r of spuren.ringe) if(r.m.visible){
+    r.t += dt; const k = r.t / r.dauer;
+    if(k >= 1){ r.m.visible = false; continue; }
+    const d = r.r0 + (r.r1 - r.r0) * Math.sqrt(k); r.m.scale.set(d * 2, 1, d * 2);
+    r.m.position.y = seaYAt(r.m.position.x, r.m.position.z) + 0.04;
+    r.m.material.opacity = r.deck * (1 - k);
+  }
+  for(const b of spuren.blasen) if(b.m.visible){
+    if(b.verz > 0){ b.verz -= dt; continue; }
+    b.t += dt; b.m.position.y += b.v * dt; b.m.position.x += Math.sin(b.t * 7 + b.ph) * 0.15 * dt;
+    if(b.t > 6 || b.m.position.y > seaYAt(b.m.position.x, b.m.position.z) - 0.05) b.m.visible = false;   // an der Oberflaeche geplatzt
+  }
+  for(const t of spuren.tropfen) if(t.m.visible){
+    t.t += dt; t.v.y -= 9.81 * dt; t.m.position.addScaledVector(t.v, dt);
+    t.m.scale.setScalar(t.sc * Math.max(0.2, 1 - t.t * 1.6));
+    if(t.t > 0.7 || t.m.position.y < seaYAt(t.m.position.x, t.m.position.z) - 0.1) t.m.visible = false;
+  }
 }
 function updateStrandleben(dt){
   if(!strandleben.an || locale !== 'earth'){ if(strandleben.forellen.length || strandleben.loewen.length || strandleben.rochen.length) clearStrandleben(); return; }
@@ -6220,8 +6449,12 @@ function updateOvalShadow(){
   const grow = 1 + f*0.8;
   // Die LOKALE Y-Achse ist nach der X-Drehung die Laengsrichtung am Boden -> lang auf scale.y.
   ovalShadow.scale.set(rx*grow, rz*grow, 1);
-  ovalShadowMat.opacity = (0.18 + 0.22*(1-f)) * SHADOW_DECK;
+  ovalShadowMat.opacity = (0.18 + 0.22*(1-f)) * SHADOW_DECK * (eva && typeof untergrundSchatten === 'function' ? untergrundSchatten(px, pz, eva.group.position.y) : 1);
 }
+// Boden fuer den Flugzeugschatten, den die Engine nicht kennt (Hoehlen, eigene Raeume eines Spiels): Hoehe oder null. Die Spiele
+// ueberschreiben das (Live-Befund 23.10.2026: in der Vulkanhoehle von Trip to Japan gab es keinen Schatten – gerechnet wurde gegen
+// das Meer 100 m darunter, also nie unter 20 m)
+function schattenBoden(x, z){ return null; }
 function updateShadow(){
   // Im WELTALL gibt es keinen Boden, auf den ein Schatten fallen koennte -> aus. Ueberall sonst gibt
   // es einen: die Inselwelt, der Hangarboden, Mond und Mars. Vorher war der Schatten ausserhalb der
@@ -6260,10 +6493,12 @@ function updateShadow(){
   // Ausserhalb der Erdwelt gibt es kein Wasser und keinen Traeger: dort liefert surfaceY die
   // Bodenhoehe direkt (Hangarboden, Hoehenraster von Mond und Mars samt Mondbasis-Flaeche).
   const erde = (locale === 'earth');
+  // Eigener Boden eines Spiels (schattenBoden, z. B. die Felsroehre im Vulkan von Trip to Japan): dort gilt die 20-m-Regel gegen IHN
+  const eigen = schattenBoden(state.pos.x, state.pos.z);
   const onCar = erde && isOnCarrier(state.pos.x, state.pos.z);
   const overLand = erde && (isOnLand(state.pos.x, state.pos.z) || isOnBeach(state.pos.x, state.pos.z));
   const seaHere = (!erde || onCar || overLand) ? 0 : seaYAt(state.pos.x, state.pos.z);
-  const surfY = !erde ? surfaceY(state.pos.x, state.pos.z)
+  const surfY = eigen !== null ? eigen : !erde ? surfaceY(state.pos.x, state.pos.z)
               : (onCar ? fordDeckY : (overLand ? ISLAND_Y : seaHere));
   // Gerechnet wird mit der ANGEZEIGTEN Hoehe (planeCamRef), nicht mit state.pos.y. Beim schwimmenden
   // Canadair fallen die beiden auseinander: dessen state.pos.y bleibt auf der Nulllinie, waehrend
@@ -6286,7 +6521,7 @@ function updateShadow(){
   // Nur ueber offenem Wasser die Wellen abtasten: an Land und auf dem TRAEGERDECK ist die Flaeche
   // eben, und ein seaYAt in der Naehe des Traegers wuerde den Schatten vom Deck ins Wasser ziehen.
   let shadowY = surfY + (state.onGround ? 0.03 : 0.15);       // am Boden direkt auf der Flaeche (unter den Raedern)
-  if(erde && !overLand && !onCar){
+  if(erde && !overLand && !onCar && eigen === null){
     for(let a = 0; a < 6.283; a += Math.PI/4){
       const s2 = seaYAt(state.pos.x + Math.sin(a)*5.5, state.pos.z + Math.cos(a)*5.5);
       if(s2 + 0.15 > shadowY) shadowY = s2 + 0.15;
@@ -9036,6 +9271,10 @@ function preloadSpace(){
   preloadGround('mars');
   preloadStationGLB(window.MOONBASE_GLB, (g)=>{
     g.scale.setScalar(5.52);       // im Original 100 m — als Station auf dem Mond zu zierlich
+    // Die Bodenplatte der Basis (Plane, 552 m) an den Mondboden angleichen (Live-Wunsch 23.10.2026: "deutlich heller, man sieht den
+    // Uebergang"): gemessen mittlere Helligkeit der Textur 159 gegen 90 beim Kraterboden -> um diesen Faktor dunkler, matt wie er
+    g.traverse(o => { if(o.isMesh && /^Plane/.test(o.name) && o.material && o.material.map){
+      o.material = o.material.clone(); o.material.color.setScalar(MOND_PLATTE_ANGLEICH); o.material.roughness = 1; o.material.metalness = 0; } });
     moonBaseObj = g;
   });
   // ISS auf Star-Destroyer-Größe (1200 m). Im Original ist sie nur 120 m groß (gemessen) und war
@@ -9363,6 +9602,7 @@ function brightenISS(root){
 const ISS_LEN  = 2400;
 const ISS_DOCK = 1300;    // etwas mehr als die halbe Ausdehnung, sonst fliegt man durch das Modell
 const issDrift = new THREE.Vector3();      // ihr eigener, langsamer Kurs
+const MOND_PLATTE_ANGLEICH = 90 / 159;   // Helligkeit Kraterboden / Bodenplatte der Mondbasis (Texturmittel, gemessen 23.10.2026)
 function preloadStationGLB(dataUrl, cb){
   if(!dataUrl || !THREE.GLTFLoader) return;
   const gl = new THREE.GLTFLoader();
@@ -10782,7 +11022,8 @@ function nearestDestroyer(from){
 // breiter als der Bug — das hatte die erste Achsvermessung in die Irre geführt).
 // Alles wird auf „Nase = -Z" vorgedreht, so wie es das Spiel überall erwartet.
 // count = wie viele von der Sorte unterwegs sind. Die schweren Modelle wurden vereinfacht
-// (Vertex-Clustering, siehe WELTRAUM_PLAN.md): Serenity 288.678 -> 32.930, Voyager 147.206 -> 14.526,
+// (Vertex-Clustering, siehe WELTRAUM_PLAN.md): Serenity 288.678 -> 32.930,
+// (die USS Voyager ist seit 23.10.2026 ganz entfernt: ihre Lizenz CC-BY-NC-ND erlaubt keine verkleinerte Fassung)
 // Enterprise 49.588 -> 19.388, Razor Crest 38.112 -> 9.843 Dreiecke. Deshalb sind jetzt von allen
 // mehrere unterwegs, und die Szene ist trotzdem leichter als vorher.
 // Längen nach den offiziellen Angaben (Kanon bzw. real), damit die Größenverhältnisse untereinander
@@ -10795,7 +11036,6 @@ const SHIP_DEFS = [
   // Blueprints (war 60) — sie ist also größer als gedacht, nicht kleiner.
   { key:'razor',      glb:()=>window.RAZOR_GLB,      len:24.27, rot:[Math.PI/2, 0, 0],  count:6 },
   { key:'serenity',   glb:()=>window.SERENITY_GLB,   len:82.1,  rot:[0, -Math.PI/2, 0], count:2 },
-  { key:'voyager',    glb:()=>window.VOYAGER_GLB,    len:340, rot:[0, Math.PI, 0],    count:2 },
   { key:'enterprise', glb:()=>window.ENTERPRISE_GLB, len:640, rot:[0, Math.PI, 0],    count:2 },
   // Millennium Falcon (by jay2307). 40 m Länge wie gewünscht — im Kanon sind es 34,75 m, das Modell
   // ist mit 4,38:1 (Länge:Höhe) etwas bauchiger als die genannten 40 × 8 m, bei 40 m Länge wird es
@@ -11240,10 +11480,15 @@ function shadowFollowFeet(mesh, root){
     }
     // etwas ruhiger (Live-Wunsch 20.10.2026: "die Bewegung ein klein wenig weniger"): hoechstens 35 % des Radius verschieben,
     // hoechstens 1,5-fach strecken, die Fuesse duerfen bis 85 % des Radius gehen
-    const mx = Math.max(-sx * 0.35, Math.min(sx * 0.35, (x0 + x1) / 2)), my = Math.max(-sy * 0.35, Math.min(sy * 0.35, (y0 + y1) / 2));
+    // noch dezenter (Live-Wunsch 23.10.2026: "jetzt gibt es Staub, der Schatten darf ruhiger werden", Samu mit grossen Schritten wirkte
+    // hektisch): hoechstens 20 % verschieben, 1,3-fach strecken, und die Werte ziehen weich nach statt jedes Bild neu zu springen
+    const zmx = Math.max(-sx * 0.2, Math.min(sx * 0.2, (x0 + x1) / 2)), zmy = Math.max(-sy * 0.2, Math.min(sy * 0.2, (y0 + y1) / 2));
     const rand = 0.12 * Math.min(sx, sy);   // Ferse hinter dem Knoechel, Zehen vor dem Zehenknochen
-    const nx = Math.min(sx * 1.5, Math.max(sx, (Math.max(x1 - mx, mx - x0) + rand) / 0.85));
-    const ny = Math.min(sy * 1.5, Math.max(sy, (Math.max(y1 - my, my - y0) + rand) / 0.85));
+    const znx = Math.min(sx * 1.3, Math.max(sx, (Math.max(x1 - zmx, zmx - x0) + rand) / 0.85));
+    const zny = Math.min(sy * 1.3, Math.max(sy, (Math.max(y1 - zmy, zmy - y0) + rand) / 0.85));
+    const W = this.userData._fw || (this.userData._fw = { mx: zmx, my: zmy, nx: znx, ny: zny }), z = 0.18;
+    W.mx += (zmx - W.mx) * z; W.my += (zmy - W.my) * z; W.nx += (znx - W.nx) * z; W.ny += (zny - W.ny) * z;
+    const mx = W.mx, my = W.my, nx = W.nx, ny = W.ny;
     e[12] += ux * mx + wx * my; e[13] += uy * mx + wy * my; e[14] += uz * mx + wz * my;
     e[0] = ux * nx; e[1] = uy * nx; e[2] = uz * nx; e[4] = wx * ny; e[5] = wy * ny; e[6] = wz * ny;
     for(let i = 0; i < 16; i++) out[i] = e[i];
@@ -11778,7 +12023,8 @@ function decodeSound(dataUrl) {
   });
 }
 function soundUrlFor(name){
-  // Canadair -> Propellersound (SuperCup), AlphaJet/X-Wing -> Turbine (Airbus), sonst Propeller.
+  // Canadair -> Propellersound (SuperCup), AlphaJet/X-Wing -> Turbine (Airbus), sonst Propeller. (Seit 23.10.2026 Aufnahmen von
+  // Pixabay statt der FMS-Samples, siehe Kopf von sounds.js; Pitts, Bf109 und CurtissR3C gibt es nicht mehr – kein Modell hiess so.)
   // Das Boot hat keinen Eintrag: sein Motor wird synthetisch erzeugt (siehe makeBoatEngineBuffer).
   const turbine = (name==='AlphaJet' || name==='XWing');
   return window.FMS_SND[name] || (turbine ? window.FMS_SND['Airbus'] : window.FMS_SND['SuperCup']);
@@ -11790,7 +12036,7 @@ function soundUrlFor(name){
 //  2. Wasserrauschen: gefiltertes Rauschen, das den Schaum am Rumpf andeutet.
 // Der Puffer ist so lang, dass der Grundton sauber durchläuft (ganze Perioden), sonst knackt es
 // bei jeder Loop-Wiederholung.
-let boatEngineBuf = null;
+let boatEngineBuf = null, boatSampleLaedt = false;
 function makeBoatEngineBuffer(){
   if(!audioCtx) return null;
   const sr = audioCtx.sampleRate;
@@ -11930,7 +12176,8 @@ const AMB_GULL_R  = 900;    // m: bis hierher sind Moewen zu hoeren. Etwas mehr 
                             // (170 bis 330 m) plus Schelf — man hoert sie also schon beim Anfahren.
 const AMB_MAX_Y   = 400;    // m Hoehe: darueber verstummt die Kulisse. Ein Flugzeug in Reisehoehe
                             // hoert nur seinen Motor.
-const AMB_GULL_VOL = 0.26;  // Grundlautstaerke. Von 0,16 hoch ("das moewen ambiente kann ein wenig
+const AMB_GULL_VOL = 0.21;  // 23.10.2026 mit den neuen Aufnahmen: "einen Tick zu laut" (vorher 0,26)
+const AMB_MEER_VOL = 0.17;  // Meeresrauschen (neue Aufnahme, "einen Tick zu dezent" bei 0,13); AMB_OCEAN_VOL bleibt fuer die Spiele (Wind)  // Grundlautstaerke. Von 0,16 hoch ("das moewen ambiente kann ein wenig
                             // lauter werden") — Kulisse bleibt es trotzdem, der Motor liegt bei
                             // 0,09 bis 0,25 und das Ozeanrauschen bleibt, wo es war ("wind ist super").
 const AMB_OCEAN_VOL= 0.13;  // unveraendert: genau richtig getroffen.
@@ -11987,7 +12234,7 @@ function updateAmbient(dt){
       gull = gRoh*gRoh*(3-2*gRoh) * AMB_GULL_VOL * hoehe;
       // OZEAN: das Gegenstueck — draussen laut, an der Insel leise. Nicht ganz aus, denn Brandung
       // hoert man auch am Ufer; deshalb bleibt ein Drittel stehen.
-      ocean = (0.33 + 0.67*(1-gRoh)) * AMB_OCEAN_VOL * hoehe;
+      ocean = (0.33 + 0.67*(1-gRoh)) * AMB_MEER_VOL * hoehe;
     }
   }
   // Gleitend nachfuehren (siehe AMB_RATE): ein harter Wechsel waere als Klicken zu hoeren.
@@ -12110,9 +12357,11 @@ function updateEngineSound() {
   // Das U-BOOT hat seit dieser Runde einen EIGENEN Motor ('Sub'). Vorher lief dort der
   // Aussenborder, und das klang falsch: ein Aussenborder blubbert und schlaegt, ein U-Boot summt.
   const model = (eva && eva.boat) ? 'Boat' : (isSub() ? 'Sub' : MODEL_NAMES[currentModel]);
-  // Boot: eigener, synthetisch erzeugter Motorloop (kein Sample zum Dekodieren).
+  // Boot: die Motorboot-Aufnahme (sounds.js FMS_SND.Boat, seit 23.10.2026); fehlt sie, der synthetische Motorloop
   if (model === 'Boat') {
-    if (!boatEngineBuf) boatEngineBuf = makeBoatEngineBuffer();
+    if (!boatEngineBuf && window.FMS_SND && window.FMS_SND.Boat){ if(!boatSampleLaedt){ boatSampleLaedt = true;
+        decodeSound(window.FMS_SND.Boat).then(b => { boatEngineBuf = b; engineFor = null; }).catch(() => { boatEngineBuf = makeBoatEngineBuffer(); }); } }
+    else if (!boatEngineBuf) boatEngineBuf = makeBoatEngineBuffer();
     if (boatEngineBuf && engineFor !== 'Boat') { engineBufCurrent = boatEngineBuf; engineFor = 'Boat'; }
   }
   // U-Boot: tiefes Summen mit Schraubenwummern (siehe makeSubEngineBuffer).
@@ -12977,8 +13226,51 @@ function stepPhysics(dt, inp){
   // X-Wing: bis er oben ist und das Fahrwerk drin, wirkt nur die Schwebestufe (xwSchub); gewuenscht bleibt, was gewaehlt ist
   const thrWunsch = state.throttle;
   state.throttle = xwSchub(dt);
-  try { return stepPhysicsKern(dt, inp); }
+  try { return stepPhysicsNeigung(dt, inp); }
   finally { if(state.throttle === xwSchubZuletzt) state.throttle = thrWunsch; }
+}
+// ---- Flugzeuge: beim Lenken leicht in die Kurve legen, um die Rumpfmitte rollen (Engine-Standard seit 23.10.2026, vorher
+// nur in einem Spiel – im anderen neigte sich die Mustang beim Lenken gar nicht) ---------------------------------------------
+// Lenken (L-Stick / Pfeile = Gieren) ohne eigenes Rollen gibt etwas Rollrate, bis NEIG_MAX; beim Loslassen richtet die
+// Auto-Rueckstellung sie wieder auf. Die Engine dreht den Flieger um state.pos = Unterkante des Fahrwerks; die Rumpfmitte liegt
+// 1,5 (Mustang) bis 4 m (Airbus) darueber – beim Rollen schwang sie wie ein Pendel zur Seite. In der Luft wird state.pos nach
+// jedem Physikschritt um den Anteil zurueckgeschoben, den nur die Drehung der Rumpfmitte gegeben hat. Am Boden bleibt alles.
+const NEIG_MAX = 0.35, NEIG_RATE = 0.9;      // rad (~20 Grad) Querlage, Rollrate-Anteil beim Hineinlegen
+const _neigObenV = new THREE.Vector3(), _neigObenN = new THREE.Vector3(), _neigE = new THREE.Euler();
+let rumpfH = 0, rumpfMesh = null;
+function rumpfHoehe(){
+  const m = modelHolder.children[0] || null;
+  if(m !== rumpfMesh){
+    rumpfMesh = m; rumpfH = 0;
+    if(m){
+      // einmal je Modell: Box in den Koordinaten des Fliegers (Lage kurz auf null, gleich wieder zurueck)
+      const q = planeGroup.quaternion.clone(), p = planeGroup.position.clone();
+      planeGroup.quaternion.identity(); planeGroup.position.set(0, 0, 0); planeGroup.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(m); if(!bb.isEmpty()) rumpfH = (bb.min.y + bb.max.y) / 2;
+      planeGroup.quaternion.copy(q); planeGroup.position.copy(p); planeGroup.updateMatrixWorld(true);
+    }
+  }
+  return rumpfH;
+}
+function stepPhysicsNeigung(dt, inp){
+  const fliegt = !eva && !state.onGround && !state.crashed && locale !== 'space' && !spec.boat && !spec.sub;
+  if(!fliegt) return stepPhysicsKern(dt, inp);
+  let ein = inp;
+  if(inp && inp.yaw && !inp.roll){
+    const bank = _neigE.setFromQuaternion(state.quat, 'YXZ').z;                        // > 0 = links haengend
+    const soll = -Math.sign(inp.yaw) * NEIG_MAX * Math.min(1, Math.abs(inp.yaw));      // rechts lenken -> rechts neigen
+    const r = Math.max(-1, Math.min(1, (bank - soll) * 3)) * NEIG_RATE;                // roll > 0 rollt nach rechts
+    if(Math.abs(r) > 0.02) ein = Object.assign({}, inp, { roll: r });
+  }
+  const h = rumpfHoehe();
+  _neigObenV.set(0, 1, 0).applyQuaternion(state.quat);
+  const r = stepPhysicsKern(dt, ein);
+  if(h && !state.onGround && !state.crashed && !eva){
+    _neigObenN.set(0, 1, 0).applyQuaternion(state.quat);
+    state.pos.addScaledVector(_neigObenN.sub(_neigObenV), -h);                         // Rumpfmitte statt Fahrwerk als Drehpunkt
+    planeGroup.position.copy(state.pos);
+  }
+  return r;
 }
 let xwSchubZuletzt = 0;
 function stepPhysicsKern(dt, inp){
@@ -15295,6 +15587,7 @@ function loop(now){
   updateComets(dt);          // im Weltall: Kometenstreifen entgegen der Fahrtrichtung
   updateOrcas(dt);           // Killerwale: Springer (45 Grad, 10 m hoch) und tauchende Schule
   updateStrandleben(dt);     // Forellen im Flachwasser, Seeloewen am Strand (nur wenn ein Spiel es einschaltet)
+  updateSpuren(dt);          // Staub je Untergrund, Ringe und Gischt im Wasser (Spielfigur, Tiere mit spurQuelle)
   updateRockets(dt);         // Raketenstarts auf den Inseln (starten bei Annäherung, steigen ins All)
   // Erststart: sobald der Hangar geladen IST und danach kurz Ruhe war, beginnt der X-Wing dort.
   // Die Wartezeit ist nötig, weil beim App-Start noch weitere Modelle nachladen (siehe oben).
