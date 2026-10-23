@@ -130,6 +130,10 @@ Startbahn mit dem **Alpha Jet**. Voraus der **Mount Fuji** (2 km hoch, steht im 
   Luftgitarre, Fuchsi und Barki tanzen, und Samu tanzt endlos weiter (wie mit den Aliens auf dem Mond), bis er weiterläuft.
   Geht Samu surfen, surft Joshi ~10 m neben ihm mit und springt eigene Tricks (Salto vorwärts/rückwärts, 360 links/rechts,
   Salto mit 360) – Fuchsi wartet am Strand.
+  Im Finale (Stufe 1) fährt Joshi auch Snowboard: selbstständig in Samus Nähe, mal überholt er und springt vor ihm über einen
+  Kicker, mal lässt er sich überholen oder einen Kicker aus; Felsen und Rails umfährt er (grinden kann er nicht), auf den Kickern
+  dieselben Tricks wie beim Surfen (zählen nicht zur Statistik). Er ist ein Körper (Samu prallt an ihm ab), wirbelt Schnee auf und
+  zieht Kantenspuren. Über die Mega-Rampe fliegt er mit aufs Meer und surft dann weiter. Bei Transall und Fallschirm ist er nicht zu sehen.
 
 Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, gelb = Etappen, lila = Fukuoka; am Ende von Etappe 6 wird daraus die 🌊).
 
@@ -327,7 +331,7 @@ NC-Lizenzen bedeuten: **nicht kommerziell** – das Spiel darf mit diesen Werken
 | Atlas Thailand (Pixabay-ID 562340) | **vadim_makes_sound** (Pixabay) | Pixabay-Lizenz | Musik Hafen, Etappe 4 |
 | Chinese Flute Relaxing Music (short, Pixabay-ID 120917) | **nourishedbymusic** (Pixabay) | Pixabay-Lizenz | Musik Etappe 5 |
 | Ancient Japan (Pixabay-ID 492751) | **alec_koff** (Pixabay) | Pixabay-Lizenz | Musik Etappe 6 |
-| Punk Rock Guitar Loop (Pixabay-ID 278767) | **idoberg** (Pixabay) | Pixabay-Lizenz | Joshis Luftgitarre am Fukuoka-Beach |
+| EMD Drop (inkl. Riser) (Pixabay-ID 478137) | **sioaar1** (Pixabay) | Pixabay-Lizenz | Musik, wenn Samu und Joshi am Fukuoka-Beach zusammen tanzen |
 
 ### Geräusche
 

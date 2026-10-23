@@ -692,7 +692,7 @@ function hookE6(){
 function updateE6(dt){
   // Live-Befund 18.10.2026: 'Ancient Japan' beginnt sehr leise (die ersten 15 s ~1/3 so laut wie die anderen Stuecke, unter
   // der Ankunftsansage praktisch unhoerbar) – am Anfang lauter, ab 15 s gleitend auf den normalen Pegel (0,12)
-  story.etappenMusik(6, window.MUSIK_SND && window.MUSIK_SND.e6, dt || 0, () => { const t = story.musikZeit ? story.musikZeit(6) : 0; return 0.12 * (t < 15 ? 2.8 : t < 25 ? 2.8 - 1.8 * (t - 15) / 10 : 1); });
+  story.etappenMusik(6, window.MUSIK_SND && window.MUSIK_SND.e6, dt || 0, () => { const t = story.musikZeit ? story.musikZeit(6) : 0; return 0.12 * (t < 15 ? 2.8 : t < 25 ? 2.8 - 1.8 * (t - 15) / 10 : 1) * (story.strandFreunde && story.strandFreunde.jam ? 0.15 : 1); });   // beim Tanzen leiser (strandfreunde.js)
   if(!e6()) return;
   ladeParkAlpha();
   if(park.obj) park.obj.visible = locale === 'earth' && story.phase !== 'alpha';

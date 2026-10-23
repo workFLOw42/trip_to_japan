@@ -4764,6 +4764,9 @@ const UNTERGRUND = {
   mars:   { staub: 0xb8653d, schatten: 1.0 },
 };
 const STAUB_FARBEN = {}; for(const k in UNTERGRUND) if(UNTERGRUND[k].staub != null) STAUB_FARBEN[k] = UNTERGRUND[k].staub;
+// Hoehe der Wasserflaeche fuer Ringe und Gischt (seit 23.10.2026 ueberschreibbar): normal das Meer der Engine; ein Spiel mit
+// eigener Wasserflaeche (z. B. die Surfwellen in Trip to Japan) gibt hier seine Hoehe – dann liegen die Ringe auf der Welle.
+let spurWasserY = function(x, z){ return seaYAt(x, z); };
 function untergrundSchatten(x, z, y){ const u = UNTERGRUND[untergrundAt(x, z, y)]; return u ? u.schatten : 1; }
 // Untergrund fuer etwas der Groesse g, dessen Ursprung (Unterkante) bei y liegt: im Wasser und ganz untergetaucht = 'unterwasser'
 function untergrundFuer(x, z, y, g){
@@ -4844,11 +4847,11 @@ function wasserRing(x, z, g, k){
   const s = Math.min(4, g);
   r.m.visible = true; r.t = 0; r.dauer = 1.2 + 0.4 * s; r.r0 = 0.25 * s + 0.15; r.r1 = r.r0 + (0.6 + 0.9 * s) * (0.5 + k); r.deck = 0.35 + 0.35 * k;
   r.m.material.color.setRGB(1, 1, 1).multiplyScalar(spurLicht());
-  r.m.position.set(x, seaYAt(x, z) + 0.04, z);
+  r.m.position.set(x, spurWasserY(x, z) + 0.04, z);
 }
 function wasserTropfen(x, z, g, k, n){
   spurTexturen();
-  const wy = seaYAt(x, z), s = Math.min(3, g);
+  const wy = spurWasserY(x, z), s = Math.min(3, g);
   for(let i = 0; i < n; i++){
     let t = spuren.tropfen.find(q => !q.m.visible);
     if(!t){ if(spuren.tropfen.length >= TROPFEN_N) return; t = { m: new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 0), spuren.tropfMat), v: new THREE.Vector3() };
@@ -4933,6 +4936,8 @@ function updateSpuren(dt){
     const v = isNaN(q.x) ? 0 : Math.hypot(_spW.x - q.x, _spW.z - q.z) / dt, rx = _spW.x - q.x, rz = _spW.z - q.z;
     q.x = _spW.x; q.z = _spW.z;
     if(v < 0.2 || v > 30){ q.t = Math.min(q.t, 0.1); continue; }              // steht (oder wurde versetzt)
+    // in der Luft ueber dem Wasser (Sprung, Surf-Trick): keine Ringe darunter
+    if(_spW.y > spurWasserY(_spW.x, _spW.z) + Math.max(0.4, q.g * 0.3) && untergrundAt(_spW.x, _spW.z, _spW.y) === 'wasser') continue;
     q.t -= dt; if(q.t > 0) continue;
     const rl = Math.hypot(rx, rz) || 1;
     q.t = spurAn(_spW.x, _spW.z, _spW.y, q.g, v, -rx / rl, -rz / rl);
@@ -4948,7 +4953,7 @@ function updateSpuren(dt){
     r.t += dt; const k = r.t / r.dauer;
     if(k >= 1){ r.m.visible = false; continue; }
     const d = r.r0 + (r.r1 - r.r0) * Math.sqrt(k); r.m.scale.set(d * 2, 1, d * 2);
-    r.m.position.y = seaYAt(r.m.position.x, r.m.position.z) + 0.04;
+    r.m.position.y = spurWasserY(r.m.position.x, r.m.position.z) + 0.04;
     r.m.material.opacity = r.deck * (1 - k);
   }
   for(const b of spuren.blasen) if(b.m.visible){
@@ -4959,7 +4964,7 @@ function updateSpuren(dt){
   for(const t of spuren.tropfen) if(t.m.visible){
     t.t += dt; t.v.y -= 9.81 * dt; t.m.position.addScaledVector(t.v, dt);
     t.m.scale.setScalar(t.sc * Math.max(0.2, 1 - t.t * 1.6));
-    if(t.t > 0.7 || t.m.position.y < seaYAt(t.m.position.x, t.m.position.z) - 0.1) t.m.visible = false;
+    if(t.t > 0.7 || t.m.position.y < spurWasserY(t.m.position.x, t.m.position.z) - 0.1) t.m.visible = false;
   }
 }
 function updateStrandleben(dt){

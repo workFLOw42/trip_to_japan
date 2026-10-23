@@ -851,6 +851,14 @@ function abfahrtStart(k){
   story.hinweis('');
 }
 story.finaleAbfahrt = abfahrtStart;
+// strandfreunde.js (Live-Wunsch 23.10.2026: Joshi faehrt mit): Samus Lage auf der Piste und Hilfen in Pisten-Koordinaten.
+// abOrt nimmt einen eigenen Such-Zeiger (st.i) – ort() merkt sich sonst Samus Abschnitt in ab.i
+story.abLage = () => (fin.aktiv && (fin.schritt === 'abfahrt' || fin.schritt === 'mega') && fin.piste && fin.piste.S)
+  ? { s: ab.s, q: ab.q, v: ab.v, luft: ab.luft, mega: fin.schritt === 'mega' } : null;
+story.abOrt = (st, s, q) => { const alt = ab.i; ab.i = st.i || 0; const o = ort(s, q); st.i = ab.i; ab.i = alt; return { x: o.x, z: o.z, tx: o.tx, tz: o.tz }; };
+story.abGrund = (x, z) => grundAb(x, z);
+story.abHinder = () => ab.hinder;
+story.abMass = { RAND: AB_RAND, VMAX: AB_VMAX, RAIL_L };
 let zeigeErlaubt = false;
 const hinweisOrig = story.hinweis;
 story.hinweis = function(text){ if(text && fin.aktiv && fin.k && !zeigeErlaubt) return; return hinweisOrig.apply(this, arguments); };
@@ -988,6 +996,10 @@ function abfahrtSchritt(dt){
     if(ab.s > h.s + h.r + 1){ h.weg = true; continue; }
     if(Math.abs(ab.s - h.s) < h.r + 0.4 && Math.abs(ab.q - h.q) < h.r + 0.5 && (ab.luft ? ab.hh : 0) < h.h * 0.85){ h.weg = true; anstossen('Autsch – ein Felsen!'); }
   }
+  // Joshi (strandfreunde.js) ist ein Koerper: am Boden prallt Samu seitlich an ihm ab und wird etwas langsamer (kein Sturz)
+  { const J = story.abJoshi && story.abJoshi();
+    if(J && !ab.luft && !J.luft && Math.abs(ab.s - J.s) < 1.3 && Math.abs(ab.q - J.q) < 0.95){
+      ab.q += (ab.q >= J.q ? 1 : -1) * (0.95 - Math.abs(ab.q - J.q)); ab.qv = 0; ab.v = Math.max(1.5, ab.v - 4 * dt); } }
   const a = P[ab.i], b2 = P[ab.i + 1], neig = Math.atan2(a.y - b2.y, (b2.S - a.S) || 1);
   pose(o.x, ab.y, o.z, o.tx, o.tz, ab.grind ? -Math.PI / 2 : 0, ab.grind ? 0 : neig, !ab.luft && !ab.grind && !ab.rampe);
   state.vel.set(o.tx * ab.v, ab.luft ? ab.vy : 0, o.tz * ab.v);
@@ -1278,6 +1290,7 @@ function surfenStart(vonMega){
     ab.tricks = ab.tricks || [];
   }
   surfBrett(fin.k.g);
+  if(typeof spurQuelle === 'function') spurQuelle(fin.k.g, { groesse: 1.8 });   // global-ok: Engine (Ringe und Gischt auf der Welle)
   ab.spin = 0; ab.spin0 = 0; ab.flip = 0; ab.stolper = 0; ab.kalT = 0; ab.qv = 0; fin.kal = false; knochen = null;
   surfPlatz();
   figurZurueck(); haltung();
@@ -1667,6 +1680,13 @@ function finaleTon(dt){
 
 // ---- Hooks --------------------------------------------------------------------------------------------------------
 function hookFinale(){
+  // Wasserspuren der Engine beim Surfen (Live-Wunsch 23.10.2026: "das sollte doch eigentlich in der Engine definiert werden"):
+  // die Ringe und die Gischt liegen auf der Welle (spurWasserY) statt auf dem abgesenkten Meer, und draussen auf dem Wasser
+  // ist der Untergrund Wasser – Samu (fin.k.g) und Joshi (strandfreunde.js) ziehen ihre Spur von selbst
+  if(typeof spurWasserY === 'function'){ const wyOrig = spurWasserY;                                    // global-ok: Engine
+    spurWasserY = function(x, z){ return welle.aktiv && hier() ? wellenY(x, z) : wyOrig.apply(this, arguments); }; }
+  if(typeof untergrundAt === 'function'){ const ugOrig = untergrundAt;                                  // global-ok: Engine
+    untergrundAt = function(x, z, y){ if(welle.aktiv && hier() && !isOnLand(x, z)) return 'wasser'; return ugOrig.apply(this, arguments); }; }
   // Toene: Finale-Toene nachfuehren; beim Surfen die Strandkulisse (Moewen + Meer) in voller Lautstaerke
   const ambOrig = updateAmbient;
   updateAmbient = function(dt){

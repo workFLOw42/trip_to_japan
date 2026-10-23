@@ -3,7 +3,7 @@
 //   nach dem Surfen, im Abspann und bei "Ab zum Strand").
 // Was: Joshi (aus "Das Geheimland") laeuft auf der freien Sandflaeche rund um das Surfbrett hin und her, schaut sich um und
 //   kniet sich hin – dann kommt Fuchsi angerannt, spielt vor ihm und setzt sich zu ihm. Sonst streift Fuchsi um Joshi herum.
-// Tanzt Samu (X) in Joshis Naehe (JAM_R), dreht Joshi sich zu ihm und spielt Luftgitarre (Gitarren-Loop wie im Geheimland),
+// Tanzt Samu (X) in Joshis Naehe (JAM_R), dreht Joshi sich zu ihm und spielt Luftgitarre (dazu der EDM-Drop in Schleife),
 //   Fuchsi tanzt vor Joshi (Saltos, Hopser, Schwanzschlag), Barki tollt vor Samu (begleiter.js). Wie bei den Aliens auf dem
 //   Mond tanzt Samu dann endlos weiter (story.js: story.strandFreunde.jam), bis der Stick ihn bewegt oder eine andere Taste kommt.
 // Modelle: Joshi = Spielfigur aus "Das Geheimland" (nur die Clips idle walk look kneel guitar, Textur 1024 px JPEG), Fox von
@@ -17,7 +17,7 @@ const RING_MIN = 9.5, RING_MAX = 22, GANG_MAX = 12;   // m um das Surfbrett (Ein
 const JAM_R = 12;                 // m: tanzt Samu naeher an Joshi, spielt er Luftgitarre
 const GEH_V = 0.95, SICHT = 220, ANIM = 120;
 const JOSHI_R = 0.3, FUCHS_R = 0.25, SAMU_R = 0.35, HUND_R = 0.36;
-const GITARRE_VOL = 0.09, GITARRE_WEIT = 25;          // Lautstaerke direkt bei Joshi, bis GITARRE_WEIT m leiser bis 0
+const GITARRE_VOL = 0.09, GITARRE_WEIT = 40;          // Lautstaerke direkt bei Joshi, bis GITARRE_WEIT m leiser bis 0
 const FA = { stehen: 'Fox_Idle', gehen: 'Fox_Walk_InPlace', rennen: 'Fox_Run_InPlace', setzen: 'Fox_Sit1', sitzen: 'Fox_Sit2_Idle',
   sitzPause: 'Fox_Sit_Idle_Break', aufstehen: 'Fox_Sit3_StandUp', pfoten: 'Fox_Attack_Paws', huepfen: 'Fox_Jump_Pivot_InPlace' };
 const TANZ_DREH = ['Fox_Somersault_InPlace', 'Fox_Jump_Pivot_InPlace', 'Fox_Somersault_InPlace', 'Fox_Attack_Tail'];
@@ -25,7 +25,8 @@ const FUCHS_LANGSAM = { Fox_Attack_Paws: 0.75, Fox_Attack_Tail: 0.7, Fox_Somersa
 const EINMAL = [FA.setzen, FA.aufstehen, FA.sitzPause, FA.pfoten, FA.huepfen, 'Fox_Somersault_InPlace', 'Fox_Attack_Tail', 'kneel', 'look'];
 const fr = story.strandFreunde = { an: false, jam: false, g: null, j: null, f: null, laedt: false };
 
-function hier(){ const FL = story.e6festland; return story.etappe === 6 && locale === 'earth' && story.phase === 'ankunft' && !!story.e6 && !!FL && !!FL.g && !!FL.g.parent; }
+// am Strand: nach der Ankunft – und auch, wenn Samu im Finale wieder zu Fuss ist (vor dem Start aus der Transall ausgestiegen)
+function hier(){ const FL = story.e6festland; return story.etappe === 6 && locale === 'earth' && (story.phase === 'ankunft' || (story.phase === 'finale' && !!eva)) && !!story.e6 && !!FL && !!FL.g && !!FL.g.parent; }   // global-ok: Engine (eva)
 const wd = (a, b) => { let d = b - a; while(d > Math.PI) d -= 2 * Math.PI; while(d < -Math.PI) d += 2 * Math.PI; return d; };
 const kl = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -292,17 +293,24 @@ function fuchsHaltung(F){
   }
 }
 
+// ---- Musik beim Tanzen (Live-Wunsch 23.10.2026): "EMD Drop (inkl. Riser)" von sioaar1 (Pixabay) in Schleife, solange Samu,
+// Joshi und die Tiere zusammen tanzen – leiser mit dem Abstand zur Kamera. Vorher spielte hier der Gitarren-Loop aus dem
+// Geheimland.
+const TANZ_VOL = 0.32;
+function tanzMusik(an, d){ musik(an, d, tanz, window.TANZ_SND, TANZ_VOL); }
+const tanz = { buf: null, laedt: false, quelle: null, gain: null };
 // ---- Gitarre (Pixabay: idoberg, Punk Rock Guitar Loop – wie im Geheimland), leiser mit dem Abstand zur Kamera ---------
 const git = { buf: null, laedt: false, quelle: null, gain: null };
-function gitarre(an, d){
-  const ok = an && soundOn && audioCtx && audioCtx.state === 'running' && window.GITARRE_SND;
-  if(!ok){ if(git.quelle){ try { git.quelle.stop(); } catch(e){} git.quelle = null; } return; }
-  if(!git.buf){ if(!git.laedt){ git.laedt = true; decodeSound(window.GITARRE_SND).then(b => { git.buf = b; }).catch(e => { git.laedt = false; console.warn('Gitarre:', e); }); } return; }
-  if(!git.gain){ git.gain = audioCtx.createGain(); git.gain.connect(audioCtx.destination); }
-  git.gain.gain.value = GITARRE_VOL * Math.max(0, 1 - d / GITARRE_WEIT);
-  if(git.quelle) return;
-  const s = audioCtx.createBufferSource(); s.buffer = git.buf; s.loop = true; s.connect(git.gain); s.start(); git.quelle = s;
+function musik(an, d, m, url, vol){
+  const ok = an && soundOn && audioCtx && audioCtx.state === 'running' && url;
+  if(!ok){ if(m.quelle){ try { m.quelle.stop(); } catch(e){} m.quelle = null; } return; }
+  if(!m.buf){ if(!m.laedt){ m.laedt = true; decodeSound(url).then(b => { m.buf = b; }).catch(e => { m.laedt = false; console.warn('Tanzmusik:', e); }); } return; }
+  if(!m.gain){ m.gain = audioCtx.createGain(); m.gain.connect(audioCtx.destination); }
+  m.gain.gain.value = vol * Math.max(0, 1 - d / GITARRE_WEIT);
+  if(m.quelle) return;
+  const s = audioCtx.createBufferSource(); s.buffer = m.buf; s.loop = true; s.connect(m.gain); s.start(); m.quelle = s;
 }
+function gitarre(an, d){ tanzMusik(an, d); }
 
 // ---- Joshi surft mit (Live-Wunsch 23.10.2026) ---------------------------------------------------------------------
 // Geht Samu surfen (finale.js: story.surfLage), faehrt Joshi auf einem eigenen Brett mit: ~10 m neben Samu auf derselben
@@ -312,8 +320,10 @@ function gitarre(an, d){
 // Ist Samu wieder an Land, steht Joshi neben dem Surfbrett im Sand.
 const SURF_SEIT = 10, SURF_SPRUNG = 7.5, SURF_G = 14, SURF_DREHPUNKT = 0.6;
 const SURF_TRICKS = [{ flip: 1, spin: 0 }, { flip: -1, spin: 0 }, { flip: 0, spin: 1 }, { flip: 0, spin: -1 }, { flip: 1, spin: 1 }, { flip: -1, spin: -1 }];
-const sf = { an: false, x: 0, z: 0, y: 0, vx: 0, vz: 0, yaw: 0, luft: false, vy: 0, lt: 0, T: 1, trick: null, naechster: 3, seite: 1, t: 0, sx: 0, sz: 0, brett: null, neig: 0 };
-const _qy = new THREE.Quaternion(), _qs = new THREE.Quaternion(), _qf = new THREE.Quaternion(), _sY = new THREE.Vector3(0, 1, 0), _sX = new THREE.Vector3(1, 0, 0), _sp = new THREE.Vector3();
+const sf = { an: false, x: 0, z: 0, y: 0, vx: 0, vz: 0, yaw: 0, luft: false, vy: 0, lt: 0, T: 1, trick: null, naechster: 3, seite: 1, t: 0, sx: 0, sz: 0, brett: null, neig: 0, roll: 0 };
+const _qy = new THREE.Quaternion(), _qs = new THREE.Quaternion(), _qf = new THREE.Quaternion(), _qr = new THREE.Quaternion(), _sY = new THREE.Vector3(0, 1, 0), _sX = new THREE.Vector3(1, 0, 0), _sZ = new THREE.Vector3(0, 0, 1), _sp = new THREE.Vector3();
+// Groesse der Engine-Spur (tierSchatten hat Joshi mit seiner Koerpergroesse angemeldet; auf dem Brett macht er mehr Welle)
+function spurGroesse(o, g){ if(typeof spuren === 'undefined') return; const q = spuren.quellen.find(e => e.o === o); if(q) q.g = g; else if(typeof spurQuelle === 'function') spurQuelle(o, { groesse: g }); }   // global-ok: Engine
 function felsNah(x, z){
   const E = story.e6; if(!E.MEOTO || !E.MEOTO_FELS) return false;
   return E.MEOTO_FELS.some(F => Math.hypot(x - E.MEOTO.x, z - (E.MEOTO.z + F.dz)) < (F.rW || F.b * 0.7) + 4);
@@ -327,7 +337,7 @@ function surfStart(J, S){
   sf.brett = V.clone(true); J.obj.add(sf.brett);                               // Nase +Z wie Joshi
   J.obj.children[0].position.y += 0.045;
   if(J.obj.userData.schatten) J.obj.userData.schatten.visible = false;
-  J.obj.userData.keineSpur = true;
+  spurGroesse(J.obj, 1.6);                                          // Ringe und Gischt der Engine auf der Welle (finale.js spurWasserY)
   J.modus = 'surfen'; J.ziel = null; vonVorn(J, 'skate'); anim(J, 'skate');
   fuchsModus('strand');
   return true;
@@ -336,12 +346,15 @@ function surfEnde(J){
   sf.an = false;
   if(sf.brett){ J.obj.remove(sf.brett); sf.brett = null; J.obj.children[0].position.y -= 0.045; }
   if(J.obj.userData.schatten) J.obj.userData.schatten.visible = true;
-  J.obj.userData.keineSpur = false;
+  spurGroesse(J.obj, 0.5);
   J.obj.quaternion.identity();
-  // zurueck an Land: neben dem Surfbrett im Sand (Samu landet im Ring)
+  strandSetzen(J);
+}
+// zurueck an Land: neben dem Surfbrett im Sand (Samu landet im Ring)
+function strandSetzen(J){
   const E = story.e6;
   for(let i = 0; i < 24; i++){ const a = Math.PI * 0.5 + i * 0.4; J.x = E.SURF.x + Math.sin(a) * (RING_MIN + 1); J.z = E.SURF.z + Math.cos(a) * (RING_MIN + 1); if(bodenFrei(J.x, J.z)) break; }
-  J.yaw = -Math.PI / 2; J.modus = 'warten'; J.t = 2; anim(J, 'idle', 0.3);
+  J.yaw = -Math.PI / 2; J.modus = 'warten'; J.t = 2; anim(J, 'idle', 0.3); J.obj.quaternion.identity(); J.obj.visible = true;
   fuchsModus('folgen');
 }
 function surfSchritt(J, dt, S){
@@ -379,13 +392,157 @@ function surfSchritt(J, dt, S){
   const fx = Math.sin(sf.yaw), fz = Math.cos(sf.yaw);
   const neig = sf.luft ? 0 : Math.atan2(wellenY(sf.x + fx * 0.7, sf.z + fz * 0.7) - wellenY(sf.x - fx * 0.7, sf.z - fz * 0.7), 1.4);
   sf.neig += (neig - sf.neig) * Math.min(1, dt * 6);
+  // ... und quer in die Welle gelegt wie Samu (finale.js: roll ueber 0,8 m): auf der steilen Front stach sonst die bergseitige
+  // Kante samt Joshi in die Wasserwand (Live-Befund 23.10.2026). Rechts = -x im Modell (Blick +z)
+  const rx = -Math.cos(sf.yaw), rz = Math.sin(sf.yaw);
+  const roll = sf.luft ? 0 : Math.atan2(wellenY(sf.x + rx * 0.4, sf.z + rz * 0.4) - wellenY(sf.x - rx * 0.4, sf.z - rz * 0.4), 0.8);
+  sf.roll += (roll - sf.roll) * Math.min(1, dt * 6);
   J.x = sf.x; J.z = sf.z;
   // Haltung: Drehung um einen Punkt SURF_DREHPUNKT ueber dem Brett (Koerpermitte), Brett bleibt an den Fuessen
   _qy.setFromAxisAngle(_sY, sf.yaw); _qs.setFromAxisAngle(_sY, spin); _qf.setFromAxisAngle(_sX, flip - sf.neig);
-  J.obj.quaternion.copy(_qy).multiply(_qs).multiply(_qf);
+  J.obj.quaternion.copy(_qy).multiply(_qs).multiply(_qf).multiply(_qr.setFromAxisAngle(_sZ, -sf.roll));
   _sp.set(0, SURF_DREHPUNKT, 0).applyQuaternion(J.obj.quaternion);
   const g = fr.g;
   J.obj.position.set(sf.x - g.position.x - _sp.x, sf.y + 0.02 + SURF_DREHPUNKT - _sp.y - g.position.y, sf.z - g.position.z - _sp.z);
+}
+
+
+// ---- Joshi faehrt Snowboard mit (Live-Wunsch 23.10.2026, Finale Stufe 1) --------------------------------------------
+// Auf der Piste (finale.js story.abLage) faehrt Joshi selbststaendig in Samus Naehe: mal nebenher, mal ueberholt er ihn und
+// nimmt einen Kicker vor ihm, mal laesst er sich ueberholen, ab und zu laesst er einen Kicker aus. Grinden kann er nicht – Rails
+// und Felsen faehrt er aus dem Weg. Auf den Kickern dieselben Tricks wie beim Surfen (Salto vor/zurueck, 360 links/rechts, Salto
+// mit 360), immer sauber gelandet; sie zaehlen nicht zur Statistik. Er wirbelt Schnee auf und zieht Kantenspuren (in der Kurve
+// nur die Innenkante, wie bei Samu). Er ist ein Koerper: Samu prallt an ihm ab (finale.js), Joshi weicht Samu aus. Ueber die
+// Mega-Rampe fliegt er mit hinaus aufs Meer, verschwindet im Wasser und surft dann wieder neben Samu (sf oben).
+// Beim Fallschirmsprung ist er nicht zu sehen (er ist erst auf der Piste da).
+const SB = { abst: 6, rand: 0, rampenAus: 0.3, g: 14 };
+const jb = { an: false, s: 0, q: 0, v: 2, y: 0, luft: false, vy: 0, hh: 0, lt: 0, T: 1, trick: null, modus: 'neben', modusT: 0, i: 0, ausLassen: new Set(),
+  brett: null, spur: null, spurN: 0, spurLetzt: null, spray: [], sprayT: 0, mega: null, weg: false, qv: 0 };
+story.abJoshi = () => (jb.an && !jb.weg && !jb.mega ? { s: jb.s, q: jb.q, luft: jb.luft } : null);
+function jbStart(J, A){
+  const V = story.finaleBrett && story.finaleBrett(); if(!V) return false;
+  Object.assign(jb, { an: true, s: A.s - 14, q: Math.max(-SB.rand, Math.min(SB.rand, A.q + (A.q > 0 ? -5 : 5))), v: Math.max(2, A.v), luft: false, vy: 0, hh: 0, lt: 0,
+    trick: null, modus: 'neben', modusT: 6, i: 0, mega: null, weg: false, qv: 0, spurLetzt: null, spin: 0, flip: 0 });
+  jb.ausLassen.clear();
+  SB.rand = story.abMass.RAND;
+  jb.brett = V.clone(true); J.obj.add(jb.brett); J.obj.children[0].position.y += 0.03;
+  if(J.obj.userData.schatten) J.obj.userData.schatten.visible = false;
+  spurGroesse(J.obj, 0.5); J.obj.userData.keineSpur = true;         // Engine-Staub aus: eigene Schneespur (wie Samu)
+  J.modus = 'snowboard'; J.ziel = null; vonVorn(J, 'skate'); anim(J, 'skate');
+  if(!jb.spur){ const P = new Float32Array(220 * 12), geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    jb.spur = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xa9bfd6, transparent: true, opacity: 0.8, fog: false })); jb.spur.frustumCulled = false; jb.spurPos = P;
+    scene.add(jb.spur); jb.sprayMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, fog: false }); }   // global-ok: liegt auf der Piste
+  jb.spur.visible = true; jb.spurN = 0; jb.spur.geometry.setDrawRange(0, 0);
+  return true;
+}
+function jbEnde(J){
+  jb.an = false;
+  if(jb.brett){ J.obj.remove(jb.brett); jb.brett = null; J.obj.children[0].position.y -= 0.03; }
+  if(jb.spur) jb.spur.visible = false; for(const p of jb.spray) p.m.visible = false;
+  J.obj.userData.keineSpur = false; J.obj.quaternion.identity();
+  if(J.obj.userData.schatten) J.obj.userData.schatten.visible = true;
+  J.obj.visible = true;
+}
+// Was liegt vor Joshi? Hindernisse in (von, bis) m voraus
+function vorJoshi(von, bis){ return (story.abHinder() || []).filter(h => h.s - jb.s > von && h.s - jb.s < bis); }
+function jbSchritt(J, dt, A){
+  const RAND = SB.rand, VMAX = story.abMass.VMAX;
+  // Mega-Rampe: eigener Bogen hinaus aufs Meer, im Wasser verschwindet er (dann surft er, sobald Samu surft)
+  if(jb.mega){
+    const m = jb.mega; m.t += dt; m.vy -= 9.81 * dt; m.y += m.vy * dt; m.x += m.tx * m.vh * dt; m.z += m.tz * m.vh * dt;
+    const k = Math.min(1, m.t / 1.4), e = k * k * (3 - 2 * k), flip = jb.megaTrick.flip * Math.PI * 2 * e, spin = jb.megaTrick.spin * Math.PI * 2 * e;
+    J.x = m.x; J.z = m.z;
+    const meer = typeof seaYAt === 'function' ? seaYAt(m.x, m.z) : 0;                                      // global-ok: Engine
+    if(m.y < meer + 0.3){ jb.weg = true; J.obj.visible = false; return; }
+    jbPose(J, m.x, m.y, m.z, Math.atan2(m.tx, m.tz), 0, 0, spin, flip); return;
+  }
+  if(jb.weg) return;
+  // Modus wechseln: nebenher, ueberholen (vor ihm Kicker nehmen), sich ueberholen lassen
+  if((jb.modusT -= dt) <= 0){ const r = Math.random(); jb.modus = r < 0.35 ? 'neben' : r < 0.7 ? 'vorne' : 'hinten'; jb.modusT = 8 + Math.random() * 7; }
+  const sollAb = jb.modus === 'vorne' ? 14 : jb.modus === 'hinten' ? -14 : 1.5;
+  // Tempo: auf Samu abgestimmt, darf etwas schneller sein (zum Ueberholen)
+  if(!jb.luft){ const soll = A.v + (A.s + sollAb - jb.s) * 0.3; jb.v += (Math.max(1.5, Math.min(VMAX * 1.15, soll)) - jb.v) * Math.min(1, dt * 1.2); }
+  // Querlage: neben Samu (SB.abst), Felsen und Rails ausweichen, Kicker anfahren (ausser er laesst ihn aus)
+  let zielQ = A.q + (jb.q >= A.q ? SB.abst : -SB.abst);
+  if(Math.abs(zielQ) > RAND - 1) zielQ = A.q - Math.sign(zielQ) * SB.abst;
+  for(const h of vorJoshi(-2, 28)){
+    if(h.typ === 'rampe' && !jb.ausLassen.has(h)){ if(h.s - jb.s > 26 && Math.random() < SB.rampenAus * dt * 2) jb.ausLassen.add(h); else if(!jb.ausLassen.has(h)) zielQ = h.q; }
+    if(h.typ === 'mega') zielQ = Math.max(-h.W / 2 + 2, Math.min(h.W / 2 - 2, zielQ));
+  }
+  for(const h of vorJoshi(-3, 22)){
+    const breite = h.typ === 'fels' ? h.r + 1.6 : h.typ === 'rail' ? 2.2 : h.typ === 'rampe' && jb.ausLassen.has(h) ? h.W / 2 + 1.5 : 0;
+    if(breite && Math.abs(zielQ - h.q) < breite) zielQ = h.q + (zielQ >= h.q ? breite : -breite);
+    if(h.typ === 'rail' && jb.s > h.s - 3 && jb.s < h.s + story.abMass.RAIL_L + 1 && Math.abs(zielQ - h.q) < 2.2) zielQ = h.q + (jb.q >= h.q ? 2.4 : -2.4);
+  }
+  // Samu ist ein Koerper: nah bei ihm Abstand halten
+  if(Math.abs(A.s - jb.s) < 3 && Math.abs(zielQ - A.q) < 2) zielQ = A.q + (jb.q >= A.q ? 2.2 : -2.2);
+  zielQ = Math.max(-RAND, Math.min(RAND, zielQ));
+  if(!jb.luft){ jb.qv += (Math.max(-6, Math.min(6, (zielQ - jb.q) * 1.6)) - jb.qv) * Math.min(1, dt * 4); jb.q += jb.qv * dt; }
+  jb.q = Math.max(-RAND, Math.min(RAND, jb.q));
+  jb.s += jb.v * (jb.luft ? 1.15 : 1) * dt;
+  const o = story.abOrt(jb, jb.s, jb.q), grund = story.abGrund(o.x, o.z);
+  // Kicker / Mega unter ihm?
+  let auf = null, hKick = 0;
+  if(!jb.luft) for(const h of story.abHinder()) if((h.typ === 'rampe' || h.typ === 'mega') && jb.s > h.s - h.L && jb.s <= h.s && Math.abs(jb.q - h.q) < h.W / 2){ auf = h; hKick = h.H * (jb.s - (h.s - h.L)) / h.L; }
+  let spin = 0, flip = 0;
+  if(jb.luft){
+    jb.lt += dt; jb.vy -= SB.g * dt; jb.hh += jb.vy * dt;
+    const k = Math.min(1, jb.lt / (0.85 * jb.T)), e = k * k * (3 - 2 * k);
+    if(jb.trick){ flip = jb.trick.flip * Math.PI * 2 * e; spin = jb.trick.spin * Math.PI * 2 * e; }
+    if(jb.hh <= 0 && jb.lt > 0.25){ jb.luft = false; jb.hh = 0; jb.trick = null; schneePuff(o, 8); }
+    jb.y = grund + Math.max(0, jb.hh);
+  } else {
+    if(jb.rampe && jb.rampe !== auf && jb.s > jb.rampe.s - 0.5){
+      if(jb.rampe.typ === 'mega'){ megaJoshi(J, o); return; }
+      // abheben wie Samu ohne B: ~8 m ueber den Hang, ein Trick, Drehung vor dem Aufsetzen fertig
+      jb.luft = true; jb.lt = 0; jb.hh = jb.rampe.H; jb.vy = 8 + jb.v * 0.35;
+      jb.T = (jb.vy + Math.sqrt(jb.vy * jb.vy + 2 * SB.g * jb.hh)) / SB.g;
+      jb.trick = SURF_TRICKS[Math.floor(Math.random() * SURF_TRICKS.length)];
+    }
+    jb.rampe = auf;
+    jb.y = grund + hKick;
+  }
+  J.x = o.x; J.z = o.z;
+  const carve = -jb.qv * 0.06;                                         // in die Kurve legen
+  jbPose(J, o.x, jb.y, o.z, Math.atan2(o.tx, o.tz) + jb.qv * 0.03, jb.luft ? 0 : neigung(o), carve, spin, flip);
+  schneeSpur(o, !jb.luft && !auf, dt);
+}
+// Gefaelle in Fahrtrichtung (1,4 m Brett)
+function neigung(o){ const v = story.abGrund(o.x + o.tx * 0.7, o.z + o.tz * 0.7), h = story.abGrund(o.x - o.tx * 0.7, o.z - o.tz * 0.7); return Math.atan2(v - h, 1.4); }
+const _jq = new THREE.Quaternion(), _jq2 = new THREE.Quaternion(), _jq3 = new THREE.Quaternion(), _jq4 = new THREE.Quaternion(), _jp = new THREE.Vector3();
+function jbPose(J, x, y, z, yaw, neig, roll, spin, flip){
+  J.obj.quaternion.setFromAxisAngle(_sY, yaw).multiply(_jq.setFromAxisAngle(_sY, spin)).multiply(_jq2.setFromAxisAngle(_sX, flip - neig)).multiply(_jq3.setFromAxisAngle(_sZ, roll));
+  _jp.set(0, SURF_DREHPUNKT, 0).applyQuaternion(J.obj.quaternion); const g = fr.g;
+  J.obj.position.set(x - g.position.x - _jp.x, y + 0.03 + SURF_DREHPUNKT - _jp.y - g.position.y, z - g.position.z - _jp.z);
+}
+// Mega-Rampe: wie Samu weit hinaus, mit einem Trick im Bogen
+function megaJoshi(J, o){
+  jb.mega = { x: o.x, z: o.z, tx: o.tx, tz: o.tz, vh: 30 + jb.v, y: jb.y, vy: 16 + jb.v * 0.5, t: 0 };
+  jb.megaTrick = SURF_TRICKS[Math.floor(Math.random() * SURF_TRICKS.length)];
+}
+// Kantenspuren (je Kante ein Strich pro 0,6 m; in der Kurve nur die Innenkante) und Schneespray hinter dem Brett
+function schneeSpur(o, amBoden, dt){
+  const p = { x: o.x, z: o.z };
+  if(amBoden){
+    const qx = -o.tz * 0.13, qz = o.tx * 0.13, L = [p.x - qx, p.z - qz], R = [p.x + qx, p.z + qz], l = jb.spurLetzt;
+    if(!l || Math.hypot(p.x - l[4], p.z - l[5]) > 0.6){
+      if(l){ const P = jb.spurPos, i = (jb.spurN % 220) * 12, yl = story.abGrund(L[0], L[1]) + 0.05, yr = story.abGrund(R[0], R[1]) + 0.05, links = jb.qv < 2, rechts = jb.qv > -2;
+        P.set(links ? [l[0], l[6], l[1], L[0], yl, L[1]] : [l[0], -1e4, l[1], l[0], -1e4, l[1]], i);
+        P.set(rechts ? [l[2], l[7], l[3], R[0], yr, R[1]] : [l[2], -1e4, l[3], l[2], -1e4, l[3]], i + 6);
+        jb.spurN++; jb.spur.geometry.attributes.position.needsUpdate = true; jb.spur.geometry.setDrawRange(0, Math.min(jb.spurN, 220) * 4); }
+      jb.spurLetzt = [L[0], L[1], R[0], R[1], p.x, p.z, story.abGrund(L[0], L[1]) + 0.05, story.abGrund(R[0], R[1]) + 0.05];
+    }
+    jb.sprayT -= dt;
+    if(jb.sprayT <= 0 && jb.v > 4){ jb.sprayT = 0.035; let s = jb.spray.find(q => !q.m.visible);
+      if(!s && jb.spray.length < 50){ s = { m: new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 0), jb.sprayMat), v: new THREE.Vector3() }; scene.add(s.m); jb.spray.push(s); }   // global-ok
+      if(s){ const seite = (Math.random() < 0.5 ? -1 : 1) + jb.qv * 0.1; s.m.visible = true; s.t = 0; s.m.position.set(o.x - o.tx * 0.8, jb.y + 0.1, o.z - o.tz * 0.8);
+        s.v.set(-o.tx * jb.v * 0.25 - o.tz * seite * 2.5, 1.5 + Math.random() * 2, -o.tz * jb.v * 0.25 + o.tx * seite * 2.5); } }
+  } else jb.spurLetzt = null;
+  for(const s of jb.spray) if(s.m.visible){ s.t += dt; s.v.y -= 9.81 * dt; s.m.position.addScaledVector(s.v, dt); s.m.scale.setScalar(Math.max(0.1, 1 - s.t * 1.5)); if(s.t > 0.6) s.m.visible = false; }
+}
+function schneePuff(o, n){
+  for(let i = 0; i < n; i++){ let s = jb.spray.find(q => !q.m.visible); if(!s) return; const a = Math.random() * 6.28;
+    s.m.visible = true; s.t = 0; s.m.position.set(o.x, jb.y + 0.1, o.z); s.v.set(Math.cos(a) * 3, 1.5 + Math.random() * 2, Math.sin(a) * 3); }
 }
 
 // ---- Aufbau und Schritt -------------------------------------------------------------------------------------------
@@ -406,15 +563,19 @@ function aufbauen(){
   }));
 }
 function schritt(dt){
-  const S = story.surfLage && story.surfLage();
-  if(!hier() && !S){ if(fr.j) fr.j.obj.visible = fr.f.obj.visible = false; fr.jam = false; gitarre(false); return; }
+  const S = story.surfLage && story.surfLage(), A = story.abLage && story.abLage();
+  if(!hier() && !S && !A){ if(fr.j) fr.j.obj.visible = fr.f.obj.visible = false; fr.jam = false; gitarre(false); return; }   // Transall, Fallschirm: nicht zu sehen
   if(!fr.j || fr.g !== story.e6festland.g) aufbauen();
   const J = fr.j, F = fr.f; if(!J || !F || !J.obj.parent) return;
-  if(S && !sf.an && !surfStart(J, S)) return;
+  // Piste (Snowboard), Meer (Surfen), Strand – in dieser Reihenfolge
+  if(A && !jb.an && !S){ if(sf.an) surfEnde(J); if(!jbStart(J, A)) return; fuchsModus('strand'); }
+  if(!A && jb.an){ jbEnde(J); if(!S) strandSetzen(J); }
+  if(S && !sf.an && !jb.an && !surfStart(J, S)) return;
   if(!S && sf.an) surfEnde(J);
   const cp = camera.position, d = Math.hypot(J.x - cp.x, J.z - cp.z), dF = Math.hypot(F.x - cp.x, F.z - cp.z);
-  J.obj.visible = d < SICHT; F.obj.visible = dF < SICHT;
-  if(sf.an){ fr.jam = false; surfSchritt(J, dt, S); }
+  J.obj.visible = d < SICHT && !(jb.an && jb.weg); F.obj.visible = dF < SICHT;
+  if(jb.an){ fr.jam = false; jbSchritt(J, dt, A); }
+  else if(sf.an){ fr.jam = false; surfSchritt(J, dt, S); }
   else { joshiSchritt(J, dt); J.obj.rotation.set(0, J.yaw, 0); setzeIn(J); }
   fuchsSchritt(F, dt); setzeIn(F); fuchsHaltung(F);
   if(d < ANIM) J.mixer.update(dt);
@@ -424,14 +585,14 @@ function schritt(dt){
 
 // Grenzen: Samu und Barki laufen nicht durch die zwei hindurch (Joshi auf dem Wasser zaehlt nicht)
 if(story.tierQuelle) story.tierQuelle(() => {
-  if(!fr.j || !(hier() || sf.an)) return null;
+  if(!fr.j || !(hier() || sf.an || jb.an)) return null;
   const l = [];
-  if(!sf.an && fr.j.obj.visible) l.push({ x: fr.j.x, z: fr.j.z, y: evaFootY(fr.j.x, fr.j.z), r: JOSHI_R, h: JOSHI_H });
+  if(!sf.an && !jb.an && fr.j.obj.visible) l.push({ x: fr.j.x, z: fr.j.z, y: evaFootY(fr.j.x, fr.j.z), r: JOSHI_R, h: JOSHI_H });
   if(fr.f.obj.visible) l.push({ x: fr.f.x, z: fr.f.z, y: evaFootY(fr.f.x, fr.f.z), r: FUCHS_R, h: 0.5 });
   return l;
 });
 story.surfJoshiTest = () => sf;                                    // Tests
-story.strandFreundeTest = () => fr;                                // Tests
+story.strandFreundeTest = () => Object.assign(fr, { tanzMusik: tanz });   // Tests
 
 let tVor = 0;
 const startVorher = window.STORY_START;
@@ -439,7 +600,8 @@ window.STORY_START = function(){
   const loopOrig = loop;
   loop = function(){
     const r = loopOrig.apply(this, arguments);
-    const t = performance.now(), dt = tVor ? Math.min(0.1, (t - tVor) / 1000) : 0; tVor = t;
+    // Zeit wie die Engine (dtCam): bei niedriger Bildrate bremst sie ihre Zeit – Joshi faehrt sonst Samu davon (Live-Pruefung)
+    const t = performance.now(), dt = tVor ? (typeof dtCam === 'number' ? dtCam : Math.min(0.1, (t - tVor) / 1000)) : 0; tVor = t;   // global-ok: Engine
     const pause = document.getElementById('hint') && document.getElementById('hint').classList.contains('show');
     if(pause) gitarre(false); else schritt(dt);
     return r;
