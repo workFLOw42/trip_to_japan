@@ -108,6 +108,10 @@ $out = ($head -join "`n") + "`n" +
   '<script src="finale_snd.js"></script>' + "`n" +
   '<script src="finale.js"></script>' + "`n" +
   '<script src="abspann.js"></script>' + "`n" +
+  '<script src="joshi_glb.js"></script>' + "`n" +
+  '<script src="fuchsi_glb.js"></script>' + "`n" +
+  '<script src="gitarre_snd.js"></script>' + "`n" +
+  '<script src="strandfreunde.js"></script>' + "`n" +
   '<script src="statistik.js"></script>' + "`n" +
   '<script src="engine/engine.js"></script>' + "`n" +
   "</body>`n</html>`n"

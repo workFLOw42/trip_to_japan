@@ -4755,7 +4755,7 @@ function clearStrandleben(){
 const UNTERGRUND = {
   beton:  { staub: 0xb9b2a0, schatten: 1.0 },
   steg:   { staub: 0xb9b2a0, schatten: 1.0 },
-  erde:   { staub: 0xa88a62, schatten: 1.0 },
+  erde:   { staub: 0xcbb088, schatten: 1.0 },                               // heller als der Boden (auf Schotter sonst unsichtbar)
   schnee: { staub: 0xf4f6f9, schatten: 0.8 },
   sand:   { staub: 0xdcc890, schatten: 0.95 },
   wasser: { staub: null,     schatten: 0.35, wasser: true },                  // an der Oberflaeche: Ringe und Gischt
@@ -4911,7 +4911,8 @@ function flugzeugSpur(dt){
   F.t -= dt; if(F.t > 0 && !aufgesetzt) return;
   let takt = 1;
   for(const seite of [-1, 1]){ const x = state.pos.x + qx * seite * sp - fx * F.g * 0.15, z = state.pos.z + qz * seite * sp - fz * F.g * 0.15;
-    takt = spurAn(x, z, state.pos.y, F.g, v, -fx, -fz);
+    takt = spurAn(x, z, state.pos.y, F.g * 1.4, v * 1.5, -fx, -fz);                 // Raeder wirbeln mehr auf als Fuesse
+    if(v > 12) spurAn(x - fx * 1.2, z - fz * 1.2, state.pos.y, F.g * 1.1, v * 1.5, -fx, -fz);
     if(aufgesetzt){ for(let i = 0; i < 3; i++) spurAn(x - fx * i * 0.8, z - fz * i * 0.8, state.pos.y, F.g * 1.3, Math.max(v, 25), -fx, -fz); } }
   F.t = Math.max(0.05, takt * 0.5);
 }
@@ -6520,7 +6521,7 @@ function updateShadow(){
   // 5,5 m ist die halbe Spannweite des Umrisses (shWing.scale.x), das groesste Mass des Schattens.
   // Nur ueber offenem Wasser die Wellen abtasten: an Land und auf dem TRAEGERDECK ist die Flaeche
   // eben, und ein seaYAt in der Naehe des Traegers wuerde den Schatten vom Deck ins Wasser ziehen.
-  let shadowY = surfY + (state.onGround ? 0.03 : 0.15);       // am Boden direkt auf der Flaeche (unter den Raedern)
+  let shadowY = surfY + (state.onGround ? 0.06 : 0.15);       // am Boden direkt auf der Flaeche (unter den Raedern; ueber Auflagen bis 3 cm)
   if(erde && !overLand && !onCar && eigen === null){
     for(let a = 0; a < 6.283; a += Math.PI/4){
       const s2 = seaYAt(state.pos.x + Math.sin(a)*5.5, state.pos.z + Math.cos(a)*5.5);
@@ -11382,8 +11383,10 @@ const shadowSoftTex = (() => {
   g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(c);
 })();
+// polygonOffset -4: vor Bodenauflagen der Spiele (Piste, Wege: -3) – sonst verschwand der Schatten des rollenden Flugzeugs auf der
+// Schotterpiste im Geheimland stellenweise (Live-Befund 23.10.2026: "der Schatten verhaelt sich komisch")
 const shadowMat = new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.3, map:shadowSoftTex,
-  depthWrite:false, depthTest:true, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2 });
+  depthWrite:false, depthTest:true, polygonOffset:true, polygonOffsetFactor:-4, polygonOffsetUnits:-4 });
 const planeShadow = new THREE.Group();
 planeShadow.renderOrder = 999;
 const shBody = new THREE.Mesh(new THREE.CircleGeometry(1, 24), shadowMat);
@@ -11418,7 +11421,7 @@ scene.add(planeShadow);
 // Damit er nicht im Wasser flackert, liegt er parallel zur Wellenflaeche (siehe updateOvalShadow) —
 // eine waagerechte Scheibe wuerde am Rand eintauchen, gemessen bis 0,54 m (C:/tmp/dt.js).
 const ovalShadowMat = new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.3, map:shadowSoftTex,
-  depthWrite:false, depthTest:true, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2 });
+  depthWrite:false, depthTest:true, polygonOffset:true, polygonOffsetFactor:-4, polygonOffsetUnits:-4 });   // vor Bodenauflagen (-3)
 // Wieder ein VOLLER Kreis. Vorher fehlte das vordere Stueck, damit der Schatten nicht ueber dem
 // eigenen Rumpf liegt — das war aber nur ein Pflaster gegen depthTest:false und sah als V-Kerbe
 // kuenstlich aus. Mit depthTest verdeckt das Objekt seinen Schatten selbst, und der Kreis darf
@@ -12812,6 +12815,104 @@ function readInput() {
   return { pitch, roll, yaw };
 }
 
+// ---- Verfolgerkamera fuer Kunstflug (Erde) – Engine-Standard seit 23.10.2026 (vorher nur in Trip to Japan) ---------------------
+// Nur fuer kunstflugfaehige Flieger (spec.aero: Mustang, Eurofighter …) – die anderen fliegen keinen Looping. Abschalten: kunstflugAus
+// (oder STORY.kunstflugAus eines Spiels, z. B. in der Vulkanhoehle mit eigener Kamera).
+// Live-Wunsch: im Steilflug verdrehte sich die Kamera, bei 90 Grad sprang sie einmal um den Flieger
+// herum (gemessen 125 Grad in einem Bild), im Looping klappte das Bild oben um (178 Grad). Ursache in der
+// Engine: sie zerlegt die Fluglage in Euler-Winkel (Gieren/Nicken, Nicken auf +-51 Grad gekappt) – bei
+// senkrechter Nase ist das Gieren unbestimmt, in Rueckenlage dreht das Gieren um 180 Grad.
+// Hier ohne Euler: das Kamera-Oben wird nur MITGESCHOBEN (senkrecht zur Blickrichtung gehalten), es dreht
+// nie mit der Rolle mit. Steil und in der Schraube steht die Kamera also still und der Flieger dreht sich
+// im Bild; im Looping faehrt sie ueber Kopf mit, ohne umzuklappen. Erst wenn der Flieger wieder flach UND
+// aufrecht fliegt, richtet sie sich auf den waagerechten Horizont aus und gibt an die Engine-Kamera ab
+// (gewohntes Bild in allen Etappen). Abstand und Nachziehen wie in der Engine.
+const KAM_EIN = 0.7;                                 // |sin Nicken| ~44 Grad: uebernehmen
+const KAM_FLACH = 0.35;                              // |sin Nicken| ~20 Grad: flach -> zurueck an die Engine
+const KAM_AUFRICHT = 3.2;                            // rad/s hoechstens beim Aufrichten (~180 Grad/s)
+const KAM_FEST = 0.6;                                 // |sin Nicken| ~37 Grad: darunter haelt die Kamera den Horizont fest (wie die Engine)
+const KAM_HALT = 0.87;                               // |sin Nicken| ~60 Grad: darueber steht das Kamera-Oben still
+const kam = { an: false, up: new THREE.Vector3(0, 1, 0), back: new THREE.Vector3(0, 0, 1), zurueck: 0,
+  pos: new THREE.Vector3(), upAlt: new THREE.Vector3(0, 1, 0) };            // letzte eigene Lage (fuer die Rueckgabe)
+const _kF = new THREE.Vector3(), _kU = new THREE.Vector3(), _kW = new THREE.Vector3(), _kD = new THREE.Vector3(), _kX = new THREE.Vector3();
+let kunstflugAus = false;
+function kunstflugMoeglich(){
+  return !kunstflugAus && !(window.STORY && window.STORY.kunstflugAus) && spec && spec.aero && !eva && !parachute && sideView === 0 && locale === 'earth' && !isSub() && !spec.boat && !state.crashed && !state.onGround;
+}
+// true = diese Kamera hat das Bild gemacht (dann die Engine-Kamera nicht rufen)
+function kunstflugKamera(camOrig){
+  if(!kunstflugMoeglich()){ kam.an = false; kam.zurueck = 0; return false; }
+  _kF.set(0, 0, -1).applyQuaternion(state.quat);                 // Nase
+  _kU.set(0, 1, 0).applyQuaternion(state.quat);                  // Flieger-Oben
+  const steil = Math.abs(_kF.y);
+  if(!kam.an){
+    if(steil < KAM_EIN){
+      if(kam.zurueck <= 0) return false;
+      // Rueckgabe an die Engine: deren Bild rechnen lassen und ueber 0,5 s von der letzten eigenen Lage
+      // dorthin ueberblenden (sonst ruckt es um den Unterschied der beiden Kameras)
+      camOrig();
+      kam.zurueck = Math.max(0, kam.zurueck - (dtCam || 1 / 60) / 0.5);
+      const m = kam.zurueck * kam.zurueck * (3 - 2 * kam.zurueck);
+      const ref0 = planeCamRef();
+      _kD.copy(camera.position).sub(ref0).lerp(kam.pos, m);              // kam.pos = Versatz zum Flieger
+      camera.position.copy(ref0).add(_kD); camera.up.lerp(kam.upAlt, m).normalize(); camera.lookAt(ref0);
+      return true;
+    }
+    // Uebernahme ab der aktuellen Kamera (kein Sprung): Rueck- und Oben-Richtung so, wie das Bild gerade
+    // WIRKLICH steht (camera.up ist nur der Wunsch an lookAt, das Bild-Oben steht in der Kameramatrix)
+    kam.an = true; kam.zurueck = 0;
+    kam.back.copy(camera.position).sub(planeCamRef()).normalize();
+    kam.up.set(0, 1, 0).applyQuaternion(camera.quaternion);
+  }
+  const dt = dtCam || 1 / 60;
+  // Blickrichtung: hinter dem Flieger entlang der Nase, weich nachgezogen
+  kam.back.lerp(_kD.copy(_kF).negate(), frameLerp(0.18, dt)).normalize();
+  // Oben mitschieben: senkrecht zur neuen Blickrichtung (Paralleltransport, keine Rollkopplung)
+  kam.up.addScaledVector(kam.back, -kam.up.dot(kam.back));
+  if(kam.up.lengthSq() < 1e-6) kam.up.copy(_kU);
+  kam.up.normalize();
+  // Zum Horizont aufrichten, sobald die Nase nicht mehr (fast) senkrecht steht: je flacher, desto schneller.
+  // Gedreht wird das Kamera-Oben UM DIE BLICKACHSE (kuerzester Weg, hoechstens KAM_AUFRICHT rad/s) – ein Lerp kam bei
+  // grossem Abstand nicht voran: nach Steigflug + Abkippen ueber den Ruecken + Ausrollen stand das Bild dauerhaft auf
+  // dem Kopf (gemessen 169 Grad, Live-Test: "man verliert die Orientierung").
+  // Ziel ist die Lage des Fliegers: liegt er (wieder) aufrecht, richtet sich die Kamera nach ihm; auf dem Ruecken im
+  // Looping (Flieger UND Kamera ueber Kopf) bleibt sie, damit das Bild oben nicht umklappt. Senkrecht (steil > KAM_HALT)
+  // steht sie still, dort dreht sich die Welt um den Flieger.
+  const horizont = _kW.set(0, 1, 0).addScaledVector(kam.back, -kam.back.y);
+  if(horizont.lengthSq() > 1e-4 && steil < KAM_HALT){
+    horizont.normalize();
+    const fliegerKopf = _kU.y < -0.3;
+    if(!(fliegerKopf && kam.up.y < 0)){                             // Looping oben: beide ueber Kopf -> stehen lassen
+      // Ziel: aufrecht fliegend der Horizont; auf dem Ruecken (Kamera noch aufrecht) ebenfalls der Horizont
+      const s = 1 - Math.max(0, (steil - KAM_FLACH) / (KAM_HALT - KAM_FLACH));   // 1 flach .. 0 senkrecht
+      const blick = _kD.copy(kam.back).negate();
+      // Vorzeichen-Winkel von kam.up zum Horizont um die Blickachse
+      const quer = _kX.crossVectors(kam.up, horizont);
+      const winkel = Math.atan2(quer.dot(blick), kam.up.dot(horizont));
+      // Flach (unter KAM_FEST): Horizont FEST halten wie die Engine – sonst hinkte das Bild beim Ausrollen nach dem
+      // Abkippen ueber den Ruecken 1,5 s hinterher (gemessen bis 107 Grad verdreht). Dazwischen weich, schnell.
+      const schritt = steil < KAM_FEST ? winkel
+        : Math.sign(winkel) * Math.min(Math.abs(winkel) * frameLerp(0.06 + 0.2 * s, dt) + 0.004, KAM_AUFRICHT * dt, Math.abs(winkel));
+      if(Math.abs(winkel) > 1e-4) kam.up.applyAxisAngle(blick, schritt).normalize();
+      if(steil < KAM_FLACH && _kU.y > 0.3 && kam.up.dot(horizont) > 0.995){ kam.an = false; kam.zurueck = 1; return kunstflugKamera(camOrig); }
+    }
+  }
+  const cfg = viewConfigs[viewMode], cc = camCfg();
+  const ref = planeCamRef();
+  const desired = _kD.copy(ref).addScaledVector(kam.back, cfg.dist * cc.dist + camBackExtra()).addScaledVector(kam.up, cfg.height * cc.hgt);
+  if(desired.y < 2) desired.y = 2;
+  const k = frameLerp(Math.min(0.5, cfg.lerp * (1 + state.vel.length() / 120)), dt);
+  _camOff.copy(camera.position).sub(ref);
+  _camDes.copy(desired).sub(ref);
+  camera.position.copy(ref).add(_camOff.lerp(_camDes, k));
+  camera.up.copy(kam.up);
+  camera.lookAt(ref);
+  kam.pos.copy(camera.position).sub(ref); kam.upAlt.copy(camera.up);   // Versatz + Oben (fuer die Rueckgabe)
+  return true;
+}
+// Kunstflug-Kamera vor die Verfolgerkamera haengen (die Spiele haengen sich spaeter davor, ihre Huellen rufen diese hier)
+const _updateCameraOhneKunstflug = updateCamera;
+updateCamera = function(){ if(kunstflugKamera(_updateCameraOhneKunstflug)) return; return _updateCameraOhneKunstflug.apply(this, arguments); };
 // ---------- Ansichten ----------
 let viewMode=0;
 let sideView=0;   // 0=normal, -1=von links, +1=von rechts (D-Pad links/rechts gehalten)
@@ -14218,7 +14319,10 @@ function updateHUD(){
   // Bezugsobjekt: draußen der Astronaut, sonst der Flieger. Vorher stand hier immer state.* — das
   // gehört aber dem STEHENDEN Flieger, das HUD zeigte also dessen Höhe und Tempo 0, während man lief.
   const hp = eva ? eva.group.position : state.pos;
-  const altRef = (GROUNDS[locale] || locale === 'death') ? surfaceY(hp.x, hp.z) : 0.3;
+  // eigener Boden eines Spiels (schattenBoden, z. B. die Vulkanhoehle in Trip to Japan): auch der Hoehenmesser zaehlt ab IHM (Live-Befund
+  // 23.10.2026: dort zeigte er 137 m – gemessen ab dem Meer, die Roehre liegt 100 m hoch)
+  const eigenBoden = schattenBoden(hp.x, hp.z);
+  const altRef = eigenBoden !== null ? eigenBoden : (GROUNDS[locale] || locale === 'death') ? surfaceY(hp.x, hp.z) : 0.3;
   // Im U-Boot die TIEFE unter der Wasseroberflaeche, also der Wert nach unten statt nach oben.
   // Bezug ist die sichtbare Flaeche an SEINER Stelle (seaSurfaceY, Gittermitte = Fahrzeug), nicht
   // die Null-Ebene: bei 1,6 m Duenung waere die Anzeige sonst dauernd um bis zu 1,6 m daneben und

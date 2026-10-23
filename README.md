@@ -125,6 +125,11 @@ Startbahn mit dem **Alpha Jet**. Voraus der **Mount Fuji** (2 km hoch, steht im 
   Surfbrett im Sand (Ring „Surfen“, kommt bald), Lagerfeuer mit Samurai, eine Samurai-Gruppe, Godzillas; dahinter das Vorfeld
   mit der C-400 (Pfeil, Schild noch leer), die Landebahn, der Bahnhof **Fukuoka-Beach** (Gleis entlang der Küste) und die
   Stadt mit einem 130 m hohen Riesen-Godzilla.
+- **Joshi und Fuchsi (jedes Ende):** Am Strand rund um das Surfbrett laufen Joshi und Fuchsi aus „Das Geheimland“ umher. Joshi
+  schaut sich um und kniet sich hin, dann kommt Fuchsi und setzt sich zu ihm. Tanzt Samu in der Nähe (X), spielt Joshi
+  Luftgitarre, Fuchsi und Barki tanzen, und Samu tanzt endlos weiter (wie mit den Aliens auf dem Mond), bis er weiterläuft.
+  Geht Samu surfen, surft Joshi ~10 m neben ihm mit und springt eigene Tricks (Salto vorwärts/rückwärts, 360 links/rechts,
+  Salto mit 360) – Fuchsi wartet am Strand.
 
 Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, gelb = Etappen, lila = Fukuoka; am Ende von Etappe 6 wird daraus die 🌊).
 
@@ -164,6 +169,7 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `etappe6c.js` | Etappe 6c: Shinkansen – Weichen wählen (eigene Strecke, 2 → 3 Gleise, HUD, Notbremsung, Einfahrt) |
 | `finale.js` | Finale: Fuji-Sprung, Snowboard-Abfahrt, Surfen (Brandungswellen, Monsterwellen, Meoto-Iwa), Rundflug |
 | `abspann.js` | Ende der Reise: Reiselog, Abspann, „Ab zum Strand“, Stufe 5 am Strand |
+| `strandfreunde.js` | Joshi und Fuchsi am Fukuoka-Beach: laufen umher, knien, Luftgitarre zu Samus Tanz, Joshi surft mit |
 | `statistik.js` | Statistiken: alle Spiele (Startmenü „Statistiken“) und dieses Spiel (Abspann) – Reisezeiten, Mond/Mars, Bestzeiten, Monsterwellen, Tricks; nur echte Spiele, nur Gespieltes |
 | `etappe6b.js` | Etappe 6b: Höhle im Vulkan als eigene Szene (Autopilot, kurvige Röhre in Abschnitten, Ausgang ins Licht), Filmsequenz mit Ausbruch, Landung am Strand. Der frühere Senkrechtschacht liegt in `_intern/archiv/e6b_senkrechtschacht/` |
 | `flucht_glb.js` | Schnellboot und Polizeiboot (verkleinert) als Base64 |
@@ -195,7 +201,7 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `sw.js`, `manifest.json` | Offline-Cache und App-Installation (PWA) |
 | `ENGINE_RISIKEN.md` | bekannte Stolperstellen der Engine-Übernahme |
 
-Ladeordnung: `samu_glb.js` → `samu_kopf.js` → `story.js` → `objekte.js` → `haeuser.js` → `spuren.js` → `etappe1.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `meeresschildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `shiba_glb.js` → `bellen_snd.js` → `begleiter.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `surfboard_glb.js` → `campfire_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `etappe6c.js` → `snowboard_glb.js` → `wolf_glb.js` → `finale_snd.js` → `finale.js` → `abspann.js` → `statistik.js` → `engine/engine.js`. Die Engine ruft am Ende
+Ladeordnung: `samu_glb.js` → `samu_kopf.js` → `story.js` → `objekte.js` → `haeuser.js` → `spuren.js` → `etappe1.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `meeresschildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `shiba_glb.js` → `bellen_snd.js` → `begleiter.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `surfboard_glb.js` → `campfire_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `etappe6c.js` → `snowboard_glb.js` → `wolf_glb.js` → `finale_snd.js` → `finale.js` → `abspann.js` → `joshi_glb.js` → `fuchsi_glb.js` → `gitarre_snd.js` → `strandfreunde.js` → `statistik.js` → `engine/engine.js`. Die Engine ruft am Ende
 ihres Boot-Blocks `STORY_HOOK` (Wrapper setzen) und `STORY_START` (Startszene) auf – die zwei Zeilen fügt das Build-Skript ein.
 
 **Welten:** Jede Etappe baut ihre Kulisse in eine eigene Gruppe – `story.welt(n).add(obj)`, nie `scene.add(obj)`.
@@ -257,6 +263,7 @@ NC-Lizenzen bedeuten: **nicht kommerziell** – das Spiel darf mit diesen Werken
 | [Shiba Inu Doggy](https://sketchfab.com/3d-models/shiba-inu-doggy-87a3ef91e9074ba996176d91f6863e6b) | **aaadragon** | CC-BY-4.0 | Hund-Begleiter |
 | [Alien Hip Hop Dancing](https://sketchfab.com/3d-models/alien-hip-hop-dancing-fac7a402b9f940aa955da87f8eb0619c) | **nonny** | CC-BY-4.0 | großes tanzendes Alien auf dem Mond |
 | [Funky Alien (Rigged & Animated)](https://sketchfab.com/3d-models/funky-alien-rigged-animated-09150cbfee3148748a8ea15e9066a1cb) | **jungle_jim** | CC-BY-4.0 | kleines tanzendes Alien auf dem Mond |
+| [Fox](https://sketchfab.com/3d-models/fox-39f97fe58f0b47ce80b6e02814001dd7) | **pxltiger** | CC-BY-4.0 | Fuchsi am Fukuoka-Beach (nur die benutzten Animationen) |
 | [Speedboat n°2](https://sketchfab.com/3d-models/speedboat-n2-66da3d79c45c41719c19fb80d0009bef) | **Jonathan Geoffroy** | CC-BY-NC-4.0 | Schnellboot der Flucht (Etappe 4, verkleinert) |
 | [Police Boat](https://sketchfab.com/3d-models/police-boat-959e50ef12a546d8a203182c4ccef17a) | **gogiart** (agt14032013) | CC-BY-4.0 | Polizeiboot (verkleinert, Blaulicht ergänzt) |
 | [N700-3000 Series Shinkansen](https://sketchfab.com/3d-models/n700-3000-series-shinkansen-f70820be44e0467d8b1614f2aa3045bd) | **Layo** (bciarfello) | CC-BY-4.0 | Shinkansen (Etappe 6, gekürzt) |
@@ -320,6 +327,7 @@ NC-Lizenzen bedeuten: **nicht kommerziell** – das Spiel darf mit diesen Werken
 | Atlas Thailand (Pixabay-ID 562340) | **vadim_makes_sound** (Pixabay) | Pixabay-Lizenz | Musik Hafen, Etappe 4 |
 | Chinese Flute Relaxing Music (short, Pixabay-ID 120917) | **nourishedbymusic** (Pixabay) | Pixabay-Lizenz | Musik Etappe 5 |
 | Ancient Japan (Pixabay-ID 492751) | **alec_koff** (Pixabay) | Pixabay-Lizenz | Musik Etappe 6 |
+| Punk Rock Guitar Loop (Pixabay-ID 278767) | **idoberg** (Pixabay) | Pixabay-Lizenz | Joshis Luftgitarre am Fukuoka-Beach |
 
 ### Geräusche
 
@@ -343,8 +351,9 @@ NC-Lizenzen bedeuten: **nicht kommerziell** – das Spiel darf mit diesen Werken
 
 | Werk | Urheber/in | Lizenz | wofür |
 |---|---|---|---|
+| Spielfigur Joshi | eigenes Foto (T-Pose), freigestellt und als Comic-Figur gezeichnet mit **Google Gemini**, daraus ein 3D-Modell mit dem Bild-zu-3D-Dienst von **[MakerWorld](https://makerworld.com)** (Bambu Lab), fürs Animieren aufbereitet | eigene Figur (nach den Nutzungsbedingungen der Dienste) | Joshi am Fukuoka-Beach |
 | Spielfigur Samu | eigenes Foto (T-Pose), freigestellt und als Comic-Figur gezeichnet mit **Google Gemini**, daraus ein 3D-Modell mit dem Bild-zu-3D-Dienst von **[MakerWorld](https://makerworld.com)** (Bambu Lab), fürs Animieren aufbereitet | eigene Figur (nach den Nutzungsbedingungen der Dienste) | die Spielfigur Samu |
-| [Mixamo](https://www.mixamo.com) (Auto-Rigging und Animationen) | **Adobe** | Mixamo-Nutzungsbedingungen (lizenzfrei nutzbar) | Skelett und 17 Bewegungen der Spielfigur Samu |
+| [Mixamo](https://www.mixamo.com) (Auto-Rigging und Animationen) | **Adobe** | Mixamo-Nutzungsbedingungen (lizenzfrei nutzbar) | Skelett und 17 Bewegungen der Spielfigur Samu, Skelett und 6 Bewegungen von Joshi |
 | [three.js](https://threejs.org) r128 inkl. GLTFLoader | **three.js authors** | MIT | 3D-Darstellung |
 | Web Speech API (Stimmen des Browsers/Betriebssystems) | Browser-/OS-Hersteller | – | Sprachausgabe |
 

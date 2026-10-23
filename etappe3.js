@@ -686,10 +686,16 @@ function skVorlage(win, lang, lauf, fertig){
     const mess = () => { const c = clip(lauf), mx = new THREE.AnimationMixer(o); if(c){ mx.clipAction(c).play(); mx.setTime(c.duration * 0.3); }
       const b = new THREE.Box3().setFromPoints(orcaPunkte(o)); mx.stopAllAction(); mx.uncacheRoot(o); return b; };   // global-ok: Engine
     const s = mess().getSize(new THREE.Vector3()); o.scale.multiplyScalar(lang / Math.max(0.001, s.x, s.z));
-    const lift = Math.max(0, -mess().min.y);
+    // je Clip die tiefste Stelle ueber die ganze Animation (Live-Befund 23.10.2026: die Babys steckten mit dem Hinterteil im Boden –
+    // gemessen war nur ein Moment des Laufens); beim Bewegen gilt der Wert des laufenden Clips
+    const liftJe = {};
+    for(const c of clips){ const mx = new THREE.AnimationMixer(o); mx.clipAction(c).play(); let lo = Infinity;
+      for(let i = 0; i < 10; i++){ mx.setTime(c.duration * i / 10); lo = Math.min(lo, new THREE.Box3().setFromPoints(orcaPunkte(o)).min.y); }   // global-ok: Engine
+      mx.stopAllAction(); mx.uncacheRoot(o); liftJe[c.name.split('|').pop()] = Math.max(0, -lo); }
+    const lift = liftJe[lauf] || Math.max(0, -mess().min.y);
     o.traverse(m => { if(m.isMesh){ m.frustumCulled = false; m.castShadow = false; } });
     const tpl = new THREE.Group(); tpl.add(o);
-    fertig({ tpl, clip, lift, lang });
+    fertig({ tpl, clip, lift, liftJe, lang });
   }, (e) => console.warn('Schildkroeten-GLB', win, e));
 }
 function ladeSchildkroeten(){
@@ -776,7 +782,8 @@ function updateSchildkroeten(dt){
     const nass = skImWasser(t.x, t.z);
     const bootNah = nass && isBoat() && !eva && Math.hypot(state.pos.x - t.x, state.pos.z - t.z) < KROKO_TAUCH_R;   // global-ok: Engine
     t.tauch += ((bootNah ? 1 : 0) - t.tauch) * Math.min(1, dt * (bootNah ? 1.6 : 0.5));
-    const ziel = nass ? Math.max(bodenY(t.x, t.z) + 0.3, WASSER_Y - SK_OBEN - t.tauch * SK_TAUCH) : bodenY(t.x, t.z) + A.lift * t.sc;
+    const lj = (A.liftJe && t.cur && A.liftJe[t.cur.split('|').pop()] !== undefined) ? A.liftJe[t.cur.split('|').pop()] : A.lift;
+    const ziel = nass ? Math.max(bodenY(t.x, t.z) + 0.3, WASSER_Y - SK_OBEN - t.tauch * SK_TAUCH) : bodenY(t.x, t.z) + lj * t.sc;
     t.y += (ziel - t.y) * Math.min(1, dt * 2);
     t.k.position.set(t.x, t.y, t.z);
     if(dCam < 120) t.mx.update(dt);

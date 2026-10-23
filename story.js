@@ -532,7 +532,7 @@ function updateSamu(dt){
     // Live-Wunsch 19.10.2026: tanzt die Alien-Gruppe mit (aliens.js), hoert Samu nicht nach dem einen Durchgang auf, sondern
     // tanzt immer weiter – bis der Stick ihn bewegt oder eine andere Taste kommt (A springt, B kniet, Y Twirl, Moonwalk;
     // alle setzen tricks.aktiv selbst um). Der Clip faengt dann einfach von vorn an, die Hueftkurve mit ihm (tricks.w).
-    if(a && tricks.aktiv === 'tanz' && story.aliens && story.aliens.gruppe && tricks.t >= a.getClip().duration - TRICK_AUSBLENDEN){
+    if(a && tricks.aktiv === 'tanz' && ((story.aliens && story.aliens.gruppe) || (story.strandFreunde && story.strandFreunde.jam)) && tricks.t >= a.getClip().duration - TRICK_AUSBLENDEN){
       a.reset(); a.play(); tricks.t = 0; tricks.w = null; return;
     }
     if(a && tricks.t < a.getClip().duration - TRICK_AUSBLENDEN) return;   // kurz vor Schluss schon zurueckblenden
@@ -1282,7 +1282,7 @@ const TAUCH_V     = 1.4;     // m/s auf und ab
 // Live-Befund 20.10.2026: "beim Schwimmen ist Samu oft genau unter der Wasserlinie, ueber Wasser unsichtbar". Gemessen liegt sein
 // Koerper in der Schwimm-Haltung 0,2 bis 0,9 m ueber dem Ursprung (Mitte 0,6) – mit 0,9 m Tiefe reichte selbst der hoechste Punkt
 // nur bis an die Oberflaeche. 0,65: Koerpermitte knapp unter Wasser, Ruecken und Kopf (obere 20 %) 0,1 bis 0,25 m darueber.
-const SCHWIMM_TIEF = 0.65;   // m: so tief liegt der Ursprung an der Oberflaeche im Wasser
+const SCHWIMM_TIEF = 0.70;   // m: so tief liegt der Ursprung an der Oberflaeche im Wasser (Live-Wunsch 23.10.2026: 5 cm tiefer)
 const SCHWIMM_GRUND = 0.6;  // m: so dicht taucht er an den Grund (Koerper in der Schwimmhaltung ab 0,2 m ueber dem Ursprung; vorher 1,0)
 const SCHWIMM_STEH = 0.8;   // m: so flach (Grund unter der Oberflaeche) steht er wieder (wie WAT_TIEF / WAT3)
 const SCHWIMM_STEG = 0.4;   // m: liegt der Boden hoeher ueber dem Wasser, ist es ein Steg ueber ihm (Planken 0,75 m)
@@ -1929,98 +1929,8 @@ function himmelUpdate(dt){
 function himmelWeg(){ for(const e of himmel) removePlane(e); himmel.length = 0; }
 story.himmel = himmelUpdate;
 story.himmelWeg = himmelWeg;
-// ---- Verfolgerkamera fuer Kunstflug (Erde) -------------------------------------------------------
-// Live-Wunsch: im Steilflug verdrehte sich die Kamera, bei 90 Grad sprang sie einmal um den Flieger
-// herum (gemessen 125 Grad in einem Bild), im Looping klappte das Bild oben um (178 Grad). Ursache in der
-// Engine: sie zerlegt die Fluglage in Euler-Winkel (Gieren/Nicken, Nicken auf +-51 Grad gekappt) – bei
-// senkrechter Nase ist das Gieren unbestimmt, in Rueckenlage dreht das Gieren um 180 Grad.
-// Hier ohne Euler: das Kamera-Oben wird nur MITGESCHOBEN (senkrecht zur Blickrichtung gehalten), es dreht
-// nie mit der Rolle mit. Steil und in der Schraube steht die Kamera also still und der Flieger dreht sich
-// im Bild; im Looping faehrt sie ueber Kopf mit, ohne umzuklappen. Erst wenn der Flieger wieder flach UND
-// aufrecht fliegt, richtet sie sich auf den waagerechten Horizont aus und gibt an die Engine-Kamera ab
-// (gewohntes Bild in allen Etappen). Abstand und Nachziehen wie in der Engine.
-const KAM_EIN = 0.7;                                 // |sin Nicken| ~44 Grad: uebernehmen
-const KAM_FLACH = 0.35;                              // |sin Nicken| ~20 Grad: flach -> zurueck an die Engine
-const KAM_AUFRICHT = 3.2;                            // rad/s hoechstens beim Aufrichten (~180 Grad/s)
-const KAM_FEST = 0.6;                                 // |sin Nicken| ~37 Grad: darunter haelt die Kamera den Horizont fest (wie die Engine)
-const KAM_HALT = 0.87;                               // |sin Nicken| ~60 Grad: darueber steht das Kamera-Oben still
-const kam = { an: false, up: new THREE.Vector3(0, 1, 0), back: new THREE.Vector3(0, 0, 1), zurueck: 0,
-  pos: new THREE.Vector3(), upAlt: new THREE.Vector3(0, 1, 0) };            // letzte eigene Lage (fuer die Rueckgabe)
-const _kF = new THREE.Vector3(), _kU = new THREE.Vector3(), _kW = new THREE.Vector3(), _kD = new THREE.Vector3(), _kX = new THREE.Vector3();
-function kunstflugMoeglich(){
-  return !story.kunstflugAus && !eva && !parachute && sideView === 0 && locale === 'earth' && !isSub() && !spec.boat && !state.crashed && !state.onGround;
-}
-// true = diese Kamera hat das Bild gemacht (dann die Engine-Kamera nicht rufen)
-function kunstflugKamera(camOrig){
-  if(!kunstflugMoeglich()){ kam.an = false; kam.zurueck = 0; return false; }
-  _kF.set(0, 0, -1).applyQuaternion(state.quat);                 // Nase
-  _kU.set(0, 1, 0).applyQuaternion(state.quat);                  // Flieger-Oben
-  const steil = Math.abs(_kF.y);
-  if(!kam.an){
-    if(steil < KAM_EIN){
-      if(kam.zurueck <= 0) return false;
-      // Rueckgabe an die Engine: deren Bild rechnen lassen und ueber 0,5 s von der letzten eigenen Lage
-      // dorthin ueberblenden (sonst ruckt es um den Unterschied der beiden Kameras)
-      camOrig();
-      kam.zurueck = Math.max(0, kam.zurueck - (dtCam || 1 / 60) / 0.5);
-      const m = kam.zurueck * kam.zurueck * (3 - 2 * kam.zurueck);
-      const ref0 = planeCamRef();
-      _kD.copy(camera.position).sub(ref0).lerp(kam.pos, m);              // kam.pos = Versatz zum Flieger
-      camera.position.copy(ref0).add(_kD); camera.up.lerp(kam.upAlt, m).normalize(); camera.lookAt(ref0);
-      return true;
-    }
-    // Uebernahme ab der aktuellen Kamera (kein Sprung): Rueck- und Oben-Richtung so, wie das Bild gerade
-    // WIRKLICH steht (camera.up ist nur der Wunsch an lookAt, das Bild-Oben steht in der Kameramatrix)
-    kam.an = true; kam.zurueck = 0;
-    kam.back.copy(camera.position).sub(planeCamRef()).normalize();
-    kam.up.set(0, 1, 0).applyQuaternion(camera.quaternion);
-  }
-  const dt = dtCam || 1 / 60;
-  // Blickrichtung: hinter dem Flieger entlang der Nase, weich nachgezogen
-  kam.back.lerp(_kD.copy(_kF).negate(), frameLerp(0.18, dt)).normalize();
-  // Oben mitschieben: senkrecht zur neuen Blickrichtung (Paralleltransport, keine Rollkopplung)
-  kam.up.addScaledVector(kam.back, -kam.up.dot(kam.back));
-  if(kam.up.lengthSq() < 1e-6) kam.up.copy(_kU);
-  kam.up.normalize();
-  // Zum Horizont aufrichten, sobald die Nase nicht mehr (fast) senkrecht steht: je flacher, desto schneller.
-  // Gedreht wird das Kamera-Oben UM DIE BLICKACHSE (kuerzester Weg, hoechstens KAM_AUFRICHT rad/s) – ein Lerp kam bei
-  // grossem Abstand nicht voran: nach Steigflug + Abkippen ueber den Ruecken + Ausrollen stand das Bild dauerhaft auf
-  // dem Kopf (gemessen 169 Grad, Live-Test: "man verliert die Orientierung").
-  // Ziel ist die Lage des Fliegers: liegt er (wieder) aufrecht, richtet sich die Kamera nach ihm; auf dem Ruecken im
-  // Looping (Flieger UND Kamera ueber Kopf) bleibt sie, damit das Bild oben nicht umklappt. Senkrecht (steil > KAM_HALT)
-  // steht sie still, dort dreht sich die Welt um den Flieger.
-  const horizont = _kW.set(0, 1, 0).addScaledVector(kam.back, -kam.back.y);
-  if(horizont.lengthSq() > 1e-4 && steil < KAM_HALT){
-    horizont.normalize();
-    const fliegerKopf = _kU.y < -0.3;
-    if(!(fliegerKopf && kam.up.y < 0)){                             // Looping oben: beide ueber Kopf -> stehen lassen
-      // Ziel: aufrecht fliegend der Horizont; auf dem Ruecken (Kamera noch aufrecht) ebenfalls der Horizont
-      const s = 1 - Math.max(0, (steil - KAM_FLACH) / (KAM_HALT - KAM_FLACH));   // 1 flach .. 0 senkrecht
-      const blick = _kD.copy(kam.back).negate();
-      // Vorzeichen-Winkel von kam.up zum Horizont um die Blickachse
-      const quer = _kX.crossVectors(kam.up, horizont);
-      const winkel = Math.atan2(quer.dot(blick), kam.up.dot(horizont));
-      // Flach (unter KAM_FEST): Horizont FEST halten wie die Engine – sonst hinkte das Bild beim Ausrollen nach dem
-      // Abkippen ueber den Ruecken 1,5 s hinterher (gemessen bis 107 Grad verdreht). Dazwischen weich, schnell.
-      const schritt = steil < KAM_FEST ? winkel
-        : Math.sign(winkel) * Math.min(Math.abs(winkel) * frameLerp(0.06 + 0.2 * s, dt) + 0.004, KAM_AUFRICHT * dt, Math.abs(winkel));
-      if(Math.abs(winkel) > 1e-4) kam.up.applyAxisAngle(blick, schritt).normalize();
-      if(steil < KAM_FLACH && _kU.y > 0.3 && kam.up.dot(horizont) > 0.995){ kam.an = false; kam.zurueck = 1; return kunstflugKamera(camOrig); }
-    }
-  }
-  const cfg = viewConfigs[viewMode], cc = camCfg();
-  const ref = planeCamRef();
-  const desired = _kD.copy(ref).addScaledVector(kam.back, cfg.dist * cc.dist + camBackExtra()).addScaledVector(kam.up, cfg.height * cc.hgt);
-  if(desired.y < 2) desired.y = 2;
-  const k = frameLerp(Math.min(0.5, cfg.lerp * (1 + state.vel.length() / 120)), dt);
-  _camOff.copy(camera.position).sub(ref);
-  _camDes.copy(desired).sub(ref);
-  camera.position.copy(ref).add(_camOff.lerp(_camDes, k));
-  camera.up.copy(kam.up);
-  camera.lookAt(ref);
-  kam.pos.copy(camera.position).sub(ref); kam.upAlt.copy(camera.up);   // Versatz + Oben (fuer die Rueckgabe)
-  return true;
-}
+// ---- Verfolgerkamera fuer Kunstflug: seit 23.10.2026 in der Engine (kunstflugKamera, fuer alle kunstflugfaehigen Flieger) ----
+// Abschalten weiter mit story.kunstflugAus (z. B. Vulkanhoehle, etappe6b.js).
 // Modellwechsel absichern: buildModel raeumt nur den modelHolder auf. Haengt etwas anderes direkt im Flieger (frueher
 // das Rennboot aus Etappe 4b) oder fehlt der Halter, wird das hier korrigiert – sonst sah man das alte Modell weiter.
 function hookModellHalter(){
@@ -2030,10 +1940,6 @@ function hookModellHalter(){
     if(modelHolder.parent !== planeGroup) planeGroup.add(modelHolder);
     return bmOrig.apply(this, arguments);
   };
-}
-function hookKunstflugKamera(){
-  const camOrig = updateCamera;
-  updateCamera = function(){ if(kunstflugKamera(camOrig)) return; return camOrig.apply(this, arguments); };
 }
 function hookLoop(){
   const loopOrig = loop;
@@ -3505,7 +3411,6 @@ window.STORY_HOOK = function(){
   hookWarp();
   hookMars();
   hookVerdreht();
-  hookKunstflugKamera();
   hookModellHalter();
   hookSchubGerade();
   hookJetLandung();

@@ -1284,6 +1284,10 @@ function surfenStart(vonMega){
   story.hinweis('');
 }
 story.finaleSurfen = surfenStart;
+// strandfreunde.js (Live-Wunsch 23.10.2026: Joshi surft mit): Samus Lage auf der Welle, die Wellenhoehe und das Brett
+story.surfLage = () => welle.aktiv && fin.schritt === 'welle' && fin.k ? { x: ab.x, y: ab.y, z: ab.z, luft: ab.luft, wasch: welle.wasch > 0, blende: welle.blende } : null;
+story.surfWellenY = (x, z) => wellenY(x, z);
+story.surfBrettVorlage = () => { ladeSurf(); return surfVorlage || null; };
 // Startplatz: vor dem Strand auf der Front einer Welle, schraeg zur Welle (immer vor dem Fukuoka-Beach – dort ist die Kueste gerade)
 function surfPlatz(){
   const K = L().FEST.x, n = reiheBei(K - 220) + 1, H = reiheH(n), a = 0.9;
