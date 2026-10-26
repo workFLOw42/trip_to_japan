@@ -687,6 +687,18 @@ function hookE6(){
   };
   const resetOrig = resetPlane;
   resetPlane = function(){ if(hier() && story.phase === 'alpha') return; return resetOrig.apply(this, arguments); };
+  // Schatten des geparkten Alpha (Live-Befund 26.10.2026: "zu Fuss drauf zu gelaufen hat der Eurofighter keinen Schatten"): der
+  // dort stehende Jet ist Kulisse (park.obj), der echte ist bis zum Einsteigen versteckt – die Engine gibt einem versteckten Flieger
+  // keinen Schatten. Darum fuer ihre Rechnung kurz der echte Jet an der Parkstelle, danach alles wie vorher
+  const schattenOrig = updateShadow;
+  updateShadow = function(){
+    if(!(hier() && eva && !story.phase && park.obj && park.obj.visible && !planeGroup.visible)) return schattenOrig.apply(this, arguments);
+    const pos = state.pos.clone(), quat = state.quat.clone(), boden = state.onGround, py = planeGroup.position.y;
+    state.pos.set(ALPHA.x, ISLAND_Y, ALPHA.z); state.quat.setFromEuler(new THREE.Euler(0, ALPHA.yaw, 0, 'YXZ')); state.onGround = true;
+    planeGroup.position.y = ISLAND_Y; planeGroup.visible = true;
+    try { return schattenOrig.apply(this, arguments); }
+    finally { planeGroup.visible = false; planeGroup.position.y = py; state.pos.copy(pos); state.quat.copy(quat); state.onGround = boden; }
+  };
 }
 
 function updateE6(dt){

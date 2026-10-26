@@ -6553,7 +6553,9 @@ function updateShadow(){
   shadowMat.opacity = (0.18 + 0.22 * (1 - f)) * SHADOW_DECK * (delta ? 0.7 : 1);   // der Delta ist eine grosse Flaeche: etwas heller
   // Am Boden kraeftiger (Live-Befund 22.10.2026: auf der hellen Bahn war der Schatten kaum zu sehen, der Flieger wirkte, als
   // laege er auf) – ein klarer Kontaktschatten unter Rumpf und Fluegeln
-  if(state.onGround && !isWaterCraft()) shadowMat.opacity = 0.85;
+  // Der Delta (Eurofighter) ist eine grosse geschlossene Flaeche: dort deutlich heller (Live-Befund 26.10.2026: "im Flugzeug von
+  // hinten ist der Schatten immer noch extrem")
+  if(state.onGround && !isWaterCraft()) shadowMat.opacity = delta ? 0.4 : 0.85;
 }
 
 // ---------- Schleudersitz + Fallschirm (nur AlphaJet) ----------

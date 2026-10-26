@@ -18,6 +18,25 @@ const story = window.STORY = {
 // Minute. Liegt eine neue Version bereit, laedt die Seite am Startbildschirm sofort neu; mitten im
 // Spiel nur ein Hinweis – ein laufendes Spiel wird nicht abgebrochen.
 let neueVersion = false;
+// Update im Hintergrund (Live-Wunsch 26.10.2026: "das Flugspiel zieht sich die Aenderungen beim Start selber"): solange die
+// neue Version laedt, steht im Startmenue ein Hinweis und Starten wartet (story.updateLaedt) – ist sie da, laedt die Seite neu
+// (controllerchange). Haengt es, geht es nach 30 s trotzdem los.
+let ladeT = 0;
+function updateBeobachten(w){
+  if(!w || !navigator.serviceWorker.controller) return;           // erste Installation: kein Update
+  story.updateLaedt = true; clearTimeout(ladeT); ladeT = setTimeout(updateFertig, 30000);
+  if(!story.gestartet) zeigeLadeHinweis();
+  w.addEventListener('statechange', () => { if(w.state === 'redundant') updateFertig(); });   // fehlgeschlagen: weiter mit der alten
+}
+function updateFertig(){ story.updateLaedt = false; const el = document.getElementById('updatelaedt'); if(el) el.remove(); }
+function zeigeLadeHinweis(){
+  if(document.getElementById('updatelaedt')) return;
+  const el = document.createElement('div'); el.id = 'updatelaedt';
+  el.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);padding:8px 18px;border-radius:10px;'
+    + 'background:rgba(0,0,0,.6);color:#fff;font:600 16px system-ui,sans-serif;z-index:60;pointer-events:none;';
+  el.textContent = 'Neue Version wird geladen …';
+  document.body.appendChild(el);
+}
 function versionNeuLaden(){
   if(story.gestartet){ zeigeUpdateHinweis(); return; }
   location.reload();
@@ -36,7 +55,11 @@ if('serviceWorker' in navigator){
     // Jede weitere Uebernahme schon.
     let warSchonGesteuert = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      updateBeobachten(reg.installing || reg.waiting);             // die Registrierung prueft beim Laden selbst – laeuft es schon?
+      reg.addEventListener('updatefound', () => updateBeobachten(reg.installing));
       setInterval(() => reg.update().catch(() => {}), 60000);
+      // App aus dem Hintergrund geholt (Tablet/Handy: kein echter Neustart, kein load): gleich pruefen, nicht erst nach einer Minute
+      document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') reg.update().catch(() => {}); });
     }).catch((e) => console.warn('Service Worker:', e));
     // ein neuer SW hat die Seite uebernommen -> neue Version ist aktiv
     navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -907,6 +930,7 @@ function startbildschirm(weiter){
     start(o);
   }
   function start(o){
+    if(story.updateLaedt){ zeigeLadeHinweis(); return; }           // erst die neue Version (Hinweis unten)
     if(los) return; los = true;
     el.remove();
     window.removeEventListener('keydown', taste, true); window.removeEventListener('keyup', tasteHoch, true);
