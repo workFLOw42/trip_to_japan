@@ -569,11 +569,20 @@ function updateSamu(dt){
   if(sw.aktiv){ samuAnim('swim'); tricks.steht = 0; return; }
   if(a > 0.05 || !eva.onGround || tricks.moon || !steuerbar() || story.phase === 'platzhalter' || story.phase === 'reise') tricks.steht = 0;
   else tricks.steht = (tricks.steht || 0) + dt;
-  if(!eva.onGround) samuAnim('jump');
+  if(!eva.onGround){ if(samu.cur !== 'jump'){ samuAnim('jump'); sprungStrecken(); } }
   else if(tricks.moon || (tricks.steht > MOON_NACH && moonwalkDarf())) samuAnim('moonwalk');
   else if(a > 0.5) samuAnim('run');
   else if(a > 0.05) samuAnim('walk');
   else samuAnim(STAND);
+}
+// Sprung (Live-Befund 26.10.2026: "auf dem Mond oder dem Mars zucken seine Beine ewig oft"): der Clip lief in Schleife, solange Samu
+// in der Luft war – auf dem Mond gut 5 s, also viele Male. Jetzt einmal, auf die Flugzeit gestreckt (Schwerkraft des Orts), und
+// am Ende gehalten; auf der Erde ist die Flugzeit knapp 1 s
+function sprungStrecken(){
+  const a = samu.acts.jump; if(!a) return;
+  const g = (typeof GRAV_AT !== 'undefined' && GRAV_AT[locale]) || 9.81, flug = eva.vy > 0.5 ? 2 * eva.vy / g : 0.8;   // global-ok: Engine
+  a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true;
+  a.timeScale = Math.max(0.15, Math.min(2, a.getClip().duration / flug));
 }
 // Live-Wunsch 14.10.2026: steht Samu lange, faengt er von selbst mit dem Moonwalk an und gleitet dabei langsam
 // rueckwaerts (samuEingabe); jede Eingabe beendet ihn. Tricks blenden TRICK_AUSBLENDEN s vor Clipende zurueck.
@@ -830,9 +839,9 @@ function startbildschirm(weiter){
     { n: 6, t: 'E6 Zug', zug: true }, { n: 6, t: 'E6 Vulkan', vulkan: true }, { n: 6, t: 'Finale 1', finale: 1 }, { n: 6, t: 'Finale 2', finale: 2 }, { n: 6, t: 'Finale 3', finale: 3 }];
   const statDa = () => !!(story.statistikBloecke && story.statistikBloecke('gesamt').length);
   let testFrei = false, seite = 'haupt', wahl = 0, knoepfe = [];
-  // "Ab zum Strand" (freies Spiel nach dem Pro-Run) ist vorerst aus dem Menue genommen (Live-Wunsch 14.10.2026) –
-  // der Code dahinter (story.freiesSpiel, finale.js) bleibt, ist aber nicht erreichbar.
-  const HAUPT = () => [{ n: 1, t: 'Neues Spiel', echt: true },
+  // "Ab zum Strand" (freies Spiel nach dem Pro-Run, 6 Tage): am 14.10.2026 vorerst herausgenommen, seit 26.10.2026 wieder da
+  // (Live-Befund: nach dem 6-Tage-Sieg fehlte er im Hauptmenue)
+  const HAUPT = () => [{ n: 1, t: 'Neues Spiel', echt: true }, ...(story.proGeschafft && story.proGeschafft() ? [{ n: 6, t: 'Ab zum Strand', strand: true, echt: true }] : []),
     ...(statDa() ? [{ t: 'Statistiken', stat: true }] : [])];   // ohne Testzugang (Live-Wunsch 26.10.2026: vor dem Verschenken raus)
   let OPT = HAUPT();
   const knopf = (o, i, breit) => '<button data-i="' + i + '" style="min-width:' + breit + 'px;height:44px;border-radius:10px;'
