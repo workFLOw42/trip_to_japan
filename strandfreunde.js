@@ -301,14 +301,22 @@ function tanzMusik(an, d){ musik(an, d, tanz, window.TANZ_SND, TANZ_VOL); }
 const tanz = { buf: null, laedt: false, quelle: null, gain: null };
 // ---- Gitarre (Pixabay: idoberg, Punk Rock Guitar Loop – wie im Geheimland), leiser mit dem Abstand zur Kamera ---------
 const git = { buf: null, laedt: false, quelle: null, gain: null };
+// Live-Befund 26.10.2026: der Tanz-Track klingt nach dem letzten Schlag (24 s) noch ~13 s bis zur Stille aus – die Schleife
+// endet deshalb dort, wo es noch hoerbar ist (letzte 0,25 s mit mindestens 8 % des lautesten Abschnitts, RMS)
+function hoerbarBis(b){
+  const d = b.getChannelData(0), w = Math.floor(b.sampleRate / 4), rms = [];
+  for(let i = 0; i + w <= d.length; i += w){ let s = 0; for(let j = i; j < i + w; j++) s += d[j] * d[j]; rms.push(Math.sqrt(s / w)); }
+  const max = Math.max(0, ...rms); let n = rms.length; while(n > 1 && rms[n - 1] < max * 0.08) n--;
+  return n * w / b.sampleRate;
+}
 function musik(an, d, m, url, vol){
   const ok = an && soundOn && audioCtx && audioCtx.state === 'running' && url;
   if(!ok){ if(m.quelle){ try { m.quelle.stop(); } catch(e){} m.quelle = null; } return; }
-  if(!m.buf){ if(!m.laedt){ m.laedt = true; decodeSound(url).then(b => { m.buf = b; }).catch(e => { m.laedt = false; console.warn('Tanzmusik:', e); }); } return; }
+  if(!m.buf){ if(!m.laedt){ m.laedt = true; decodeSound(url).then(b => { m.buf = b; m.ende = hoerbarBis(b); }).catch(e => { m.laedt = false; console.warn('Tanzmusik:', e); }); } return; }
   if(!m.gain){ m.gain = audioCtx.createGain(); m.gain.connect(audioCtx.destination); }
   m.gain.gain.value = vol * Math.max(0, 1 - d / GITARRE_WEIT);
   if(m.quelle) return;
-  const s = audioCtx.createBufferSource(); s.buffer = m.buf; s.loop = true; s.connect(m.gain); s.start(); m.quelle = s;
+  const s = audioCtx.createBufferSource(); s.buffer = m.buf; s.loop = true; if(m.ende) s.loopEnd = m.ende; s.connect(m.gain); s.start(); m.quelle = s;
 }
 function gitarre(an, d){ tanzMusik(an, d); }
 
@@ -318,6 +326,9 @@ function gitarre(an, d){ tanzMusik(an, d); }
 // echten Trick – Salto vorwaerts oder rueckwaerts, 360 links oder rechts herum, Salto mit 360 –, die Drehung ist vor dem
 // Aufsetzen immer ganz fertig (er landet jeden). Haltung: Mixamo "Skateboarding". Fuchsi wartet am Strand und schaut zu.
 // Ist Samu wieder an Land, steht Joshi neben dem Surfbrett im Sand.
+// Im Clip 'skate' (Mixamo "Skateboarding") stehen die Sohlen 5,8 cm hoch – fuers Skateboard (gemessen 26.10.2026). Auf
+// Snowboard und Surfbrett (Oberseite 4,5 cm, wie bei Samu) wird Joshi darum so weit abgesenkt.
+const SKATE_SOHLE = 0.058, BRETT_OBEN = 0.045, JOSHI_AUF_BRETT = BRETT_OBEN - SKATE_SOHLE;
 const SURF_SEIT = 10, SURF_SPRUNG = 7.5, SURF_G = 14, SURF_DREHPUNKT = 0.6;
 const SURF_TRICKS = [{ flip: 1, spin: 0 }, { flip: -1, spin: 0 }, { flip: 0, spin: 1 }, { flip: 0, spin: -1 }, { flip: 1, spin: 1 }, { flip: -1, spin: -1 }];
 const sf = { an: false, x: 0, z: 0, y: 0, vx: 0, vz: 0, yaw: 0, luft: false, vy: 0, lt: 0, T: 1, trick: null, naechster: 3, seite: 1, t: 0, sx: 0, sz: 0, brett: null, neig: 0, roll: 0 };
@@ -335,7 +346,7 @@ function surfStart(J, S){
   sf.x = S.x; sf.z = S.z + SURF_SEIT * sf.seite; sf.vx = sf.vz = 0; sf.y = wellenY(sf.x, sf.z); sf.luft = false; sf.naechster = 3 + Math.random() * 3;
   sf.sx = S.x; sf.sz = S.z; sf.yaw = Math.PI / 2;
   sf.brett = V.clone(true); J.obj.add(sf.brett);                               // Nase +Z wie Joshi
-  J.obj.children[0].position.y += 0.045;
+  J.obj.children[0].position.y += JOSHI_AUF_BRETT;
   if(J.obj.userData.schatten) J.obj.userData.schatten.visible = false;
   spurGroesse(J.obj, 1.6);                                          // Ringe und Gischt der Engine auf der Welle (finale.js spurWasserY)
   J.modus = 'surfen'; J.ziel = null; vonVorn(J, 'skate'); anim(J, 'skate');
@@ -344,7 +355,7 @@ function surfStart(J, S){
 }
 function surfEnde(J){
   sf.an = false;
-  if(sf.brett){ J.obj.remove(sf.brett); sf.brett = null; J.obj.children[0].position.y -= 0.045; }
+  if(sf.brett){ J.obj.remove(sf.brett); sf.brett = null; J.obj.children[0].position.y -= JOSHI_AUF_BRETT; }
   if(J.obj.userData.schatten) J.obj.userData.schatten.visible = true;
   spurGroesse(J.obj, 0.5);
   J.obj.quaternion.identity();
@@ -417,7 +428,7 @@ function surfSchritt(J, dt, S){
 // Beim Fallschirmsprung ist er nicht zu sehen (er ist erst auf der Piste da).
 const SB = { abst: 6, rand: 0, rampenAus: 0.3, g: 14 };
 const jb = { an: false, s: 0, q: 0, v: 2, y: 0, luft: false, vy: 0, hh: 0, lt: 0, T: 1, trick: null, modus: 'neben', modusT: 0, i: 0, ausLassen: new Set(),
-  brett: null, spur: null, spurN: 0, spurLetzt: null, spray: [], sprayT: 0, mega: null, weg: false, qv: 0 };
+  brett: null, spur: null, spurN: 0, spurLetzt: null, spray: [], sprayT: 0, mega: null, weg: false, qv: 0, schatten: null };
 story.abJoshi = () => (jb.an && !jb.weg && !jb.mega ? { s: jb.s, q: jb.q, luft: jb.luft } : null);
 function jbStart(J, A){
   const V = story.finaleBrett && story.finaleBrett(); if(!V) return false;
@@ -425,8 +436,11 @@ function jbStart(J, A){
     trick: null, modus: 'neben', modusT: 6, i: 0, mega: null, weg: false, qv: 0, spurLetzt: null, spin: 0, flip: 0 });
   jb.ausLassen.clear();
   SB.rand = story.abMass.RAND;
-  jb.brett = V.clone(true); J.obj.add(jb.brett); J.obj.children[0].position.y += 0.03;
+  jb.brett = V.clone(true); J.obj.add(jb.brett); J.obj.children[0].position.y += JOSHI_AUF_BRETT;
+  // Schatten: der Engine-Tierschatten haengt an Joshi (laege unter dem Brett, floege im Sprung mit) – auf der Piste stattdessen
+  // Samus Hangschatten auf dem Schnee (finale.js hangSchatten)
   if(J.obj.userData.schatten) J.obj.userData.schatten.visible = false;
+  if(!jb.schatten && story.abSchattenNeu){ jb.schatten = story.abSchattenNeu(); scene.add(jb.schatten); }   // global-ok: liegt auf der Piste
   spurGroesse(J.obj, 0.5); J.obj.userData.keineSpur = true;         // Engine-Staub aus: eigene Schneespur (wie Samu)
   J.modus = 'snowboard'; J.ziel = null; vonVorn(J, 'skate'); anim(J, 'skate');
   if(!jb.spur){ const P = new Float32Array(220 * 12), geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
@@ -437,8 +451,8 @@ function jbStart(J, A){
 }
 function jbEnde(J){
   jb.an = false;
-  if(jb.brett){ J.obj.remove(jb.brett); jb.brett = null; J.obj.children[0].position.y -= 0.03; }
-  if(jb.spur) jb.spur.visible = false; for(const p of jb.spray) p.m.visible = false;
+  if(jb.brett){ J.obj.remove(jb.brett); jb.brett = null; J.obj.children[0].position.y -= JOSHI_AUF_BRETT; }
+  if(jb.spur) jb.spur.visible = false; if(jb.schatten) jb.schatten.visible = false; for(const p of jb.spray) p.m.visible = false;
   J.obj.userData.keineSpur = false; J.obj.quaternion.identity();
   if(J.obj.userData.schatten) J.obj.userData.schatten.visible = true;
   J.obj.visible = true;
@@ -453,8 +467,9 @@ function jbSchritt(J, dt, A){
     const k = Math.min(1, m.t / 1.4), e = k * k * (3 - 2 * k), flip = jb.megaTrick.flip * Math.PI * 2 * e, spin = jb.megaTrick.spin * Math.PI * 2 * e;
     J.x = m.x; J.z = m.z;
     const meer = typeof seaYAt === 'function' ? seaYAt(m.x, m.z) : 0;                                      // global-ok: Engine
+    if(jb.schatten) jb.schatten.visible = false;
     if(m.y < meer + 0.3){ jb.weg = true; J.obj.visible = false; return; }
-    jbPose(J, m.x, m.y, m.z, Math.atan2(m.tx, m.tz), 0, 0, spin, flip); return;
+    jbPose(J, m.x, m.y, m.z, Math.atan2(m.tx, m.tz), 0, 0, spin, flip, false); return;
   }
   if(jb.weg) return;
   // Modus wechseln: nebenher, ueberholen (vor ihm Kicker nehmen), sich ueberholen lassen
@@ -480,7 +495,7 @@ function jbSchritt(J, dt, A){
   if(!jb.luft){ jb.qv += (Math.max(-6, Math.min(6, (zielQ - jb.q) * 1.6)) - jb.qv) * Math.min(1, dt * 4); jb.q += jb.qv * dt; }
   jb.q = Math.max(-RAND, Math.min(RAND, jb.q));
   jb.s += jb.v * (jb.luft ? 1.15 : 1) * dt;
-  const o = story.abOrt(jb, jb.s, jb.q), grund = story.abGrund(o.x, o.z);
+  const o = story.abOrt(jb, jb.s, jb.q), grund = grundJ(0, 0);
   // Kicker / Mega unter ihm?
   let auf = null, hKick = 0;
   if(!jb.luft) for(const h of story.abHinder()) if((h.typ === 'rampe' || h.typ === 'mega') && jb.s > h.s - h.L && jb.s <= h.s && Math.abs(jb.q - h.q) < h.W / 2){ auf = h; hKick = h.H * (jb.s - (h.s - h.L)) / h.L; }
@@ -504,16 +519,22 @@ function jbSchritt(J, dt, A){
   }
   J.x = o.x; J.z = o.z;
   const carve = -jb.qv * 0.06;                                         // in die Kurve legen
-  jbPose(J, o.x, jb.y, o.z, Math.atan2(o.tx, o.tz) + jb.qv * 0.03, jb.luft ? 0 : neigung(o), carve, spin, flip);
+  jbPose(J, o.x, jb.y, o.z, Math.atan2(o.tx, o.tz) + jb.qv * 0.03, jb.luft ? 0 : neigung(), carve, spin, flip, !jb.luft);
+  if(jb.schatten){ jb.schatten.visible = J.obj.visible; if(J.obj.visible) story.abSchatten(jb.schatten, { x: o.x, y: jb.y, z: o.z }, o, grundJ); }
   schneeSpur(o, !jb.luft && !auf, dt);
 }
+// Schneehoehe v m vor und r m rechts von Joshi – aus seinen Pisten-Koordinaten (finale.js abGrundSQ, glatt; abGrund(x, z) ruckelte)
+function grundJ(v, r){ if(story.abGrundSQ) return story.abGrundSQ(jb, jb.s + v, jb.q + r); const o = story.abOrt(jb, jb.s + v, jb.q + r); return story.abGrund(o.x, o.z); }
 // Gefaelle in Fahrtrichtung (1,4 m Brett)
-function neigung(o){ const v = story.abGrund(o.x + o.tx * 0.7, o.z + o.tz * 0.7), h = story.abGrund(o.x - o.tx * 0.7, o.z - o.tz * 0.7); return Math.atan2(v - h, 1.4); }
+function neigung(){ return Math.atan2(grundJ(0.7, 0) - grundJ(-0.7, 0), 1.4); }
 const _jq = new THREE.Quaternion(), _jq2 = new THREE.Quaternion(), _jq3 = new THREE.Quaternion(), _jq4 = new THREE.Quaternion(), _jp = new THREE.Vector3();
-function jbPose(J, x, y, z, yaw, neig, roll, spin, flip){
+// Drehpunkt wie bei Samu (finale.js pose): am Boden die Brettmitte unten (liegt satt auf – um 0,6 m darueber gedreht hob ihn
+// das Gefaelle an, Live-Befund 26.10.2026), in der Luft die Koerpermitte (Tricks drehen um den Bauch)
+function jbPose(J, x, y, z, yaw, neig, roll, spin, flip, amBoden){
   J.obj.quaternion.setFromAxisAngle(_sY, yaw).multiply(_jq.setFromAxisAngle(_sY, spin)).multiply(_jq2.setFromAxisAngle(_sX, flip - neig)).multiply(_jq3.setFromAxisAngle(_sZ, roll));
-  _jp.set(0, SURF_DREHPUNKT, 0).applyQuaternion(J.obj.quaternion); const g = fr.g;
-  J.obj.position.set(x - g.position.x - _jp.x, y + 0.03 + SURF_DREHPUNKT - _jp.y - g.position.y, z - g.position.z - _jp.z);
+  const mitte = amBoden ? 0 : SURF_DREHPUNKT;
+  _jp.set(0, mitte, 0).applyQuaternion(J.obj.quaternion); const g = fr.g;
+  J.obj.position.set(x - g.position.x - _jp.x, y + 0.03 + mitte - _jp.y - g.position.y, z - g.position.z - _jp.z);
 }
 // Mega-Rampe: wie Samu weit hinaus, mit einem Trick im Bogen
 function megaJoshi(J, o){
@@ -597,13 +618,20 @@ story.strandFreundeTest = () => Object.assign(fr, { tanzMusik: tanz });   // Tes
 let tVor = 0;
 const startVorher = window.STORY_START;
 window.STORY_START = function(){
+  // vor dem Rendern (in updateCamera, wie finale.js): nach loop() gesetzt hinkte Joshi ein Bild hinter Samu und der Kamera her
+  // und ruckelte bei schwankender Bildrate auf der Piste (Live-Befund 26.10.2026)
+  const camOrig = updateCamera;
+  updateCamera = function(){
+    // Zeit wie die Engine (dtCam): bei niedriger Bildrate bremst sie ihre Zeit – Joshi faehrt sonst Samu davon (Live-Pruefung)
+    const t = performance.now(), dt = tVor ? (typeof dtCam === 'number' ? dtCam : Math.min(0.1, (t - tVor) / 1000)) : 0; tVor = t;   // global-ok: Engine
+    schritt(dt);
+    return camOrig.apply(this, arguments);
+  };
+  // Pause (Hilfe offen): die Engine ruft updateCamera nicht – dann die Musik aus
   const loopOrig = loop;
   loop = function(){
     const r = loopOrig.apply(this, arguments);
-    // Zeit wie die Engine (dtCam): bei niedriger Bildrate bremst sie ihre Zeit – Joshi faehrt sonst Samu davon (Live-Pruefung)
-    const t = performance.now(), dt = tVor ? (typeof dtCam === 'number' ? dtCam : Math.min(0.1, (t - tVor) / 1000)) : 0; tVor = t;   // global-ok: Engine
-    const pause = document.getElementById('hint') && document.getElementById('hint').classList.contains('show');
-    if(pause) gitarre(false); else schritt(dt);
+    if(document.getElementById('hint') && document.getElementById('hint').classList.contains('show')) gitarre(false);
     return r;
   };
   if(startVorher) return startVorher.apply(this, arguments);

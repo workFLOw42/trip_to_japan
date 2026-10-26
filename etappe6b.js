@@ -527,6 +527,24 @@ function hud(){
 }
 function hudAus(){ if(ho.hudEl) ho.hudEl.style.display = 'none'; }
 
+// Flughilfe in der Roehre (siehe hookE6b stepPhysics): Kurs direkt aus dem Stick, Hoehe auf die Roehrenmitte gezogen. Engstes
+// Stueck: Radius ~620 m bei 361 m/s -> 0,58 rad/s; voller Ausschlag gibt etwas Reserve.
+const ROEHRE = { dreh: 0.85, lage: 0.75, lageZug: 12, steig: 14, nick: 0.18, hoeheZug: 0.6 };
+// hoch: +1 = Stick zum Steigen (Engine: inp.pitch +1 = Nase runter)
+function roehreSteuern(dt, lenk, hoch){
+  if(ho.kurs === undefined){ ho.kurs = new THREE.Euler().setFromQuaternion(state.quat, 'YXZ').y; ho.lage = 0; }
+  const v = Math.max(state.vel.length(), spec.vMax * 0.5);
+  ho.kurs -= lenk * ROEHRE.dreh * dt;                                   // Stick rechts -> Kurs nach rechts (Engine: Nase -z)
+  ho.lage += (-lenk * ROEHRE.lage - ho.lage) * Math.min(1, ROEHRE.lageZug * dt);
+  const L = lokal(state.pos.x, state.pos.z), yMitte = HOEHE_Y + hoehe(L.u) / 2;
+  if(Math.abs(hoch) > 0.08) state.pos.y += hoch * ROEHRE.steig * dt;   // gesteuert: ruhige Steig-/Sinkrate
+  else state.pos.y += (yMitte - state.pos.y) * Math.min(1, ROEHRE.hoeheZug * dt);   // losgelassen: sanft zur Mitte
+  ho.nick = (ho.nick || 0) + (hoch * ROEHRE.nick - (ho.nick || 0)) * Math.min(1, ROEHRE.lageZug * dt);
+  state.quat.setFromEuler(new THREE.Euler(ho.nick, ho.kurs, ho.lage, 'YXZ'));
+  state.vel.set(-Math.sin(ho.kurs) * v, Math.abs(hoch) > 0.08 ? hoch * ROEHRE.steig : 0, -Math.cos(ho.kurs) * v);
+  planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat);
+}
+
 // ---- Hooks ---------------------------------------------------------------------------------------------
 function hookE6b(){
   const physOrig = stepPhysics;
@@ -535,6 +553,18 @@ function hookE6b(){
     if(hier() && ho.szene){ szeneUpdate(dt); return; }                  // Zwischenszene: eigene Bewegung, keine Physik
     if(hier() && ho.blende) return;                                     // waehrend einer Blende steht alles
     if(hier() && ho.steht){ state.vel.set(0, 0, 0); state.throttle = 0; return; }   // gekracht: steht bis zum Etappenende
+    // Selbst durch die Roehre: Flughilfe (Live-Wunsch 26.10.2026 – "gefuehlt unmoeglich": vorsichtig gelenkt drehte der Jet kaum
+    // oder erst nach einem Moment, staerker gelenkt riss er ganz herum; der Stick war beim Hoehenruder sehr empfindlich).
+    // Das Hoehenruder bleibt, aber deutlich weniger empfindlich: der Stick gibt direkt eine Steig-/Sinkrate (hoechstens
+    // ROEHRE.steig m/s), losgelassen zieht der Jet sanft zur halben Roehrenhoehe. Links/rechts dreht ihn direkt und genau im
+    // Verhaeltnis zum Ausschlag (ROEHRE.dreh rad/s bei vollem Ausschlag), die Querlage folgt sofort – nur fuers Auge.
+    if(hier() && ho.aktiv && !ho.auto && !ho.fertig){
+      const lenk = Math.max(-1, Math.min(1, (inp && inp.yaw || 0) + (inp && inp.roll || 0)));
+      const r = physOrig.call(this, dt, Object.assign({}, inp, { pitch: 0, yaw: 0, roll: 0 }));
+      roehreSteuern(dt, lenk, -Math.max(-1, Math.min(1, inp && inp.pitch || 0))); hoehleUpdate(dt);
+      return r;
+    }
+    ho.kurs = undefined;                                                // ausserhalb der Roehre: beim naechsten Mal neu vom Flieger
     const r = physOrig.apply(this, arguments);
     if(hier() && ho.aktiv) hoehleUpdate(dt);
     if(hier() && ho.landen){ luftbremse(dt); landungPruefen(); }

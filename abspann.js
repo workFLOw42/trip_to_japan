@@ -3,7 +3,10 @@
 //   Reiselog: jedes Etappen-Ende (story.etappeEnde 1-5, story.e6ankunft 6) traegt Etappe, Ort, Weg und Tage ein.
 //   Abspann: laeuft einmal, beim ersten Aussteigen aus dem Surfen (finale.js ruft story.abspann). Langsame Kamerafahrt um den
 //            Fukuoka-Beach und den Fuji, darueber rollt der Text: Reise-Zusammenfassung, Trick-Statistik, Widmung
-//            "Für Samu! Hab dich lieb!", unten rechts "by workFLOw ©2026". Danach frei weiterspielen.
+//            "Für Samu! Hab’ dich lieb!", unten rechts "by workFLOw42 ©2026" (darueber der Hinweis auf das Repo). Live-Wunsch 26.10.2026: der Text rollt herein und
+//            bleibt dann stehen (passt er nicht ins Bild, wird er kleiner); dann erscheint unten mittig ein B – damit geht es
+//            ins Menue "Wie geht es weiter?". Die Reise steht als Strecken ("München → Wüste", mit Umwegen wie Mars,
+//            Flugschule, Gefängnis, Krankenhaus), nicht als "Etappe 1-6".
 //   Pro-Run (Stufe 1, 6 Tage) geschafft -> localStorage; im Startmenue unter "Neues Spiel" dann "Ab zum Strand" (alles frei).
 //   Stufe 5 (42 Tage): kein Surfen (Schild "Außer Betrieb"); kurze Szene am Strand, dann der Abspann.
 (function(){
@@ -52,6 +55,15 @@ function e6Nachtrag(){
   if(fehlt.length){ for(const n of fehlt) story.reiseLog.push({ etappe: n, ort: ORT[n - 1], tage: 0, wie: '?' }); return; }
   if(rest > 0) story.reiseLog.push({ etappe: 6, ort: ORT[5], tage: rest, wie: rest === 1 ? 'mit dem Jet' : rest === 4 ? 'mit dem Shinkansen' : '' });
 }
+// Strecke einer Etappe: von – (Umweg) – nach. Der Umweg steht im Reiselog bei "wie" (Etappen-Enden, e1Nachtrag).
+const STRECKE = ['München', 'Wüste', 'Indischer Ozean', 'Südostasien', 'Chinesisches Meer', 'Tokio', 'Fukuoka'];
+function strecke(e){
+  const w = e.wie || '';
+  // Mond- und Mars-Trip gibt es in jeder Etappe (story.js: Etappe 1 Mars, danach Mond), auch als "Absturz auf dem Mond-Trip"
+  const umweg = /Krankenhaus/.test(w) ? 'Krankenhaus' : /Gefängnis/.test(w) ? 'Gefängnis' : /Mars/.test(w) ? 'Mars'
+    : /Mond/.test(w) ? 'Mond' : (e.etappe === 2 && w === 'ausgestiegen') ? 'Flugschule' : null;
+  return (STRECKE[e.etappe - 1] || e.ort) + ' → ' + (umweg ? umweg + ' → ' : '') + (STRECKE[e.etappe] || '');
+}
 function abspannText(){
   e1Nachtrag(); e6Nachtrag();
   const L = story.reiseLog.slice().sort((a, b) => a.etappe - b.etappe);
@@ -60,7 +72,7 @@ function abspannText(){
   let h = '<div style="font-size:44px;font-weight:800;margin-bottom:6px">Reise nach Japan</div>'
     + '<div style="font-size:20px;opacity:.85;margin-bottom:40px">Samu hat es nach Fukuoka geschafft!</div>'
     + '<div style="font-size:24px;font-weight:700;margin-bottom:10px">Die Reise</div><div style="min-width:440px;text-align:left">';
-  for(const e of L) h += zeile('Etappe ' + e.etappe + ' · ' + e.ort, e.wie === '?' ? '–' : (e.tage === 1 ? '1 Tag' : e.tage + ' Tage') + (e.wie ? ' <span style="font-weight:400;opacity:.75">(' + e.wie + ')</span>' : ''));
+  for(const e of L) h += zeile(strecke(e), e.wie === '?' ? '–' : (e.tage === 1 ? '1 Tag' : e.tage + ' Tage') + (e.wie ? ' <span style="font-weight:400;opacity:.75">(' + e.wie + ')</span>' : ''));
   h += zeile('Zusammen', tage + ' von 42 Tagen', true) + zeile('Finale', 'Stufe ' + stufe + ' – ' + stufenName, true) + '</div>';
   // Live-Wunsch 14.10.2026: alle Statistiken dieses Spiels (nur was gemacht wurde), Ueberschriften in Gold (statistik.js).
   // Die Reisezeit steht schon oben ("Zusammen"), die Trick-Zahl unten.
@@ -71,8 +83,8 @@ function abspannText(){
     const nT = T.filter(t => t && t.s !== 'welle').length; if(nT) h += zeile('Zusammen', nT + (nT === 1 ? ' Trick' : ' Tricks'), true);
     h += '</div>';
   }
-  h += '<div style="font-size:40px;font-weight:800;margin-top:90px;color:#ffd23f">Für Samu!</div>'
-    + '<div style="font-size:30px;font-weight:700;margin-top:6px">Hab dich lieb!</div>'
+  h += '<div style="font-size:40px;font-weight:800;margin-top:140px;color:#ffd23f">Für Samu!</div>'   // weiter unten: Platz fuer die Statistiken
+    + '<div style="font-size:30px;font-weight:700;margin-top:6px">Hab’ dich lieb!</div>'
     + '<div id="abspann-ende" style="height:1px"></div>';
   return h;
 }
@@ -90,13 +102,17 @@ story.abspann = function(){
   roll.innerHTML = abspannText();
   const sig = document.createElement('div');
   sig.style.cssText = 'position:absolute;right:18px;bottom:14px;font-size:15px;opacity:.85;font-weight:600';
-  sig.textContent = 'by workFLOw ©2026';
+  // darueber der Hinweis auf das Repo (Live-Wunsch 26.10.2026)
+  sig.style.textAlign = 'right'; sig.innerHTML = '<div style="font-size:13px;font-weight:500;opacity:.9;margin-bottom:6px">Weitere Infos siehe:<br>github.com/workFLOw42/trip_to_japan</div>by workFLOw42 ©2026';
   el.appendChild(roll); el.appendChild(sig); document.body.appendChild(el);
   const F = story.e6, mitte = { x: F.STRANDPLATZ.x - 120, z: F.STRANDPLATZ.z };
   ab = { el, roll, t: 0, h: 0, mitte, dauer: 0 };
   // Live-Wunsch 19.10.2026: das Menue sofort, wenn der Abspann durch ist – vorher rollten nach der Widmung noch 60 % Bildhoehe
   // Leerraum durch (gut 5 s nichts). Jetzt endet er, wenn die Widmung oben aus dem Bild ist: Rollhoehe + Bildhoehe, mehr nicht.
-  ab.h = roll.offsetHeight; ab.dauer = story.abspannTestDauer || (innerHeight + ab.h) / 42;   // ~42 px/s (Testdauer fuer den Browser-Test)
+  // Stehen bleiben: das Ende des Textes knapp ueber dem B (unten mittig); zu hoch fuer das Bild -> kleiner
+  ab.h = roll.offsetHeight; ab.s = Math.min(1, (innerHeight - 130) / Math.max(1, ab.h));
+  if(ab.s < 1){ roll.style.transformOrigin = 'top center'; roll.style.transform = 'translateX(-50%) scale(' + ab.s.toFixed(3) + ')'; }
+  ab.ziel = Math.max(16, innerHeight - 110 - ab.h * ab.s);
   if(story.hudSichtbar) story.hudSichtbar(false);
   story.abspannLaeuft = true;
   // Eigene Uhr (Live-Befund 19.10.2026: "das Weiterspielen-Menue kam immer erst, wenn man 3 s X gedrueckt hat, nie
@@ -114,8 +130,26 @@ story.abspann = function(){
 function abspannSchritt(dt){
   if(!ab) return;
   ab.t += dt;
-  ab.roll.style.top = (innerHeight - ab.t * 42) + 'px';
-  if(ab.t > ab.dauer){ ab.el.remove(); ab = null; story.abspannLaeuft = false; if(story.hudSichtbar) story.hudSichtbar(true); nachDemAbspann(); }
+  const top = Math.max(ab.ziel, innerHeight - ab.t * (story.abspannTestDauer ? 400 : 42));   // ~42 px/s herein, dann bleibt er stehen
+  ab.roll.style.top = top + 'px';
+  if(top <= ab.ziel && !ab.bKnopf) bZeigen();
+}
+// Das B (rot wie im Spiel, weisser Rand und Buchstabe) unten mittig, sobald der Abspann steht. B / Esc / Controller-B ->
+// "Wie geht es weiter?"
+function bZeigen(){
+  const k = ab.bKnopf = document.createElement('div');
+  k.style.cssText = 'position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:58px;height:58px;border-radius:50%;background:#e8352b;'
+    + 'border:4px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.45);color:#fff;font:800 32px system-ui,sans-serif;display:flex;align-items:center;'
+    + 'justify-content:center;opacity:0;transition:opacity .6s;text-shadow:none';
+  k.textContent = 'B'; ab.el.appendChild(k); requestAnimationFrame(() => { k.style.opacity = '1'; });
+  const weiter = () => { if(!ab) return; window.removeEventListener('keydown', taste, true);
+    ab.el.remove(); ab = null; story.abspannLaeuft = false; if(story.hudSichtbar) story.hudSichtbar(true); nachDemAbspann(); };
+  function taste(e){ if(e.code !== 'KeyB' && e.code !== 'Escape') return; e.preventDefault(); e.stopPropagation(); if(!e.repeat) weiter(); }
+  window.addEventListener('keydown', taste, true);
+  let pB = true;                                                    // erst nach dem Loslassen zaehlen
+  (function pad(){ if(!ab) return;
+    let b = false; for(const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) if(gp && gp.buttons[1] && gp.buttons[1].pressed) b = true;
+    if(b && !pB){ weiter(); return; } pB = b; requestAnimationFrame(pad); })();
 }
 // Live-Wunsch 14.10.2026: nach dem Abspann (jede Stufe) kurz fragen – ins Hauptmenue (Seite neu laden, die Statistik ist schon
 // gespeichert) oder weiterspielen. Stick/Pfeile waehlen, A/Enter bestaetigt, B/Esc = weiterspielen.

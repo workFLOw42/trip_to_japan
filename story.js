@@ -506,7 +506,10 @@ function samuTasten(){
   }
   const k = trickTasten(), pr = tricks.prev;
   const neu = n => (k[n] && !pr[n]) || getippt[n];
-  const frei = !amFahrzeug();
+  // Live-Befund 26.10.2026: mit Y in die Transall – man sah noch kurz den Twirl. Die Engine steigt schon beim Tastendruck ein,
+  // hier kommt derselbe Druck erst im naechsten Bild an, und dann stand Samu nicht mehr "am Fahrzeug". Darum zaehlt auch das
+  // vorige Bild: stand er dort am Fahrzeug, gehoert Y (und X) dem Einsteigen, nicht einem Trick.
+  const frei = !amFahrzeug() && !tricks.fzgVorher;
   if(neu('a') && eva.onGround){ tricks.aktiv = null; evaJumpOrig(); }
   // Moonwalk und B beenden den (Endlos-)Tanz. B kniet danach mit dem naechsten Druck (begleiter.js laesst waehrend eines
   // Tricks nicht knien) – sonst waere B beim Tanz mit den Aliens wirkungslos geblieben.
@@ -515,7 +518,7 @@ function samuTasten(){
   // B = knien (begleiter.js, Live-Wunsch 18.10.2026: der Hund kommt) – Aerial Evade liegt nicht mehr auf B
   if(frei && neu('x')) trickStart('tanz');
   if(frei && neu('y')) trickStart('twirl');
-  tricks.prev = k;
+  tricks.prev = k; tricks.fzgVorher = amFahrzeug();
   for(const n in getippt) delete getippt[n];
 }
 
@@ -807,7 +810,7 @@ function startbildschirm(weiter){
   // "Ab zum Strand" (freies Spiel nach dem Pro-Run) ist vorerst aus dem Menue genommen (Live-Wunsch 14.10.2026) –
   // der Code dahinter (story.freiesSpiel, finale.js) bleibt, ist aber nicht erreichbar.
   const HAUPT = () => [{ n: 1, t: 'Neues Spiel', echt: true },
-    ...(statDa() ? [{ t: 'Statistiken', stat: true }] : []), ...(testFrei ? [{ t: 'Testzugang', test: true }] : [])];
+    ...(statDa() ? [{ t: 'Statistiken', stat: true }] : [])];   // ohne Testzugang (Live-Wunsch 26.10.2026: vor dem Verschenken raus)
   let OPT = HAUPT();
   const knopf = (o, i, breit) => '<button data-i="' + i + '" style="min-width:' + breit + 'px;height:44px;border-radius:10px;'
     + 'border:2px solid rgba(255,255,255,.45);background:rgba(255,255,255,.1);color:#fff;font:600 18px system-ui;'
@@ -928,14 +931,13 @@ function startbildschirm(weiter){
   }
   function schritt(d){ if(!OPT.length) return; wahl = (wahl + d + OPT.length) % OPT.length; zeige(); }
   function blaettern(d){ const l = el.querySelector('#statliste'); if(l) l.scrollTop += d * 60; }
-  // X 3 s halten: Testzugang einblenden (Tastatur und Controller)
+  // X 3 s halten: in den Statistiken loeschen / zuruecksetzen (der Testzugang ist seit 26.10.2026 raus)
   let xSeit = 0;
   function xPruefen(gedrueckt){
     if(!gedrueckt){ xSeit = 0; return; }
     if(!xSeit) xSeit = performance.now();
     if(performance.now() - xSeit > 3000){
       if(seite === 'stat'){ xSeit = Infinity; seite = 'loeschen'; wahl = 2; zeichnen(); return; }   // erst nach dem Loslassen wieder
-      if(!testFrei && seite === 'haupt'){ testFrei = true; zeichnen(); }
     }
   }
   let xTaste = false;
@@ -3331,6 +3333,69 @@ function ohneTodesstern(){
   // Start im Hangar. Das Hangar-Modell laesst build_engine.ps1 ebenfalls weg.
   if(typeof enterHangar === 'function') enterHangar = function(){ return false; };   // global-ok: Engine
 }
+// ---- Propellerton (Live-Wunsch 26.10.2026) ------------------------------------------------------------------------------
+// "Zu hell, klingt wie ein Rasenmaeher", und am Anfang der Aufnahme steckt ein Startgeraeusch: Die Schleife beginnt PROP_START s
+// spaeter, ein Tiefpass nimmt die Schaerfe, und die Tonhoehe bleibt tief – mit dem Schub wird der Motor nur lauter (leise und
+// tief im Leerlauf, laut und tief bei Vollgas). Turbinen (Alpha Jet, X-Wing, Airbus) und Boote bleiben wie in der Engine.
+// Die Engine selbst bleibt unveraendert (startEngineLoop und updateEngineSound werden nur umhuellt).
+const PROP_START = 1.0, PROP_TIEF = 1300, PROP_RATE = 0.72, PROP_LEISE = 0.04, PROP_LAUT = 0.27, PROP_UEBER = 0.3;
+// Nahtlose Schleife (Live-Befund 26.10.2026: "eine kurze Pause dazwischen" – beim Sprung vom Ende zurueck passten Klang und
+// Lautstaerke nicht zusammen): einmal je Aufnahme ein eigener Puffer ab PROP_START, dessen letzte PROP_UEBER s weich in den
+// Anfang uebergeblendet sind (gleiche Leistung) – das Ende geht ohne Sprung in den Anfang ueber.
+const propSchleifen = new WeakMap(), propFertig = new WeakSet();
+function propSchleife(buf){
+  if(propFertig.has(buf)) return buf;                                   // schon eine fertige Schleife (die Engine gibt sie zurueck)
+  if(propSchleifen.has(buf)) return propSchleifen.get(buf);
+  const sr = buf.sampleRate, a = Math.floor(PROP_START * sr), x = Math.floor(PROP_UEBER * sr), L = buf.length - a - x;
+  const out = audioCtx.createBuffer(buf.numberOfChannels, L, sr);                                       // global-ok: Engine
+  for(let c = 0; c < buf.numberOfChannels; c++){ const d = buf.getChannelData(c), o = out.getChannelData(c);
+    for(let i = 0; i < L; i++) o[i] = d[a + i];
+    for(let i = 0; i < x; i++){ const k = i / x; o[i] = d[a + i] * Math.sin(k * Math.PI / 2) + d[a + L + i] * Math.cos(k * Math.PI / 2); } }
+  propSchleifen.set(buf, out); propFertig.add(out); return out;
+}
+function propellerTon(buf){
+  const m = MODEL_NAMES[currentModel];                                                                   // global-ok: Engine
+  if(m === 'AlphaJet' || m === 'XWing' || m === 'Airbus') return false;
+  if((typeof boatEngineBuf !== 'undefined' && buf === boatEngineBuf) || (typeof subEngineBuf !== 'undefined' && buf === subEngineBuf)) return false;   // global-ok
+  return !(typeof isWaterCraft === 'function' && isWaterCraft()) && (propFertig.has(buf) || buf.duration > PROP_START + PROP_UEBER + 0.5);   // global-ok: Engine
+}
+// ---- Pause haelt auch den Ton an (Live-Wunsch 26.10.2026: "Pause sollte doch grundsaetzlich alles pausieren") ------------
+// In der Pause ruft die Engine updateEngineSound und die Umgebungstoene nicht mehr auf – der Motor lief auf seiner letzten
+// Lautstaerke weiter. Darum haelt die Pause die ganze Web-Audio-Ausgabe an (audioCtx.suspend, auch Musik, Wind, Sirene) und die
+// Ansage; danach geht alles an derselben Stelle weiter. Nur was wir selbst angehalten haben, setzen wir fort.
+let pauseTonAn = false, pauseTonUns = false;
+function pauseTonSchritt(){
+  const p = hilfeOffen();
+  if(p === pauseTonAn) return; pauseTonAn = p;
+  const ctx = typeof audioCtx !== 'undefined' ? audioCtx : null;                                       // global-ok: Engine
+  if(p){ if(ctx && ctx.state === 'running'){ ctx.suspend(); pauseTonUns = true; } try { speechSynthesis.pause(); } catch(e){} }
+  else { if(ctx && pauseTonUns && ctx.state === 'suspended') ctx.resume(); pauseTonUns = false; try { speechSynthesis.resume(); } catch(e){} }
+}
+function hookPauseTon(){ const loopOrig = loop; loop = function(){ const r = loopOrig.apply(this, arguments); pauseTonSchritt(); return r; }; }   // global-ok: Engine
+function hookPropeller(){
+  if(typeof startEngineLoop !== 'function') return;
+  const startOrig = startEngineLoop;                                                                    // global-ok: Engine
+  startEngineLoop = function(buf){
+    if(!audioCtx || !buf || !propellerTon(buf)) return startOrig.apply(this, arguments);                // global-ok: Engine
+    if(engineSrc){ try { engineSrc.stop(); } catch(e){} }                                               // global-ok: Engine
+    const s = audioCtx.createBufferSource(); s.buffer = propSchleife(buf); s.loop = true; s.quelle = buf;
+    const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = PROP_TIEF; f.Q.value = 0.7;
+    const g = audioCtx.createGain(); g.gain.value = 0;
+    s.connect(f).connect(g).connect(audioCtx.destination); s.start(); s.propeller = true;
+    // als aktueller Puffer der Engine anmelden – sonst startete sie den Loop jedes Bild neu (sie vergleicht engineSrc.buffer)
+    engineSrc = s; engineGain = g; engineBufCurrent = s.buffer;                                        // global-ok: Engine
+  };
+  const tonOrig = updateEngineSound;                                                                    // global-ok: Engine
+  updateEngineSound = function(){
+    const r = tonOrig.apply(this, arguments);
+    // nur, wenn die Engine den Motor gerade laufen laesst (sonst hat sie die Lautstaerke auf 0 gesetzt – das bleibt so)
+    if(engineSrc && engineSrc.propeller && engineGain && engineGain.gain.value > 0){                   // global-ok: Engine
+      const t = Math.max(0, Math.min(1, state.throttle));                                              // global-ok: Engine
+      engineSrc.playbackRate.value = PROP_RATE; engineGain.gain.value = PROP_LEISE + t * (PROP_LAUT - PROP_LEISE);
+    }
+    return r;
+  };
+}
 window.STORY_HOOK = function(){
   if(typeof strandleben !== 'undefined') strandleben.an = true;   // Forellen im Flachwasser, Seeloewen am Strand (Engine)
   // Live-Wunsch (08.10.2026): Alpha Jet bis 3000 m (Engine: 2200) – der Fuji ist 2 km hoch, der Lavaschacht endet darueber
@@ -3344,6 +3409,8 @@ window.STORY_HOOK = function(){
   hookHud();
   hookHilfe();
   hookTon();
+  hookPropeller();
+  hookPauseTon();
   hookPad();
   hookSchwimmen();
   hookMaster();

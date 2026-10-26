@@ -6476,11 +6476,11 @@ function updateShadow(){
   // vorher hatten sie gar keinen. Er macht sichtbar, wo man auf dem Wasser steht, und laesst den
   // Astronauten beim Huepfen nicht mehr schwerelos wirken.
   if(isWaterCraft() || eva){
-    planeShadow.visible = false;
     updateOvalShadow();
-    return;
-  }
-  ovalShadow.visible = false;
+    // Zu Fuss neben dem abgestellten Flugzeug (Live-Wunsch 26.10.2026 in Trip to Japan: beim Start der Etappe laeuft man auf den
+    // Jet zu – er hatte keinen Schatten): er behaelt seinen, dezent wie am Boden. Boote und Rover nicht.
+    if(isWaterCraft() || !eva || eva.boat || eva.rover || !planeGroup.visible || !state.onGround){ planeShadow.visible = false; return; }
+  } else ovalShadow.visible = false;
   // Oberflaeche: ueber Land (samt Sandrand) die Inselhoehe, ueber Wasser die WELLENHOEHE AN DIESER
   // STELLE — nicht der feste Wert 1,4 m, der hier stand. Genau derselbe Fehler, der beim Feuerwehrboot
   // schon behoben wurde (siehe updateOvalShadow): eine Hoehendifferenz zur echten Wasserflaeche
@@ -6537,7 +6537,8 @@ function updateShadow(){
   // am Boden ragt er etwas nach hinten heraus (Live-Wunsch 22.10.2026: nach dem Einsteigen sieht man von hinten drauf – so
   // ist er hinter dem Heck zu sehen, wie ein Schatten der tiefstehenden Sonne)
   if(state.onGround && !isWaterCraft()){ const hb = new THREE.Vector3(0, 0, 1).applyQuaternion(state.quat); hb.y = 0; if(hb.lengthSq() > 1e-6){ hb.normalize(); planeShadow.position.x += hb.x * SCHATTEN_HINTEN; planeShadow.position.z += hb.z * SCHATTEN_HINTEN; } }
-  { const delta = MODEL_NAMES[currentModel] === 'AlphaJet'; shDelta.visible = delta; shWing.visible = !delta; }   // Eurofighter: Deltafluegel
+  // Eurofighter: Deltafluegel – ohne die Rumpfellipse darunter (Live-Wunsch 26.10.2026: am Boden zu kraeftig, die Mitte lag doppelt)
+  const delta = MODEL_NAMES[currentModel] === 'AlphaJet'; shDelta.visible = delta; shWing.visible = !delta; shBody.visible = !delta;
   // Kurs (Gierwinkel) übernehmen, damit der Umriss in Flugrichtung zeigt
   const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(state.quat);
   planeShadow.rotation.y = Math.atan2(fwd.x, fwd.z) + Math.PI;
@@ -6549,7 +6550,7 @@ function updateShadow(){
   const scale = 1 + f * 0.8;
   planeShadow.scale.set(scale, 1, scale);
   // nah = dunkel, hoch = blasser, aber Mindest-Deckkraft, damit er auf Wasser sichtbar bleibt
-  shadowMat.opacity = (0.18 + 0.22 * (1 - f)) * SHADOW_DECK;
+  shadowMat.opacity = (0.18 + 0.22 * (1 - f)) * SHADOW_DECK * (delta ? 0.7 : 1);   // der Delta ist eine grosse Flaeche: etwas heller
   // Am Boden kraeftiger (Live-Befund 22.10.2026: auf der hellen Bahn war der Schatten kaum zu sehen, der Flieger wirkte, als
   // laege er auf) – ein klarer Kontaktschatten unter Rumpf und Fluegeln
   if(state.onGround && !isWaterCraft()) shadowMat.opacity = 0.85;
@@ -11405,7 +11406,12 @@ planeShadow.add(shBody);
 // Live-Befund 22.10.2026 ("der Jet hat immer noch keinen Schatten, auch von der Seite nicht"): das Dreieck war mit 4,7 m
 // halb so lang wie der Jet und auf der hellen Bahn kaum zu sehen -> volle Laenge (Nase 5,5 m vor, Heck 5,5 m hinter der
 // Mitte), dazu der Rumpfstreifen (shBody)
-const shDelta = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(0, -5.5), new THREE.Vector2(-4.4, 3.4), new THREE.Vector2(-1.2, 5.5), new THREE.Vector2(1.2, 5.5), new THREE.Vector2(4.4, 3.4)])), shadowMat);
+const shDelta = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(0, 5.5), new THREE.Vector2(-4.4, -3.4), new THREE.Vector2(-1.2, -5.5), new THREE.Vector2(1.2, -5.5), new THREE.Vector2(4.4, -3.4)])), shadowMat);
+// UVs der Form auf 0..1 (Live-Befund 26.10.2026 in Trip to Japan: ShapeGeometry legt sie in Metern an, von der weichen runden
+// Schatten-Textur lag nur ein kleines Stueck rechts der Mitte auf dem Dreieck – der Schatten war duenn, schief und sah aus wie
+// ein Propeller). Dabei fiel auf: die Spitze lag hinten – jetzt vorn (y = +5,5 wird nach der Drehung -z = vorn, gemessen von oben)
+{ const g = shDelta.geometry, p = g.attributes.position, uv = g.attributes.uv; g.computeBoundingBox(); const b = g.boundingBox;
+  for(let i = 0; i < uv.count; i++) uv.setXY(i, (p.getX(i) - b.min.x) / (b.max.x - b.min.x), (p.getY(i) - b.min.y) / (b.max.y - b.min.y)); uv.needsUpdate = true; }
 shDelta.rotation.x = -Math.PI/2; shDelta.renderOrder = 999; shDelta.visible = false;
 planeShadow.add(shDelta);
 const shWing = new THREE.Mesh(new THREE.CircleGeometry(1, 24), shadowMat);

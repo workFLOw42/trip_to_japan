@@ -668,13 +668,35 @@ function aufPisteLegen(m, s, q, L){
 // Effekte auf dem Brett (Live-Wunsch): weicher Schatten unter dem Brett, zwei Kantenspuren im Schnee, Staubwolke bei der Landung,
 // Fahrtwind-Striche je nach Tempo. Alles in einer Gruppe, die beim Aufraeumen mit verschwindet.
 let fx = null;
+// Hangschatten (Samu hier, Joshi in strandfreunde.js – Live-Wunsch 26.10.2026): weiche Scheibe in der Hangebene, 8 cm ueber dem
+// Schnee, im Sprung kleiner und heller. grund(v, r) = Schneehoehe v m voraus und r m rechts (quer wie ort) von der Figur.
+let schattenTex = null;
+function hangSchattenNeu(){
+  if(!schattenTex){ const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d');
+    const gr = c.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(0, 0, 64, 64);
+    schattenTex = new THREE.CanvasTexture(cv); }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: schattenTex, transparent: true, depthWrite: false, fog: false }));
+  m.renderOrder = 2; return m;
+}
+const _sAx = new THREE.Vector3(), _sAz = new THREE.Vector3(), _sN = new THREE.Vector3(), _sQ = new THREE.Vector3(), _sM = new THREE.Matrix4();
+function hangSchatten(m, p, o, grund){
+  const boden = grund(0, 0), hoehe = Math.max(0, p.y - boden), k = 1 / (1 + hoehe * 0.15);
+  // Hangebene aus vier Punkten (1 m vor/hinter, links/rechts) -> Normale; Schatten liegt darin
+  const rx = -o.tz, rz = o.tx;
+  const yv = grund(1, 0), yh = grund(-1, 0), yr = grund(0, 1), yl = grund(0, -1);
+  _sAx.set(2 * o.tx, yv - yh, 2 * o.tz); _sAz.set(2 * rx, yr - yl, 2 * rz); _sN.crossVectors(_sAz, _sAx).normalize();
+  if(_sN.y < 0) _sN.negate();
+  m.position.set(p.x, boden + 0.08, p.z);
+  // Ebene: lokale Z-Achse des Schattens = Normale, lokale Y-Achse (lange Seite) = Fahrtrichtung in der Ebene
+  _sAx.normalize(); _sQ.crossVectors(_sAx, _sN).normalize();
+  m.quaternion.setFromRotationMatrix(_sM.makeBasis(_sQ, _sAx, _sN));
+  m.scale.set(0.9 * k + 0.25, 1.9 * k + 0.35, 1); m.material.opacity = Math.max(0.15, k);
+}
+story.abSchattenNeu = hangSchattenNeu; story.abSchatten = hangSchatten;
 function fxBauen(){
   if(fx) return fx;
   const g = new THREE.Group(); scene.add(g);
-  const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d');
-  const gr = c.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(0, 0, 64, 64);
-  const schatten = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, fog: false }));
-  schatten.renderOrder = 2; g.add(schatten);
+  const schatten = hangSchattenNeu(); g.add(schatten);
   // Spuren: Ringpuffer aus Strichen (je Kante einer pro 0,6 m), verblassen ueber 6 s
   const SP = 220, spurPos = new Float32Array(SP * 2 * 2 * 3), spurGeo = new THREE.BufferGeometry();
   spurGeo.setAttribute('position', new THREE.BufferAttribute(spurPos, 3));
@@ -697,17 +719,7 @@ function fxWeg(){ if(!fx) return; scene.remove(fx.g); fx.g.traverse(o => { if(o.
 function fxSchritt(dt, o, amBoden){
   const f = fxBauen(), p = state.pos; f.schatten.visible = true; f.spur.visible = true;
   // Schatten: auf dem Schnee unter Samu, im Sprung kleiner und heller
-  const boden = grundAb(p.x, p.z), hoehe = Math.max(0, p.y - boden), k = 1 / (1 + hoehe * 0.15);
-  // Hangebene aus vier Punkten um Samu (1 m vor/hinter, links/rechts) -> Normale; Schatten liegt darin, 8 cm ueber dem Schnee
-  const rx = -o.tz, rz = o.tx;
-  const yv = grundAb(p.x + o.tx, p.z + o.tz), yh = grundAb(p.x - o.tx, p.z - o.tz), yr = grundAb(p.x + rx, p.z + rz), yl = grundAb(p.x - rx, p.z - rz);
-  const ax = new THREE.Vector3(2 * o.tx, yv - yh, 2 * o.tz), az = new THREE.Vector3(2 * rx, yr - yl, 2 * rz), nrm = new THREE.Vector3().crossVectors(az, ax).normalize();
-  if(nrm.y < 0) nrm.negate();
-  f.schatten.position.set(p.x, boden + 0.08, p.z);
-  // Ebene: lokale Z-Achse des Schattens = Normale, lokale Y-Achse (lange Seite) = Fahrtrichtung in der Ebene
-  const lang = ax.clone().normalize(), quer = new THREE.Vector3().crossVectors(lang, nrm).normalize();
-  f.schatten.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(quer, lang, nrm));
-  f.schatten.scale.set(0.9 * k + 0.25, 1.9 * k + 0.35, 1); f.schatten.material.opacity = Math.max(0.15, k);
+  hangSchatten(f.schatten, p, o, (v, r) => grundAb(p.x + o.tx * v - o.tz * r, p.z + o.tz * v + o.tx * r));
   // Spuren: am Boden alle 0,6 m ein Strich je Kante
   if(amBoden){
     const qx = -o.tz * 0.13, qz = o.tx * 0.13, kurve = ab.qv;     // > 0 = nach rechts gelenkt
@@ -857,6 +869,15 @@ story.abLage = () => (fin.aktiv && (fin.schritt === 'abfahrt' || fin.schritt ===
   ? { s: ab.s, q: ab.q, v: ab.v, luft: ab.luft, mega: fin.schritt === 'mega' } : null;
 story.abOrt = (st, s, q) => { const alt = ab.i; ab.i = st.i || 0; const o = ort(s, q); st.i = ab.i; ab.i = alt; return { x: o.x, z: o.z, tx: o.tx, tz: o.tz }; };
 story.abGrund = (x, z) => grundAb(x, z);
+// Pistenhoehe direkt aus Pisten-Koordinaten (s, q), ohne Suche nach dem naechsten Pistenpunkt: grundAb(x, z) wich an Joshis Platz
+// neben Samu bis ~10 cm von der Flaeche ab und sprang dabei von Bild zu Bild – Joshi ruckelte auf und ab (Live-Befund 26.10.2026)
+story.abGrundSQ = (st, s, q) => {
+  const P = fin.piste.pts, alt = ab.i; ab.i = st.i || 0; const o = ort(s, q), a = P[ab.i], b = P[ab.i + 1]; st.i = ab.i; ab.i = alt;
+  if(!a.hq) return grundAb(o.x, o.z);
+  const f = Math.max(0, Math.min(1, (s - a.S) / ((b.S - a.S) || 1))), u = (Math.max(-1, Math.min(1, q / (PISTE_B / 2))) + 1) * 3, j = Math.min(5, Math.floor(u)), w = u - j;
+  const ha = a.hq[j] + (a.hq[j + 1] - a.hq[j]) * w, hb = b.hq[j] + (b.hq[j + 1] - b.hq[j]) * w;
+  return ha + (hb - ha) * f;
+};
 story.abHinder = () => ab.hinder;
 story.abMass = { RAND: AB_RAND, VMAX: AB_VMAX, RAIL_L };
 let zeigeErlaubt = false;
