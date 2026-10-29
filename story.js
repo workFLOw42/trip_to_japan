@@ -634,10 +634,32 @@ let sprecher = null;
 const wartend = [];
 function sprecherFrei(r){ if(sprecher === r) sprecher = null; const n = wartend.shift(); if(n) n(); }
 const ZEICHEN_PRO_S = 14;
-// Stimme nach Rolle: 'pilot' = maennlich, sonst ('funk') weiblich. Gewaehlt wird nach Namen, weil die
+// Stimme nach Rolle (story.stimmen: m = maennlich, sonst weiblich). Gewaehlt wird nach Namen, weil die
 // Browser kein Geschlecht melden. Edge bringt zusaetzlich natuerliche Online-Stimmen mit.
 const STIMME_M = /Conrad|Killian|Florian|Stefan|Ralf|Kasper|Bernd|Christoph|male|männlich/i;
 const STIMME_W = /Katja|Amala|Seraphina|Louisa|Hedda|Elke|Klarissa|Tanja|Google Deutsch|female|weiblich/i;
+// ---- Stimmen (Standard seit 29.10.2026, wie im Geheimland): JEDE Sprechrolle hat ihre eigene Zeile, auch wenn sie noch gleich
+// klingt – so laesst sich jede spaeter einzeln aendern. m: maennliche Stimme, p: Tonhoehe, r: Tempo. Ohne Rolle spricht die
+// Erzaehlerin. Werte vorerst wie bisher (weiblich 1,0; maennlich 1,0, ohne Maennerstimme 0,75 tiefer). Neue Figur = neue Zeile.
+const STIMMEN = story.stimmen = {
+  erzaehlerin:        { m: false, p: 1.0, r: 1.0 },
+  bordcomputer:       { m: false, p: 1.0, r: 1.0 },   // Startsequenz (X-Wing, Jet)
+  bodenstation:       { m: false, p: 1.0, r: 1.0 },   // Mars- und Mond-Trips: "Du hast den Beweis!"
+  ubootCrew:          { m: false, p: 1.0, r: 1.0 },   // Etappe 1, Wrack-Fotos
+  transallPilot:      { m: true,  p: 1.0, r: 1.0 },   // Etappe 2, Kiste abwerfen
+  feuerwehrKapitaen:  { m: true,  p: 1.0, r: 1.0 },   // Etappe 3, Feuerwehrboot
+  polizei:            { m: true,  p: 1.0, r: 1.0 },   // Etappe 4, Verfolgungsjagd und Festnahme
+  schnellbootBeifahrer: { m: true, p: 1.0, r: 1.0 },  // Etappe 4, Kommentare beim Schnellboot
+  kranfuehrer:        { m: true,  p: 1.0, r: 1.0 },   // Etappe 4, Container
+  ubootFunk:          { m: true,  p: 1.0, r: 1.0 },   // Etappe 5, Felsenschlucht
+  airRaceAnsager:     { m: true,  p: 1.0, r: 1.0 },   // Etappe 5, Mustang Air Race
+  jetFunk:            { m: true,  p: 1.0, r: 1.0 },   // Etappe 6, Jet durch die Hoehle im Fuji
+  lokfuehrer:         { m: true,  p: 1.0, r: 1.0 },   // Etappe 6, Shinkansen
+  c400Pilot:          { m: true,  p: 1.0, r: 1.0 },   // Finale, C-400
+  strandStufe5:       { m: true,  p: 1.0, r: 1.0 },   // Finale Stufe 5 am Strand (vorher die Pilotenstimme)
+  pilot:              { m: true,  p: 1.0, r: 1.0 },   // alt: die fruehere Sammelrolle – nicht mehr verwenden
+};
+const stimmeVon = (rolle) => STIMMEN[rolle] || STIMMEN.erzaehlerin;
 // nurLokal: nur Stimmen des Rechners (Windows), keine Online-Stimme. Wird gesetzt, wenn eine Online-Stimme nicht anfing (siehe
 // die Wache in sprich) – Live-Befund 19.10.2026: beim Nutzer laedt Chrome die Google-Stimmen uebers Netz, und nach schnellem
 // Neuladen blieb die Sprachausgabe "oft blockiert". Ab dann fuer den Rest des Spiels lokal (sonst wartete jeder Satz erst).
@@ -646,7 +668,7 @@ function stimmeFuer(rolle, lokal){
   const alle = window.speechSynthesis.getVoices().filter(v => /^de/i.test(v.lang));
   const de = (lokal || nurLokal) && alle.some(v => v.localService) ? alle.filter(v => v.localService) : alle;
   const bevorzugt = (re) => de.filter(v => re.test(v.name)).sort((a, b) => (a.localService ? 1 : 0) - (b.localService ? 1 : 0))[0];
-  return (rolle === 'pilot' ? bevorzugt(STIMME_M) : bevorzugt(STIMME_W)) || de[0] || null;
+  return (stimmeVon(rolle).m ? bevorzugt(STIMME_M) : bevorzugt(STIMME_W)) || de[0] || null;
 }      // Sprechtempo bei rate 1.0 (fuer Schaetzung und Untertitel-Takt)
 function satzDauer(s){ return 1200 + s.length / ZEICHEN_PRO_S * 1000; }   // ms, Untertitel-Takt
 function sprich(saetze, fertig, rolle, warteMax, beiSatz){
@@ -684,15 +706,16 @@ function sprich(saetze, fertig, rolle, warteMax, beiSatz){
       sprecher = r; wartetSeit = 0;
       // Live-Befund 19.10.2026: die maennliche Stimme (Pilot, z. B. Etappe 4b 'Samu muss mit auf die Wache') sagte "Semu". Nur ihr
       // wird "Sahmu" vorgelesen (wie "Joschi" im Geheimland); Untertitel und Positionen (pos0, bPos) bleiben beim Originaltext.
-      const text = rolle === 'pilot' ? rest.replace(/Samu/g, 'Sahmu') : rest;
+      const text = stimmeVon(rolle).m ? rest.replace(/Samu/g, 'Sahmu') : rest;   // jede Maennerstimme
       const satzId = {};                                    // dieser Satz (ueber alle Versuche hinweg)
       // Ein Satzobjekt je Versuch: der Versuch, den die Wache verwirft, darf mit seinem onerror (Folge des cancel) nichts mehr
       // ausloesen – vorher sprang die Ansage dadurch einen Satz weiter, waehrend derselbe Satz neu gesprochen wurde.
       const neuU = (lokal) => {
         const u = new SpeechSynthesisUtterance(text), stimme = stimmeFuer(rolle, lokal);
-        u.lang = 'de-DE'; if(stimme) u.voice = stimme; u.rate = 1.0; u.satz = satzId;
-        // ohne maennliche Stimme klingt der Pilot wenigstens tiefer
-        u.pitch = rolle === 'pilot' && !(stimme && STIMME_M.test(stimme.name)) ? 0.75 : 1.0;
+        const S = stimmeVon(rolle);
+        u.lang = 'de-DE'; if(stimme) u.voice = stimme; u.rate = S.r; u.satz = satzId;
+        // ohne maennliche Stimme klingen die Maennerrollen wenigstens tiefer
+        u.pitch = S.p * (S.m && !(stimme && STIMME_M.test(stimme.name)) ? 0.75 : 1.0);
         u.onboundary = e => { if(utt === u) bPos = p + (e.charIndex || 0); };
         u.onend = u.onerror = () => { if(utt === u) naechster(); };
         u.onstart = () => { if(utt === u) u.lief = true; };
@@ -2153,7 +2176,7 @@ function pfStart(opts){
   pf.aktiv = true; pf.t = 0; pf.schritt = 0; pf.gruen = false;
   gesehen(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz');
   hinweis('');
-  if(!opts.still) sprich(['Bitte Startsequenz durchführen!']);
+  if(!opts.still) sprich(['Bitte Startsequenz durchführen!'], null, 'bordcomputer');
   pfHud();
 }
 story.pfStart = pfStart;
@@ -2231,7 +2254,7 @@ function pfFertig(ok){
   }
   if(ok){
     story.neueZeit(pf.kurzschluss ? 'startsequenzKurzschluss' : 'startsequenz', pf.t);   // still speichern (statistik.js)
-    sprich(['Startsequenz abgeschlossen. Guten Flug!']);
+    sprich(['Startsequenz abgeschlossen. Guten Flug!'], null, 'bordcomputer');
     spaeter(2.5, () => { pf.gruen = false; pfHud(); });
     story.phase = 'freiflug';
     story.ziel = story.zielFuer ? story.zielFuer(story.etappe) : { x: 0, z: -9000 };   // Radarpunkt
@@ -2576,7 +2599,7 @@ function marsSteinHolen(){
   mars.phase = 'zurueck';
   blitz();
   const st = TRIP[mars.ort || 'mars'].stein;
-  sprich(['Klasse! Du hast den Beweis! Und jetzt… schnell zurück zur Erde!']);
+  sprich(['Klasse! Du hast den Beweis! Und jetzt… schnell zurück zur Erde!'], null, 'bodenstation');
   hinweis('🪨 ' + st + ' an Bord – zurück zur Erde (blauer Punkt)');
   spaeter(9, () => { if(mars.phase === 'zurueck') hinweis(''); });
 }
@@ -2759,15 +2782,15 @@ function fotoMachen(){
   if(!w || !ub.aktiv) return;
   blitz();
   if(ub.fotos[w.key]){
-    sprich(['Diesen Schiffstyp haben wir schon! Such bitte ein anderes Wrack.']);
+    sprich(['Diesen Schiffstyp haben wir schon! Such bitte ein anderes Wrack.'], null, 'ubootCrew');
     return;
   }
   ub.fotos[w.key] = true;
   const n = Object.keys(ub.fotos).length;
   if(n < 2){
-    sprich(['Klasse, ein ' + NAME[w.key] + '! Jetzt fehlt nur noch ein zweites, anderes Schiff.']);
+    sprich(['Klasse, ein ' + NAME[w.key] + '! Jetzt fehlt nur noch ein zweites, anderes Schiff.'], null, 'ubootCrew');
   } else {
-    sprich(['Toll gemacht! Mit deinen beiden Fotos können wir die Riffe bauen. Vielen Dank, Samu!']);
+    sprich(['Toll gemacht! Mit deinen beiden Fotos können wir die Riffe bauen. Vielen Dank, Samu!'], null, 'ubootCrew');
     ub.aktiv = false; story.phase = 'uboot-fertig';
     ub.nah = null; fotoAnzeige();
     spaeter(3.5, () => {

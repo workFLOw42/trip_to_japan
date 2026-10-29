@@ -179,9 +179,9 @@ function einsteigen(art){
       story.pfStart({ kurzschluss: false, ohneZeit: true, still: true, danach: () => {
         if(!fin.aktiv) return;
         fin.schritt = 'flug'; zielSetzen();
-        story.sprich(['Sehr gut! Vollgas und ab in die Luft.'], null, 'pilot');
+        story.sprich(['Sehr gut! Vollgas und ab in die Luft.'], null, 'c400Pilot');
       }});
-    }, 'pilot');
+    }, 'c400Pilot');
   });
 }
 function zielSetzen(){
@@ -195,7 +195,7 @@ function zielSetzen(){
 function flugUpdate(){
   if(state.crashed){
     if(!fin.crash){ fin.crash = true; story.ziel = null;
-      story.sprich(['Oh nein! Das ging schief. Keine Sorge – wir versuchen es gleich noch einmal.'], null, 'pilot');
+      story.sprich(['Oh nein! Das ging schief. Keine Sorge – wir versuchen es gleich noch einmal.'], null, 'c400Pilot');
       story.spaeter(3.5, () => zurueck('Noch ein Versuch!')); }
     return;
   }
@@ -229,7 +229,7 @@ function rundflugUpdate(){
     // Live-Befund 19.10.2026: "nach dem Rundflug kann man nicht mehr aus der C-400 aussteigen". Ausgestiegen wurde NUR im
     // fertig()-Rueckruf der Ansage – blieb die haengen, sass man bis zur Notfall-Zeitsperre fest. Jetzt spaetestens nach
     // AUSSTIEG_SPAET s auch ohne fertig(), und Y steigt nach der Landung jederzeit aus (siehe buttonY).
-    story.sprich(['Und jetzt ab an den Strand: Die Wellen sind heute richtig hoch!'], () => zurueck('', 'Surfen auf hohen Wellen kommt bald!'), 'pilot');
+    story.sprich(['Und jetzt ab an den Strand: Die Wellen sind heute richtig hoch!'], () => zurueck('', 'Surfen auf hohen Wellen kommt bald!'), 'c400Pilot');
     story.spaeter(AUSSTIEG_SPAET, () => { if(fin.aktiv && fin.art === 'rundflug' && fin.schritt === 'fertig') zurueck('', 'Surfen auf hohen Wellen kommt bald!'); });
   }
 }
@@ -257,7 +257,7 @@ function sprungFlugUpdate(){
   const d = Math.hypot(state.pos.x - z.x, state.pos.z - z.z);
   if(d < SPRUNG_R && !state.onGround && state.pos.y - ISLAND_Y >= SPRUNG_MIN - 50){   // 50 m Spielraum (HUD rundet)
     fin.schritt = 'pilot'; fin.yaw = new THREE.Euler().setFromQuaternion(state.quat, 'YXZ').y; fin.hoehe = state.pos.y;
-    story.sprich(['Ich übernehme! Wir kreisen über der Piste. Spring mit B, wenn du bereit bist!'], null, 'pilot');
+    story.sprich(['Ich übernehme! Wir kreisen über der Piste. Spring mit B, wenn du bereit bist!'], null, 'c400Pilot');
   }
 }
 // Der Pilot kreist in der Hoehe ueber dem Zielpunkt (die Engine-Physik ist solange aus)
@@ -360,7 +360,7 @@ function abspringen(){
   fin.k.lande = { x: best.x, z: best.z, sx: 0, sz: 0 };   // sx/sz: Versatz durch den Stick (bleibt auf der Pistenbreite)
   kAnim('fly'); state.throttle = 0; freiflugStart(); ab.tricks = []; ab.v = 0;
   if(story.hudSichtbar) story.hudSichtbar(false);          // Live-Wunsch: ab dem Fallschirmsprung kein HUD
-  story.sprich(['Viel Spaß!'], null, 'pilot');
+  story.sprich(['Viel Spaß!'], null, 'c400Pilot');
   story.hinweis('');
 }
 function schirmAuf(){
@@ -1641,7 +1641,7 @@ function testPilot(){
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat); planeGroup.visible = true;
   fin.yaw = 0; fin.hoehe = state.pos.y; fin.schritt = 'pilot'; zielSetzen();
   snapCamera();
-  story.sprich(['Ich übernehme! Wir kreisen über der Piste. Spring mit B, wenn du bereit bist!'], null, 'pilot');
+  story.sprich(['Ich übernehme! Wir kreisen über der Piste. Spring mit B, wenn du bereit bist!'], null, 'c400Pilot');
 }
 // Test "Finale 3" (Live-Wunsch 14.10.2026): im freien Fall hinter dem Ende der Piste (wie nach der Mega-Rampe), Schirm, dann
 // gleich surfen – mit vielen Riesenwellen (60 % sind 10, 15, 20 oder 30 m hoch, story.finaleRiesen)

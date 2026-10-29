@@ -586,7 +586,7 @@ function kranB(){
       const p = c.obj.position;
       if(greifbar(c, h)){
         kran.haengt = c; c.ziel = 'haengt';
-        story.sprich(['Angehängt.'], null, 'pilot');
+        story.sprich(['Angehängt.'], null, 'kranfuehrer');
         return;
       }
     }
@@ -626,7 +626,7 @@ function kranB(){
   c.obj.position.set(luecke.x, DECK_Y + CONT.h / 2, luecke.z); c.obj.rotation.set(0, -luecke.grad * Math.PI / 180 + Math.PI / 2, 0);
   kran.voll++;
   if(kran.voll >= 4){ kranGeschafft(); return; }
-  story.sprich([['Sehr gut, der erste sitzt!', 'Prima, schon zwei!', 'Klasse, nur noch einer!'][kran.voll - 1]], null, 'pilot');
+  story.sprich([['Sehr gut, der erste sitzt!', 'Prima, schon zwei!', 'Klasse, nur noch einer!'][kran.voll - 1]], null, 'kranfuehrer');
 }
 function legeZurueck(c){
   const i = kran.lager.indexOf(c), p = STAPEL[i];
@@ -637,7 +637,7 @@ function fehler(grund){
   kran.fehler++;
   if(typeof rumble === 'function') rumble(300, 0.8, 0.5);
   if(kran.fehler > FEHLER_MAX){ kranEnde(false, 'zu viele Fehler'); return; }
-  story.sprich([grund.charAt(0).toUpperCase() + grund.slice(1) + '. ' + (kran.fehler === 1 ? 'Ein Fehler.' : 'Zwei Fehler – der nächste ist zu viel.')], null, 'pilot');
+  story.sprich([grund.charAt(0).toUpperCase() + grund.slice(1) + '. ' + (kran.fehler === 1 ? 'Ein Fehler.' : 'Zwei Fehler – der nächste ist zu viel.')], null, 'kranfuehrer');
 }
 
 // ---- Ablauf -----------------------------------------------------------------------------------
@@ -667,12 +667,12 @@ function kranEinsteigen(){
     kran.laeuft = true;
     story.hinweis('Vier Container aufs Schiff – B: anhängen / lösen');
     story.spaeter(8, () => { if(kran.aktiv) story.hinweis(''); });
-  }, 'pilot');
+  }, 'kranfuehrer');
 }
 function kranGeschafft(){
   if(kran.fertig) return;
   kran.laeuft = false;
-  story.sprich(['Großartig! Alle vier Container sind an Bord. Das war echte Geduldsarbeit!'], () => kranEnde(true, 'mit dem Kran', true), 'pilot');
+  story.sprich(['Großartig! Alle vier Container sind an Bord. Das war echte Geduldsarbeit!'], () => kranEnde(true, 'mit dem Kran', true), 'kranfuehrer');
 }
 function kranEnde(ok, wie, schonGesagt){
   if(kran.fertig) return;
@@ -686,7 +686,7 @@ function kranEnde(ok, wie, schonGesagt){
   });
   if(schonGesagt){ weiter(); return; }
   story.sprich([wie === 'Zeit abgelaufen' ? 'Oh, die Zeit ist um. Das Schiff muss ohne die Container auslaufen.'
-                                          : 'Oh nein, das waren zu viele Fehler. Wir brechen ab.'], weiter, 'pilot');
+                                          : 'Oh nein, das waren zu viele Fehler. Wir brechen ab.'], weiter, 'kranfuehrer');
 }
 
 // ---- HUD: Pendel, Winkel, Wind, Seil, Fehler, Zeit, Zaehler + Ladeplan -----------------------

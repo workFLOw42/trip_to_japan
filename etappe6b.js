@@ -213,7 +213,7 @@ function hoehleStart(){
   hud();
   if(story.stilleAlle) story.stilleAlle();                             // nichts mehr vor der Erklaerung in der Schlange
   autoRoll = 0; ho.ansageFertig = false;
-  ho.rede = story.sprich(ANSAGE, () => { ho.ansageFertig = true; }, 'pilot');
+  ho.rede = story.sprich(ANSAGE, () => { ho.ansageFertig = true; }, 'jetFunk');
 }
 function autoAbgeben(){ ho.auto = false; ho.phase = 'frei'; story.hinweis('Vollgas! Durch die Höhle – nichts berühren!'); story.spaeter(4, () => story.hinweis('')); }
 story.hoehleStart = hoehleStart;
@@ -391,7 +391,7 @@ function raus(){
   // im Schwarzen (Blende ~1,3 s), deshalb 2 s spaeter
   story.spaeter(2, () => {
     if(!ho.landen || ho.fertig) return;
-    story.sprich(['Du bist der absolute Wahnsinn! Ein wahres Fliegerass!', 'Jetzt nur noch landen… dann hast du es geschafft!'], null, 'pilot');
+    story.sprich(['Du bist der absolute Wahnsinn! Ein wahres Fliegerass!', 'Jetzt nur noch landen… dann hast du es geschafft!'], null, 'jetFunk');
     story.hinweis('Lande auf dem Flugfeld hinter dem Strand (roter Punkt im Radar)'); story.spaeter(8, () => story.hinweis(''));
   });
   ho.landen = true;

@@ -10,10 +10,30 @@ Stand: 09.10.2026 – vom User überarbeitet und in den Code übernommen (`story
 
 ## 🎙️ Rollen & Stimmen
 
-| Rolle im Code | Stimme | Wer spricht |
+**Standard seit 29.10.2026 (wie im Geheimland):** Jede Sprechrolle hat ihre eigene Zeile in `story.stimmen` (story.js) –
+auch wenn sie vorerst gleich klingt. So lässt sich jede später einzeln ändern. Die Werte sind noch die von vorher
+(weiblich bzw. männlich); welche Figur wie klingen soll, legen wir noch fest.
+
+| Rolle im Code | Stimme (vorerst) | Wer spricht |
 |---|---|---|
-| *(keine)* | **weiblich** | Erzählerin, Bodenstation im All, U-Boot-Crew Etappe 1, Startsequenz-Ansage |
-| `pilot` | **männlich** | Pilot, Kapitän, Kranführer, Polizei, Air-Race-Ansager, U-Boot-Funk Etappe 5, Lokführer |
+| *(keine)* / `erzaehlerin` | weiblich | Erzählerin |
+| `bordcomputer` | weiblich | Startsequenz-Ansage (X-Wing, Jet) |
+| `bodenstation` | weiblich | Bodenstation bei den Mars- und Mond-Trips |
+| `ubootCrew` | weiblich | U-Boot-Crew, Etappe 1 (Wrack-Fotos) |
+| `transallPilot` | männlich | Pilot der Transall, Etappe 2 |
+| `feuerwehrKapitaen` | männlich | Kapitän des Feuerwehrboots, Etappe 3 |
+| `polizei` | männlich | Polizei, Etappe 4 (Flucht und Festnahme) |
+| `schnellbootBeifahrer` | männlich | Kommentare beim Schnellboot, Etappe 4 |
+| `kranfuehrer` | männlich | Kranführer, Etappe 4 |
+| `ubootFunk` | männlich | U-Boot-Funk, Etappe 5 |
+| `airRaceAnsager` | männlich | Ansager beim Mustang Air Race, Etappe 5 |
+| `jetFunk` | männlich | Funk beim Jet durch die Höhle im Fuji, Etappe 6 |
+| `lokfuehrer` | männlich | Lokführer / Stellwerk, Etappe 6 (Shinkansen) |
+| `c400Pilot` | männlich | Pilot der C-400, Finale |
+| `strandStufe5` | männlich | Finale Stufe 5 am Strand |
+
+*Offen:* „Sauber gelandet! Was für ein unglaublicher Flug!“ (Etappe 6, Jet) spricht die Erzählerin – oder ein Tower? Und die
+Texte am Strand (Stufe 5) mischen Erzählung und Samu, gesprochen bisher mit der Pilotenstimme.
 
 ---
 

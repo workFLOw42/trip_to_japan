@@ -341,7 +341,7 @@ function fluchtStart(){
     story.hinweis('Durch den Kanal aufs Meer – gelbe Bojen!');
     story.spaeter(6, () => { if(fl.aktiv) story.hinweis(''); });
     story.spaeter(1.5, () => { if(fl.aktiv && fl.polizei[0]) fl.polizei[0].aktiv = true; });
-  }, 'pilot');
+  }, 'polizei');
 }
 
 // ---- Pro Bild --------------------------------------------------------------------------------
@@ -372,7 +372,7 @@ function kontakt(erster){
   if(typeof rumble === 'function') rumble(300, 1, 0.7);
   fl.kontakte++;
   if(fl.kontakte > KONTAKT_MAX){ fluchtEnde(false, 'zerschellt'); return; }
-  story.sprich([fl.kontakte === 1 ? erster : 'Noch einer! Beim nächsten Treffer ist das Boot hin.'], null, 'pilot');
+  story.sprich([fl.kontakte === 1 ? erster : 'Noch einer! Beim nächsten Treffer ist das Boot hin.'], null, 'schnellbootBeifahrer');
 }
 function fluchtUpdate(dt){
   if(!fl.aktiv) return;
@@ -514,8 +514,8 @@ function fluchtEnde(ok, wie){
     fl.aktiv = false; fluchtHud(); story.hinweis('');
     story.etappeEnde(ok ? 1 : 7, ok ? 'mit dem Schnellboot' : (wie === 'zerschellt' ? 'Boot zerschellt, Gefängnis' : 'eingeholt, Gefängnis'));
   });
-  if(ok){ story.sprich(['Geschafft! Die Polizei ist weit hinten. Ab aufs offene Meer!'], weiter, 'pilot'); return; }
-  story.sprich([wie === 'zerschellt' ? 'Krach! Das Boot ist am Felsen zerschellt, und schon ist die Polizei da.' : GEFAENGNIS[0]].concat(GEFAENGNIS.slice(1)), weiter, 'pilot');
+  if(ok){ story.sprich(['Geschafft! Die Polizei ist weit hinten. Ab aufs offene Meer!'], weiter, 'schnellbootBeifahrer'); return; }
+  story.sprich([wie === 'zerschellt' ? 'Krach! Das Boot ist am Felsen zerschellt, und schon ist die Polizei da.' : GEFAENGNIS[0]].concat(GEFAENGNIS.slice(1)), weiter, 'polizei');
 }
 
 // ---- HUD ------------------------------------------------------------------------------------

@@ -924,7 +924,7 @@ function bootEinsteigen(){
     boot.laeuft = true;                       // Zeit laeuft erst nach der Erklaerung
     story.hinweis('Lösche die drei Feuer flussabwärts – B: Wasserstrahl');
     story.spaeter(8, () => { if(boot.aktiv) story.hinweis(''); });
-  }, 'pilot');
+  }, 'feuerwehrKapitaen');
 }
 function bootHud(){
   if(!boot.hudEl){
@@ -1029,7 +1029,7 @@ function bootUpdate(dt){
       if(boot.laeuft || boot.schluss){
         boot.kontakte++;
         if(boot.kontakte > KONTAKT_MAX){ bootEnde(false, 'Boot am Felsen kaputt'); return; }
-        story.sprich([boot.kontakte === 1 ? 'Vorsicht, ein Felsen! Langsamer in den Kurven!' : 'Noch ein Felsen! Beim nächsten Treffer ist das Boot hin.'], null, 'pilot');
+        story.sprich([boot.kontakte === 1 ? 'Vorsicht, ein Felsen! Langsamer in den Kurven!' : 'Noch ein Felsen! Beim nächsten Treffer ist das Boot hin.'], null, 'feuerwehrKapitaen');
       }
     }
     planeGroup.position.copy(state.pos);
@@ -1044,7 +1044,7 @@ function bootUpdate(dt){
         f.loeschT = (f.loeschT || 0) + dt;
         if(f.loeschT > 1.2){ f.aus = true; story.entsorgen(f.g); if(typeof showThumb === 'function') showThumb();
           const n = kul.feuer.filter(q => q.aus).length;
-          if(n < 3) story.sprich([n === 1 ? 'Klasse, das erste Feuer ist aus!' : 'Sehr gut, nur noch eins!'], null, 'pilot');
+          if(n < 3) story.sprich([n === 1 ? 'Klasse, das erste Feuer ist aus!' : 'Sehr gut, nur noch eins!'], null, 'feuerwehrKapitaen');
         }
       }
     }
@@ -1066,7 +1066,7 @@ function bootGeschafft(){
   boot.rede = story.sprich(['Großartig! Alle Feuer sind aus. Du bist ein echter Held!'], () => {
     if(boot.fertig) return;                      // inzwischen am Felsen gescheitert
     bootEnde(true, 'mit dem Feuerwehrboot', true);
-  }, 'pilot');
+  }, 'feuerwehrKapitaen');
 }
 function bootEnde(ok, wie, schonGesagt){
   if(boot.fertig) return;
@@ -1083,7 +1083,7 @@ function bootEnde(ok, wie, schonGesagt){
   });
   if(schonGesagt){ weiter(); return; }           // Erfolg: der Satz ist schon durch (bootGeschafft)
   story.sprich([wie === 'Zeit abgelaufen' ? 'Oh nein, das hat zu lange gedauert. Die Feuerwehr vom Land übernimmt.'
-                                          : 'Autsch! Das Boot ist leck. Wir müssen uns abschleppen lassen.'], weiter, 'pilot');
+                                          : 'Autsch! Das Boot ist leck. Wir müssen uns abschleppen lassen.'], weiter, 'feuerwehrKapitaen');
 }
 
 // Feuer-Radar: im Boot der naechste Brand, sonst wie gehabt

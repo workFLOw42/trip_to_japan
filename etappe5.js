@@ -280,9 +280,9 @@ function mustangEinsteigen(){
     story.pfStart({ kurzschluss: false, ohneZeit: true, still: true, danach: () => {
       ar.laeuft = true; ar.t = 0;
       story.ziel = zielPunkt();
-      story.sprich(['Startsequenz abgeschlossen. Die Zeit läuft – Vollgas und ab durchs erste Tor!'], null, 'pilot');
+      story.sprich(['Startsequenz abgeschlossen. Die Zeit läuft – Vollgas und ab durchs erste Tor!'], null, 'airRaceAnsager');
     }});
-  }, 'pilot');
+  }, 'airRaceAnsager');
 }
 function zielPunkt(){ const t = welt.tore[ar.naechstes]; return t ? { x: t.L.m.x, z: t.L.m.z } : null; }
 
@@ -327,16 +327,16 @@ function arUpdate(dt){
       if(t.T.typ === 'messer'){
         // Querlage: Fluegel-Oben steht waagerecht (Oben quer zur Welt-Senkrechten)
         if(Math.abs(_arU.y) > Math.cos(MESSER_QUER)) strafe('messer', 'Nicht auf der Seite! Plus drei Sekunden.');
-        else story.sprich(['Messerflug, super!'], null, 'pilot');
+        else story.sprich(['Messerflug, super!'], null, 'airRaceAnsager');
       }
       if(t.T.loopEin){ ar.loopWinkel = 0; ar.loopKopf = false; }
       if(t.T.schraube){
         if(Math.abs(ar.rolle) < 2 * Math.PI * 0.9) strafe('schraube', 'Keine Schraube gedreht! Plus drei Sekunden.');
-        else story.sprich(['Schraube, klasse!'], null, 'pilot');
+        else story.sprich(['Schraube, klasse!'], null, 'airRaceAnsager');
       }
       if(t.T.loopAus){
         if(ar.loopWinkel < 300 * Math.PI / 180 || !ar.loopKopf) strafe('looping', 'Kein ganzer Looping! Plus fünfzehn Sekunden.');
-        else story.sprich(['Looping geschafft!'], null, 'pilot');
+        else story.sprich(['Looping geschafft!'], null, 'airRaceAnsager');
       }
 
       torGeschafft();
@@ -359,14 +359,14 @@ story.e5torSichtbar = () => torSichtbar();
 function strafe(art, text){
   ar.strafe += STRAFE[art]; ar.fehler.push(art);
   if(typeof rumble === 'function' && art === 'pylon') rumble(250, 0.8, 0.5);
-  story.sprich([text], null, 'pilot');
+  story.sprich([text], null, 'airRaceAnsager');
 }
 function torGeschafft(){
   ar.naechstes++;
   ar.rolle = 0;                                              // Schraube zaehlt ab dem letzten Tor
   if(ar.naechstes >= welt.tore.length){ zielDurch(); return; }
   const tn = welt.tore[ar.naechstes];
-  if(tn.T.text) story.sprich([tn.T.text], null, 'pilot');
+  if(tn.T.text) story.sprich([tn.T.text], null, 'airRaceAnsager');
   story.ziel = zielPunkt();
 }
 // Live-Wunsch: nach dem Ziel nicht einfach abstuerzen, sondern sauber landen – die Zeit ist dann schon gestoppt.
@@ -378,7 +378,7 @@ function zielDurch(){
   story.ziel = { x: MUSTANG.x, z: 0 };                       // Radar: zur Startbahn
   torSichtbar(true);
   // Zeit erst nach der Landung ansagen (Live-Wunsch: nicht doppelt); 20 % Schub reichen, die Sinkrate ist nur etwas hoeher
-  story.sprich(['Im Ziel! Die Zeit ist gestoppt. Jetzt noch sauber auf der Bahn landen: Gas auf zwanzig Prozent, langsam runter und aufsetzen!'], null, 'pilot');
+  story.sprich(['Im Ziel! Die Zeit ist gestoppt. Jetzt noch sauber auf der Bahn landen: Gas auf zwanzig Prozent, langsam runter und aufsetzen!'], null, 'airRaceAnsager');
 }
 function landungPruefen(){
   if(!ar.landen || ar.fertig) return;
@@ -398,7 +398,7 @@ function arEnde(ok, wie){
   story.sprich(txt, () => story.spaeter(1.5, () => {
     ar.aktiv = false; arHud();
     story.etappeEnde(ok ? 4 : 7, ok ? 'Air Race geschafft' : (wie === 'absturz' ? 'Absturz beim Air Race' : 'Air Race zu langsam'));
-  }), 'pilot');
+  }), 'airRaceAnsager');
 }
 function fmt(t){ return t.toFixed(1).replace('.', ','); }
 // ---- Richtungspfeil zum aktuellen Tor ------------------------------------------------------------

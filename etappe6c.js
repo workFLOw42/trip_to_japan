@@ -211,7 +211,7 @@ function einsteigen(){
     kamera(true);
     hudEngine(false);
     hud();
-    zf.rede = story.sprich(ANSAGE, () => { zf.start = true; }, 'pilot');
+    zf.rede = story.sprich(ANSAGE, () => { zf.start = true; }, 'lokfuehrer');
   });
 }
 story.e6zugEinsteigen = einsteigen;
@@ -273,7 +273,7 @@ function notbremse(){
 function geschafft(){
   if(zf.fertig) return; zf.fertig = true; zf.zeigt = false;
   // Live-Wunsch: steht der Zug, gleich der Globus (die Ansage laeuft hinein)
-  story.sprich(['Perfekt, Samu! Auf die Sekunde pünktlich.', 'Willkommen in Fukuoka-Beach!'], null, 'pilot');
+  story.sprich(['Perfekt, Samu! Auf die Sekunde pünktlich.', 'Willkommen in Fukuoka-Beach!'], null, 'lokfuehrer');
   story.spaeter(1.2, () => ende(true));
 }
 function ende(ok){

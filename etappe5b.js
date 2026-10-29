@@ -227,12 +227,12 @@ function padDruck(){
 function padFertig(){
   padAus();
   if(pad.eingabe === CODE){
-    story.sprich(['Code richtig! Das U-Boot ist frei. Abtauchen und durch die Felsenschlucht – vorsichtig, die Wände sind nah.'], () => schluchtStart(), 'pilot');
+    story.sprich(['Code richtig! Das U-Boot ist frei. Abtauchen und durch die Felsenschlucht – vorsichtig, die Wände sind nah.'], () => schluchtStart(), 'ubootFunk');
   } else {
     story.sprich(['Falscher Code. Das U-Boot bleibt gesperrt.',
       'Ein Fischer nimmt Samu mit – sein Kutter ist langsam, die Fahrt dauert eine Woche.'], () => {
       story.spaeter(1, () => { sb.aktiv = false; story.etappeEnde(7, 'falscher Code'); });
-    }, 'pilot');
+    }, 'ubootFunk');
   }
 }
 // Tastatur: Pfeile/WASD, B, auch Ziffern direkt? Nein – Live-Wunsch: ueber das Pad. Capture, damit nichts in die Engine geht.
@@ -272,7 +272,7 @@ function ubootEinsteigen5(){
   // Wie in Etappe 1: jemand hilft per Funk – aber den Code sagt diesmal niemand
   sb.rede = story.sprich(['Hallo! Bitte den Universal-Code für U-Boote eingeben.', 'Du hast nur einen Versuch.', 'Mit Raute bestätigst du, mit Stern löschst du die letzte Ziffer.'], () => {
     pad.offen = true; pad.wahl = 0; pad.eingabe = ''; pad.prev = { b: true }; padZeigen();
-  }, 'pilot');
+  }, 'ubootFunk');
 }
 function schluchtStart(){
   sb.laeuft = true; sb.t = 0;
@@ -336,7 +336,7 @@ function kontakt(t){
   if(sb.kontakte > KONTAKT_MAX){ ende(false, 'zerschellt'); return; }
   story.sprich([sb.kontakte === 1 ? (t.art === 'wand' ? 'Autsch, die Felswand!' : t.art === 'decke' ? 'Bumm, die Felsdecke! Nicht so hoch!'
       : t.art === 'bogen' ? 'Bumm! Unter dem Felsbogen musst du tiefer!' : 'Krach! Über die Felsrippe musst du höher!')
-    : 'Noch ein Treffer! Beim nächsten ist der Rumpf leck.'], null, 'pilot', 3);
+    : 'Noch ein Treffer! Beim nächsten ist der Rumpf leck.'], null, 'ubootFunk', 3);
 }
 function schluchtUpdate(dt){
   if(!sb.aktiv) return;
@@ -360,7 +360,7 @@ function ende(ok, wie){
   const txt = ok ? ['Geschafft! Durch die ganze Schlucht – das war Maßarbeit!']
     : wie === 'zerschellt' ? ['Krach! Der Rumpf ist leck, das U-Boot muss auftauchen.', 'Bis es repariert ist, vergeht eine Woche.']
     : ['Die Zeit ist um – der Sauerstoff wird knapp, das U-Boot muss auftauchen.', 'Die Fahrt dauert jetzt viel länger: eine ganze Woche.'];
-  story.sprich(txt, () => story.spaeter(1, () => { sb.aktiv = false; hud(); story.etappeEnde(ok ? 1 : 7, ok ? 'U-Boot-Schlucht' : (wie === 'zerschellt' ? 'U-Boot leck' : 'Schlucht zu langsam')); }), 'pilot');
+  story.sprich(txt, () => story.spaeter(1, () => { sb.aktiv = false; hud(); story.etappeEnde(ok ? 1 : 7, ok ? 'U-Boot-Schlucht' : (wie === 'zerschellt' ? 'U-Boot leck' : 'Schlucht zu langsam')); }), 'ubootFunk');
 }
 function hud(){
   if(!sb.hudEl){

@@ -537,7 +537,7 @@ function nachSequenz(ok){
   // Ansagen wie beim X-Wing mit der Startsequenz-Stimme (weiblich, SPRECHTEXTE_2.md)
   if(!ok){ story.sprich(['Die Startsequenz hat nicht geklappt – ohne Startsequenz darf hier keiner fliegen.', 'Die Flughafenpolizei nimmt Samu fest. Eine Woche Gefängnis.'],
     () => story.spaeter(1, () => flugEnde(false, 'Startsequenz verpasst, Gefängnis'))); return; }
-  story.sprich(['Startsequenz abgeschlossen. Guten Flug!']);
+  story.sprich(['Startsequenz abgeschlossen. Guten Flug!'], null, 'bordcomputer');
   flug.laeuft = true;
   story.ziel = { x: ZIEL6.x, z: ZIEL6.z };
   story.hinweis('Folge dem roten Punkt im Radar – Start: X / Shift halten');

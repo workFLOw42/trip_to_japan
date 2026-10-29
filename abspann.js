@@ -209,7 +209,7 @@ function abspannKamera(){
 const TEXT5 = ['Puh, das war knapp – nur noch ein Nachmittag!', 'Samu und sein Freund halten die Füße ins Meer und umarmen sich.', 'Nächstes Jahr machen wir den Pro-Run!'];
 function stufe5(){
   if(story.stufe5Gezeigt) return; story.stufe5Gezeigt = true;
-  story.spaeter(3, () => story.sprich(TEXT5, () => story.spaeter(1.5, () => story.abspann()), 'pilot'));
+  story.spaeter(3, () => story.sprich(TEXT5, () => story.spaeter(1.5, () => story.abspann()), 'strandStufe5'));
 }
 
 // ---- Hooks ---------------------------------------------------------------------------------------------------------

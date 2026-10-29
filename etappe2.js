@@ -484,7 +484,7 @@ function fsEinsteigen(){
   kiste = null;
   // Kurzschluss-Symbol genau zu seinem Satz: an, bevor er beginnt; aus 1 s nachdem er zu Ende ist.
   // Vorher feste 11 s / 20 s – je nach Stimme (oder Untertitel) kam es zu frueh und ging zu spaet.
-  fsch.rede = story.sprich(FS_TEXT, () => fsFrage(), 'pilot', 0, (i) => {
+  fsch.rede = story.sprich(FS_TEXT, () => fsFrage(), 'transallPilot', 0, (i) => {
     if(i === FS_SATZ_KURZSCHLUSS && fsch.schritt === 'erklaeren') fsSymbol(true);
     if(i === FS_SATZ_KURZSCHLUSS + 1) story.spaeter(1, () => fsSymbol(false));
   });
@@ -504,7 +504,7 @@ function fsSymbol(an){
 // Frage mit JA / NEIN (Stick links-rechts, A / Enter / Klick)
 function fsFrage(){
   fsch.schritt = 'frage';
-  story.sprich(['Und… du kannst doch fliegen, oder?'], null, 'pilot');
+  story.sprich(['Und… du kannst doch fliegen, oder?'], null, 'transallPilot');
   if(!fsch.frageEl){
     fsch.frageEl = document.createElement('div'); fsch.frageEl.dataset.etappeHud = '1';
     fsch.frageEl.style.cssText = 'position:absolute;left:50%;bottom:16%;transform:translateX(-50%);display:flex;gap:18px;z-index:22;';
@@ -535,15 +535,15 @@ function fsAntwort(){
     fsch.schritt = 'nein';
     story.sprich(['Oh man! Für Anfänger ist das leider nichts. Bitte steig wieder aus.'], () => {
       story.etappeEnde(7, 'ausgestiegen');
-    }, 'pilot');
+    }, 'transallPilot');
     return;
   }
   fsch.schritt = 'sequenz';
-  story.sprich(['Klasse! Dann zeig mal, was du kannst. Erst die Startsequenz!'], null, 'pilot');
+  story.sprich(['Klasse! Dann zeig mal, was du kannst. Erst die Startsequenz!'], null, 'transallPilot');
   story.pfStart({ kurzschluss: false, ohneZeit: true, still: true, danach: () => {
     fsch.schritt = 'flug';
     story.ziel = { x: OASE.x, z: OASE.z };              // roter Punkt im Radar
-    story.sprich(['Sehr gut! Jetzt Vollgas und ab zur Oase. Der rote Punkt im Radar zeigt dir den Weg.'], null, 'pilot');
+    story.sprich(['Sehr gut! Jetzt Vollgas und ab zur Oase. Der rote Punkt im Radar zeigt dir den Weg.'], null, 'transallPilot');
   }});
 }
 // Eingaben fuer die Frage: Pfeile/Stick links-rechts, A/Enter/Leertaste – als Tastendruck-Ereignis
@@ -642,7 +642,7 @@ function fsErgebnis(abstand){
   fsHudAus();
   const treffer = abstand <= FS_TREFFER;
   story.sprich([treffer ? (abstand < 20 ? 'Perfekt! Volltreffer, mitten in die Oase!' : 'Gut gemacht! Die Kiste ist sicher angekommen.')
-                        : 'Oh je, daneben! Die Leute müssen die Kiste jetzt im Sand suchen.'], null, 'pilot');
+                        : 'Oh je, daneben! Die Leute müssen die Kiste jetzt im Sand suchen.'], null, 'transallPilot');
   story.spaeter(4, () => {
     if(story.hinweis) story.hinweis('');
     story.etappeEnde(treffer ? 4 : 7, treffer ? 'Kiste getroffen' : 'Kiste daneben');
