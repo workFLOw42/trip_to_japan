@@ -913,7 +913,8 @@ function startbildschirm(weiter){
   // der Inhalt ist senkrecht zentriert, also sprang der Titel zweimal (index.html -> "wird geladen" -> Menue). Jetzt steht
   // der Titel in allen drei Faellen gleich, darunter ein Platz fester Hoehe (UNTER_H), in dem erst "wird geladen …" und dann
   // das Menue steht (oben ausgerichtet). index.html hat denselben Aufbau.
-  const titel = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>';
+  const titel = '<div style="font-size:52px;font-weight:700;letter-spacing:1px">Reise nach Japan</div>'   // Untertitel: Live-Wunsch 02.11.2026
+    + '<div style="font-size:clamp(16px,2.6vw,22px);margin-top:10px;opacity:.85">Ein Sommer ohne Eltern</div>';
   const UNTER_H = 210;
   const unter = (inhalt) => '<div style="height:' + UNTER_H + 'px;margin-top:34px;display:flex;flex-direction:column;align-items:center">' + inhalt + '</div>';
   function zeichnen(){
@@ -1649,13 +1650,18 @@ function updateWarpStreifen(dt){
   }
   ws.mesh.instanceMatrix.needsUpdate = true;
 }
+// Live-Befund 02.11.2026 ("die Mitte des Warplichts ist etwa eine X-Wing-Hoehe ueber dem X-Wing"): die Streifen wurden mit der Kamera des
+// LETZTEN Bildes ausgerichtet (die Engine setzt sie erst danach) – bei Warp fliegt der X-Wing Hunderte Meter je Bild, die Achse von der alten
+// Kamera zielte fast in Flugrichtung, also auf den Horizont ueber ihm. Jetzt erst, wenn die Kamera fuer dieses Bild steht.
 function hookWarp(){
   const updateWarpOrig = updateWarp;
   updateWarp = function(dt){
     const r = updateWarpOrig.apply(this, arguments);
-    updateWarpStreifen(dt);
+    ws.dt = (ws.dt || 0) + (dt || 0);
     return r;
   };
+  const camOrig = updateCamera;                                                                           // global-ok: Engine
+  updateCamera = function(){ const r = camOrig.apply(this, arguments); if(ws.dt !== undefined){ updateWarpStreifen(ws.dt); ws.dt = 0; } return r; };   // global-ok: Engine
 }
 
 // ---- Schatten -------------------------------------------------------------------------------

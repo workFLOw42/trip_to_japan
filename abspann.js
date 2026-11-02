@@ -69,8 +69,8 @@ function abspannText(){
   const L = story.reiseLog.slice().sort((a, b) => a.etappe - b.etappe);
   const tage = story.tage, stufe = story.finaleStufe ? story.finaleStufe() : 5;
   const stufenName = { 1: 'Pro-Run', 2: 'Fast perfekt', 3: 'Solide', 4: 'Lern-Run', 5: 'Das Versprechen' }[stufe];
-  let h = '<div style="font-size:44px;font-weight:800;margin-bottom:6px">Reise nach Japan</div>'
-    + '<div style="font-size:20px;opacity:.85;margin-bottom:40px">Samu hat es nach Fukuoka geschafft!</div>'
+  let h = '<div><div style="font-size:44px;font-weight:800;margin-bottom:6px">Reise nach Japan</div><div style="font-size:22px;opacity:.88">Ein Sommer ohne Eltern</div></div>'
+    + '<div><div style="font-size:20px;opacity:.85;margin-bottom:28px">Samu hat es nach Fukuoka geschafft!</div>'
     + '<div style="font-size:24px;font-weight:700;margin-bottom:10px">Die Reise</div><div style="min-width:440px;text-align:left">';
   for(const e of L) h += zeile(strecke(e), e.wie === '?' ? '–' : (e.tage === 1 ? '1 Tag' : e.tage + ' Tage') + (e.wie ? ' <span style="font-weight:400;opacity:.75">(' + e.wie + ')</span>' : ''));
   h += zeile('Zusammen', tage + ' von 42 Tagen', true) + zeile('Finale', 'Stufe ' + stufe + ' – ' + stufenName, true) + '</div>';
@@ -83,9 +83,12 @@ function abspannText(){
     const nT = T.filter(t => t && t.s !== 'welle').length; if(nT) h += zeile('Zusammen', nT + (nT === 1 ? ' Trick' : ' Tricks'), true);
     h += '</div>';
   }
-  h += '<div style="font-size:40px;font-weight:800;margin-top:140px;color:#ffd23f">Für Samu!</div>'   // weiter unten: Platz fuer die Statistiken
-    + '<div style="font-size:30px;font-weight:700;margin-top:6px">Hab’ dich lieb!</div>'
-    + '<div id="abspann-ende" style="height:1px"></div>';
+  // Danksagung wie im Geheimland (Live-Wunsch 02.11.2026), dann der Mittelblock zu; unten die Widmung
+  h += '<div style="font-size:24px;font-weight:700;margin:28px 0 8px;color:#ffd23f">Danke</div>'
+    + '<div style="font-size:18px;margin:4px 0;opacity:.92">allen Künstlerinnen und Künstlern der 3D-Modelle und Töne</div>'
+    + '<div style="font-size:16px;margin:4px 0;opacity:.92">(Namen und Lizenzen: github.com/workFLOw42/trip_to_japan)</div></div>';
+  h += '<div><div style="font-size:40px;font-weight:800;color:#ffd23f">Für Samu!</div>'
+    + '<div class="ab-hdl" style="font-size:30px;font-weight:700;margin-top:6px;display:inline-block">Hab’ dich lieb!</div><div id="abspann-ende" style="height:1px"></div></div>';
   return h;
 }
 story.abspann = function(){
@@ -98,7 +101,6 @@ story.abspann = function(){
   el.style.cssText = 'position:absolute;inset:0;z-index:28;pointer-events:none;overflow:hidden;color:#fff;font-family:system-ui,sans-serif;'
     + 'text-shadow:0 2px 6px rgba(0,0,0,.7);background:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.15) 40%,rgba(0,0,0,.35))';
   const roll = document.createElement('div');
-  roll.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:100%;display:flex;flex-direction:column;align-items:center;text-align:center;';
   roll.innerHTML = abspannText();
   const sig = document.createElement('div');
   sig.style.cssText = 'position:absolute;right:18px;bottom:14px;font-size:15px;opacity:.85;font-weight:600';
@@ -106,13 +108,11 @@ story.abspann = function(){
   sig.style.textAlign = 'right'; sig.innerHTML = '<div style="font-size:13px;font-weight:500;opacity:.9;margin-bottom:6px">Weitere Infos siehe:<br>github.com/workFLOw42/trip_to_japan</div>by workFLOw42 ©2026';
   el.appendChild(roll); el.appendChild(sig); document.body.appendChild(el);
   const F = story.e6, mitte = { x: F.STRANDPLATZ.x - 120, z: F.STRANDPLATZ.z };
-  ab = { el, roll, t: 0, h: 0, mitte, dauer: 0 };
+  ab = { el, roll, sig, t: 0, h: 0, mitte, dauer: 0 };
   // Live-Wunsch 19.10.2026: das Menue sofort, wenn der Abspann durch ist – vorher rollten nach der Widmung noch 60 % Bildhoehe
   // Leerraum durch (gut 5 s nichts). Jetzt endet er, wenn die Widmung oben aus dem Bild ist: Rollhoehe + Bildhoehe, mehr nicht.
   // Stehen bleiben: das Ende des Textes knapp ueber dem B (unten mittig); zu hoch fuer das Bild -> kleiner
-  ab.h = roll.offsetHeight; ab.s = Math.min(1, (innerHeight - 130) / Math.max(1, ab.h));
-  if(ab.s < 1){ roll.style.transformOrigin = 'top center'; roll.style.transform = 'translateX(-50%) scale(' + ab.s.toFixed(3) + ')'; }
-  ab.ziel = Math.max(16, innerHeight - 110 - ab.h * ab.s);
+  ab.s = abspannLage(roll); ab.ziel = 0;                  // drei Bloecke auf der ganzen Bildhoehe (abspannLage)
   if(story.hudSichtbar) story.hudSichtbar(false);
   story.abspannLaeuft = true;
   // Eigene Uhr (Live-Befund 19.10.2026: "das Weiterspielen-Menue kam immer erst, wenn man 3 s X gedrueckt hat, nie
@@ -127,6 +127,26 @@ story.abspann = function(){
     if(ab) requestAnimationFrame(uhr);
   })();
 };
+// Abspann-Aufteilung (Live-Wunsch 02.11.2026, in beiden Spielen gleich): ein bildschirmhoher Rahmen mit drei Bloecken – oben Titel und
+// Untertitel, in der Mitte das Gemachte und die Danksagung, unten die Widmung –, gleichmaessig verteilt (space-evenly: Rand oben = Rand
+// unten = die beiden Luecken dazwischen). Passt der Inhalt nicht, wird alles gleichmaessig kleiner. Er rollt von unten herein und haelt,
+// sobald er den Bildschirm genau fuellt (Titel oben). Copyright unten rechts; das B auf Hoehe von "Hab' dich lieb!", waagerecht in der Mitte
+// zwischen dessen Ende und dem Copyright-Block (zu eng: mittig darunter).
+function abspannLage(roll){
+  const H = innerHeight, W = innerWidth;
+  roll.style.cssText = 'position:absolute;left:50%;top:' + H + 'px;width:' + W + 'px;height:' + H + 'px;display:flex;flex-direction:column;'
+    + 'align-items:center;justify-content:space-evenly;text-align:center;transform-origin:top center;transform:translateX(-50%);';
+  const summe = [...roll.children].reduce((s, c) => s + c.offsetHeight, 0), luft = 4 * 24;
+  const s = Math.min(1, (H - luft) / Math.max(1, summe));
+  if(s < 1){ roll.style.width = (W / s) + 'px'; roll.style.height = (H / s) + 'px'; roll.style.transform = 'translateX(-50%) scale(' + s.toFixed(3) + ')'; }
+  return s;
+}
+function abspannBLage(k, roll, sig){
+  const hdl = roll.querySelector('.ab-hdl'), r = hdl ? hdl.getBoundingClientRect() : null, q = sig.getBoundingClientRect(), B = 66;
+  if(r && q.left - r.right >= B + 16){ k.style.left = Math.round((r.right + q.left) / 2) + 'px'; k.style.top = Math.round((r.top + r.bottom) / 2) + 'px'; }
+  else if(r){ k.style.left = Math.round((r.left + r.right) / 2) + 'px'; k.style.top = Math.round(Math.min(innerHeight - B / 2 - 6, r.bottom + (innerHeight - r.bottom) / 2)) + 'px'; }
+  else { k.style.left = '50%'; k.style.top = (innerHeight - 55) + 'px'; }
+}
 function abspannSchritt(dt){
   if(!ab) return;
   ab.t += dt;
@@ -138,10 +158,10 @@ function abspannSchritt(dt){
 // "Wie geht es weiter?"
 function bZeigen(){
   const k = ab.bKnopf = document.createElement('div');
-  k.style.cssText = 'position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:58px;height:58px;border-radius:50%;background:#e8352b;'
+  k.style.cssText = 'position:absolute;transform:translate(-50%,-50%);width:58px;height:58px;border-radius:50%;background:#e8352b;'
     + 'border:4px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.45);color:#fff;font:800 32px system-ui,sans-serif;display:flex;align-items:center;'
     + 'justify-content:center;opacity:0;transition:opacity .6s;text-shadow:none';
-  k.textContent = 'B'; ab.el.appendChild(k); requestAnimationFrame(() => { k.style.opacity = '1'; });
+  k.textContent = 'B'; abspannBLage(k, ab.roll, ab.sig); ab.el.appendChild(k); requestAnimationFrame(() => { k.style.opacity = '1'; });
   const weiter = () => { if(!ab) return; window.removeEventListener('keydown', taste, true);
     ab.el.remove(); ab = null; story.abspannLaeuft = false; if(story.hudSichtbar) story.hudSichtbar(true); nachDemAbspann(); };
   function taste(e){ if(e.code !== 'KeyB' && e.code !== 'Escape') return; e.preventDefault(); e.stopPropagation(); if(!e.repeat) weiter(); }
