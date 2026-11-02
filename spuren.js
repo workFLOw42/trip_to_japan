@@ -50,12 +50,12 @@ story.tierSchatten = function(obj, laenge, breite, deck){
 // wasserY: Hoehe der Wasserflaeche (Fluss in Etappe 3 hat eine eigene), sonst das Meer der Engine
 story.wasserTier = function(obj, laenge){ if(obj && typeof spurQuelle === 'function') spurQuelle(obj, { groesse: laenge }); };   // global-ok: Engine (Ringe/Gischt)
 
-function tierWelle(x, z, rich, k, groesse, wy){
+function tierWelle(x, z, rich, k, groesse, wy, rund){
   gischtBauen();
   let w = gis.wellen.find(q => !q.m.visible);
   if(!w && gis.wellen.length < WELLE_MAX + 20){ w = { m: new THREE.Mesh(gis.wGeo, gis.wMat.clone()) }; w.m.renderOrder = 2; scene.add(w.m); gis.wellen.push(w); }   // global-ok
   if(!w) return;
-  w.m.position.set(x, (wy !== undefined ? wy : seaYAt(x, z)) + 0.06, z); w.m.rotation.y = rich; w.m.visible = true; w.t = 0; w.k = k; w.g = groesse; w.wy = wy;
+  w.m.position.set(x, (wy !== undefined ? wy : seaYAt(x, z)) + 0.06, z); w.m.rotation.y = rich; w.m.visible = true; w.t = 0; w.k = k; w.g = groesse; w.wy = wy; w.rund = !!rund;
 }
 // Spritzer-Ring (Gischt-Teile der Boote): n Tropfen rund um (x, z) auf der Wasserflaeche wy, nach oben und aussen
 function spritzer(x, wy, z, n, kraft){
@@ -70,6 +70,8 @@ function spritzer(x, wy, z, n, kraft){
   }
 }
 story.spritzer = spritzer;
+// runder Ring, der sich gleichmaessig ausbreitet (Live-Wunsch 02.11.2026: beim Eintauchen von Samu, wie beim Orca)
+story.wasserRing = (x, z, groesse) => tierWelle(x, z, 0, 0.6, groesse, undefined, true);
 // Orcas der Engine (Live-Wunsch 18.10.2026): an der Oberflaeche eine Heckwelle und etwas Gischt, beim Sprung ein grosser
 // Spritzer beim Auftauchen und beim Eintauchen. Ruecken = Unterkante + ORCA_BACK der Engine (seit dem Low-Poly-Orca 2,05 m).
 // Erst beim Rechnen gelesen: spuren.js laedt VOR der Engine, ORCA_BACK gibt es beim Laden noch nicht.
@@ -185,12 +187,12 @@ function updateGischt(dt){
     let w = gis.wellen.find(q => !q.m.visible);
     if(!w && gis.wellen.length < WELLE_MAX){ w = { m: new THREE.Mesh(gis.wGeo, gis.wMat.clone()) }; w.m.renderOrder = 2; scene.add(w.m); gis.wellen.push(w); }   // global-ok
     if(w){ const px = state.pos.x - fx * lang * 0.9, pz = state.pos.z - fz * lang * 0.9;
-      w.m.position.set(px, seaYAt(px, pz) + 0.06, pz); w.m.rotation.y = Math.atan2(fx, fz); w.m.visible = true; w.t = 0; w.k = k; w.g = 1; w.wy = undefined; }
+      w.m.position.set(px, seaYAt(px, pz) + 0.06, pz); w.m.rotation.y = Math.atan2(fx, fz); w.m.visible = true; w.t = 0; w.k = k; w.g = 1; w.wy = undefined; w.rund = false; }
   }
   for(const w of gis.wellen) if(w.m.visible){
     w.t += dt; const a = w.t / 1.6;
     const gw = w.g || 1;                                     // Tierwellen (Krokodil) kleiner als die Bootswelle
-    w.m.scale.set((2.4 + a * 7 * (0.5 + w.k)) * gw, 1, (1.6 + a * 3) * gw);
+    if(w.rund){ const s = (1.0 + a * 6) * gw; w.m.scale.set(s, 1, s); } else w.m.scale.set((2.4 + a * 7 * (0.5 + w.k)) * gw, 1, (1.6 + a * 3) * gw);
     w.m.position.y = (w.wy !== undefined ? w.wy : seaYAt(w.m.position.x, w.m.position.z)) + 0.06;
     w.m.material.opacity = 0.6 * (0.4 + w.k) * (1 - a);
     if(a >= 1) w.m.visible = false;

@@ -469,7 +469,7 @@ function trickTasten(){
 function trickStart(name){
   const a = samu.acts[TRICK_CLIP[name]];
   if(!a) return;
-  tricks.aktiv = name; tricks.t = 0; tricks.w = null;
+  tricks.aktiv = name; tricks.t = 0; tricks.w = null; tricks.flug = null;
   a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true;
   if(samu.cur === TRICK_CLIP[name]) samu.cur = 'neu';     // derselbe Trick nochmal: von vorn (ohne alten Clip zu verlieren)
   samuAnim(TRICK_CLIP[name], 0.2);
@@ -493,7 +493,28 @@ function trickSchieben(){
   const fx = -Math.sin(y), fz = -Math.cos(y);             // vorn (Engine: Nase -Z)
   const lx = -Math.cos(y), lz = Math.sin(y);              // links
   const nx = g.x + fx * dv + lx * ds, nz = g.z + fz * dv + lz * ds;
-  if(evaSolid(nx, nz) && !hitsBuilding(nx, evaFootY(nx, nz) + 1, nz, false)){ g.x = nx; g.z = nz; g.y = evaFootY(nx, nz); }
+  if(evaSolid(nx, nz) && !hitsBuilding(nx, evaFootY(nx, nz) + 1, nz, false)){ g.x = nx; g.z = nz; if(eva.onGround) g.y = evaFootY(nx, nz); }   // in der Luft (Twirl-Sprung) nicht auf den Boden
+}
+// Der Twirl als echter Sprung (Live-Wunsch 02.11.2026): wo Samu im Clip abhebt (TWIRL.ab, an den Fuessen gemessen), springt die Engine
+// wirklich – auf der Erde gut 50 cm hoeher als der Clip allein (TWIRL.erde), auf Mond, Mars und allem mit wenig Schwerkraft mit voller
+// Sprungkraft (wie Joshis Mondsprung im Geheimland, dort mehrere Meter). Der Luftteil des Clips (ab..bis) wird ueber die ganze Flugzeit
+// gestreckt (Zeitlupe), in der Luft geht es zusaetzlich nach vorn (weiter). Landet er, laeuft der Rest des Clips normal.
+const TWIRL = { ab: 1.38, bis: 1.75, erde: 0.5, vor: 1.0 };
+function twirlSprung(a, dt){
+  const F = tricks.flug || (tricks.flug = { phase: 'anlauf' });
+  if(F.phase === 'anlauf' && a.time >= TWIRL.ab){
+    if(!eva.onGround){ F.phase = 'aus'; return; }
+    const g = (typeof GRAV_AT !== 'undefined' && GRAV_AT[locale]) || 9.81;                         // global-ok: Engine
+    const v = g > 6 ? Math.sqrt(2 * g * TWIRL.erde) : (typeof EVA_JUMP_V !== 'undefined' ? EVA_JUMP_V : 4.6);   // global-ok: Engine
+    eva.vy = v; eva.onGround = false; F.phase = 'luft'; F.flug = 2 * v / g;
+    a.timeScale = Math.max(0.03, Math.min(1, (TWIRL.bis - TWIRL.ab) / F.flug));
+    return;
+  }
+  if(F.phase !== 'luft') return;
+  if(eva.onGround){ F.phase = 'ab'; a.timeScale = 1; return; }                                       // gelandet: der Rest normal
+  if(a.time >= TWIRL.bis - 0.02) a.timeScale = 0.001;                                             // noch in der Luft: die Pose halten
+  const g = eva.group.position, y = eva.yaw, nx = g.x - Math.sin(y) * TWIRL.vor * dt, nz = g.z - Math.cos(y) * TWIRL.vor * dt;
+  if((evaSolid(nx, nz) || (locale === 'earth' && ueberWasser(nx, nz))) && !hitsBuilding(nx, g.y + 1, nz, false)){ g.x = nx; g.z = nz; }   // global-ok: Engine
 }
 
 // Vor updateEva: Eingabe umformen (Tempo-Kurve, Stillstand bei Tricks/Moonwalk)
@@ -561,17 +582,22 @@ function updateSamu(dt){
   samu.mixer.update(dt);
   if(!eva || !eva.group || samu.obj.parent !== eva.group) return;
   tricks.dt = dt;
+  // im Wasser gelandet (Sprung oder Twirl ueber die Kante): der Trick ist vorbei, er schwimmt
+  if(tricks.aktiv && sw.aktiv && !(sw.eintauchen && sw.eintauchen.luft)){ const ta = samu.acts[TRICK_CLIP[tricks.aktiv]]; if(ta) ta.timeScale = 1; tricks.aktiv = null; tricks.flug = null; }
   if(tricks.aktiv){
     const a = samu.acts[TRICK_CLIP[tricks.aktiv]];
     tricks.t += dt;
     trickSchieben();
+    if(a && tricks.aktiv === 'twirl') twirlSprung(a, dt);
     // Live-Wunsch 19.10.2026: tanzt die Alien-Gruppe mit (aliens.js), hoert Samu nicht nach dem einen Durchgang auf, sondern
     // tanzt immer weiter – bis der Stick ihn bewegt oder eine andere Taste kommt (A springt, B kniet, Y Twirl, Moonwalk;
     // alle setzen tricks.aktiv selbst um). Der Clip faengt dann einfach von vorn an, die Hueftkurve mit ihm (tricks.w).
     if(a && tricks.aktiv === 'tanz' && ((story.aliens && story.aliens.gruppe) || (story.strandFreunde && story.strandFreunde.jam)) && tricks.t >= a.getClip().duration - TRICK_AUSBLENDEN){
       a.reset(); a.play(); tricks.t = 0; tricks.w = null; return;
     }
-    if(a && tricks.t < a.getClip().duration - TRICK_AUSBLENDEN) return;   // kurz vor Schluss schon zurueckblenden
+    // kurz vor Schluss schon zurueckblenden; beim Twirl nach der Clipzeit (gestreckt) und nie in der Luft
+    const tt = tricks.aktiv === 'twirl' ? a.time : tricks.t;
+    if(a && (tt < a.getClip().duration - TRICK_AUSBLENDEN || (tricks.aktiv === 'twirl' && !eva.onGround))) return;
     tricks.aktiv = null;
     samuAnim(tricks.ausschlag > 0.5 ? 'run' : tricks.ausschlag > 0.05 ? 'walk' : STAND, TRICK_AUSBLENDEN);
   }
@@ -592,7 +618,9 @@ function sprungStrecken(){
   const a = samu.acts.jump; if(!a) return;
   const g = (typeof GRAV_AT !== 'undefined' && GRAV_AT[locale]) || 9.81, flug = eva.vy > 0.5 ? 2 * eva.vy / g : 0.8;   // global-ok: Engine
   a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true;
-  a.timeScale = Math.max(0.15, Math.min(2, a.getClip().duration / flug));
+  // nur strecken, nie beschleunigen (Live-Befund 02.11.2026: auf der Erde – Flugzeit knapp 1 s, der Clip mit Absprung und Landung ist
+  // laenger – lief er fast doppelt so schnell); dort wie vor dem 26.10. im normalen Tempo
+  a.timeScale = Math.max(0.15, Math.min(1, a.getClip().duration / flug));
 }
 // Live-Wunsch 14.10.2026: steht Samu lange, faengt er von selbst mit dem Moonwalk an und gleitet dabei langsam
 // rueckwaerts (samuEingabe); jede Eingabe beendet ihn. Tricks blenden TRICK_AUSBLENDEN s vor Clipende zurueck.
@@ -1285,8 +1313,9 @@ function hookIntro(){
       return updateEvaOrig(dt, { pitch: geht ? -INTRO_GEH : 0 });
     }
     if(sw.aktiv){ schwimmUpdate(dt, inp); return; }
-    const r = updateEvaOrig(dt, samuEingabe(inp));
-    insWasserVoraus(inp);
+    const e = samuEingabe(inp), vx = eva.group.position.x, vz = eva.group.position.z;
+    const r = updateEvaOrig(dt, e);
+    insWasserVoraus(inp); luftInsWasser(e, dt, vx, vz);
     return r;
   };
   // Einsteigen (Y) und Reset (R) erst nach der Ansage. Y abseits der Fahrzeuge = Twirl (samuTasten).
@@ -1317,7 +1346,9 @@ function hookIntro(){
   const camOrig = updateCamera;
   updateCamera = function(){
     if(eva && sw.aktiv && steuerbar()){
-      const p = eva.group.position, yaw = eva.yaw + evaOrbit;
+      const pe = eva.group.position, yaw = eva.yaw + evaOrbit;
+      // beim Eintauchen bleibt die Kamera ueber Wasser: sie rechnet mit der Schwimmhoehe statt der Tauchtiefe (Live-Wunsch 02.11.2026)
+      const p = sw.eintauchen ? { x: pe.x, y: Math.max(pe.y, seaYAt(pe.x, pe.z) - SCHWIMM_TIEF), z: pe.z } : pe;
       const tief = seaYAt(p.x, p.z) - p.y;                     // wie weit unter der Oberflaeche
       const k = Math.min(1, Math.max(0, (tief - 0.5) / 2));    // 0 = an der Oberflaeche, 1 = getaucht
       const dist = 6 - 2 * k, hoch = 2.2 - 1.8 * k;
@@ -1372,6 +1403,18 @@ const sw = story.schwimm = { aktiv: false };
 // Geht er weiter, und der naechste Schritt ist tiefes Wasser: gleich schwimmen (Live-Befund 23.10.2026: "Samu laeuft noch ewig
 // auf der Stelle, bevor es zum Schwimmen umschaltet" – die Engine schaltet erst um, wenn er ganz feststeckt; schraeg zum Ufer
 // rutschte er gemessen 9 s an der Kante der Watzone entlang). Nicht von oben (Steg, Kai): dort faellt er wie bisher hinunter.
+// Im Sprung ueber die Kaikante (oder einen Steg) hinaus ins Wasser (Live-Wunsch 02.11.2026: mit allen Spruengen ins Wasser springen): die
+// Engine haelt Samu in der Luft an der Kante fest (offenes Wasser ist fuer sie kein Boden) – kommt er nicht voran, obwohl er laeuft, und
+// liegt vor ihm offenes Wasser unter ihm, geht es hier weiter; er faellt hinein und schwimmt (evaEnterDinghy an der Wasserlinie)
+function luftInsWasser(inp, dt, vx, vz){
+  if(!eva || eva.onGround || sw.aktiv || eva.boat || eva.rover || locale !== 'earth' || tricks.aktiv) return;   // global-ok: Engine
+  const f = Math.abs(inp.pitch || 0); if(f < 0.1) return;
+  const g = eva.group.position, soll = EVA_SPEED * Math.min(1, f) * dt;                                    // global-ok: Engine
+  if(Math.hypot(g.x - vx, g.z - vz) > soll * 0.5) return;                                                 // er kommt voran: nichts tun
+  const px = g.x - Math.sin(eva.yaw) * soll, pz = g.z - Math.cos(eva.yaw) * soll;
+  if(!evaSolid(px, pz) && isOpenWater(px, pz) && g.y > seaYAt(px, pz) + 0.3 && !hitsBuilding(px, g.y + 1, pz, false)){ g.x = px; g.z = pz; }
+}
+const ueberWasser = (x, z) => !evaSolid(x, z) && isOpenWater(x, z) && eva.group.position.y > seaYAt(x, z) + 0.3;   // Twirl-Sprung ins Wasser
 function insWasserVoraus(inp){
   if(!eva || sw.aktiv || eva.boat || eva.rover || !eva.onGround || locale !== 'earth' || -(inp.pitch || 0) < 0.1) return;
   const g = eva.group.position, px = g.x - Math.sin(eva.yaw) * 0.6, pz = g.z - Math.cos(eva.yaw) * 0.6;
@@ -1381,10 +1424,29 @@ function insWasserVoraus(inp){
   if(g.y > seaYAt(px, pz) + 0.4){ g.x = px; g.z = pz; eva.onGround = false; if(eva.vy > 0) eva.vy = 0; return; }
   evaEnterDinghy(px, pz);
 }
+// Eintauchen (Live-Wunsch 02.11.2026: "ein Untertauchen und gleich wieder Auftauchen zum Schwimmen, als wuerde ein Orca springen"; vorher
+// setzte das Schwimmen ihn hart auf die Schwimmhoehe): wer schneller als ab m/s ins Wasser faellt, taucht mit dem Schwung unter (mit = Anteil
+// der Fallgeschwindigkeit), das Wasser bremst (bremse), der Auftrieb (auftrieb) traegt ihn weich zurueck nach oben (hoechstens hoch m/s);
+// dabei gleitet er nach vorn weiter (vor m/s, wird langsamer) und neigt sich: abwaerts der Kopf nach unten, aufwaerts nach oben. Die
+// Kamera bleibt dabei ueber Wasser (er kommt ja gleich wieder hoch).
+// Kommt er von oben (Steg, Kai: das Schwimmen beginnt schon, wenn er noch ueber dem Wasser ist), faellt er erst sichtbar bis zur Oberflaeche
+// (luft) – dort spritzt es und die Ringe laufen (platsch); vorher wurde er in einem Bild auf die Schwimmhoehe versetzt (holprig).
+const EINTAUCH = { ab: 2.5, max: 7, mit: 1.0, auftrieb: 2.0, bremse: 1.0, hoch: 1.8, vor: 2.0, neigung: 0.9 };
+function platsch(x, z, fall){
+  if(story.spritzer) story.spritzer(x, seaYAt(x, z), z, 34, Math.min(1.8, 0.7 + fall * 0.12));
+  if(story.wasserRing){ story.wasserRing(x, z, 1.0); setTimeout(() => story.wasserRing(x, z, 0.75), 280); }
+}
 function schwimmStart(x, z){
+  const fall = -(eva.vy || 0), hoehe = eva.group.position.y - seaYAt(x, z), vorTempo = (tricks.aktiv === 'twirl' ? TWIRL.vor : (tricks.ausschlag || 0) * EVA_SPEED);   // vor dem Zuruecksetzen: wie schnell kam er herein
   sw.aktiv = true;
   const g = eva.group;
   g.position.set(x, seaYAt(x, z) - SCHWIMM_TIEF, z);
+  // von oben hineingesprungen (Steg, Kaimauer): erst eintauchen wie ein Orca, dann weich wieder hoch (sw.eintauchen, schwimmUpdate) –
+  // mit Spritzern und Ringen auf dem Wasser (wie der Orca, story.spritzer / story.wasserRing)
+  if(fall > EINTAUCH.ab || hoehe > 0.15){ const luft = hoehe > 0; g.position.y = seaYAt(x, z) + (luft ? hoehe : -0.1);
+    sw.eintauchen = { vy: -Math.min(Math.max(0, fall), EINTAUCH.max) * (luft ? 1 : EINTAUCH.mit), vor: Math.max(EINTAUCH.vor, vorTempo), luft };
+    sw.eintauchen.y = g.position.y; if(!luft) platsch(x, z, fall); }   // ab hier rechnet das Eintauchen (nicht ab der Schwimmhoehe)
+  else sw.eintauchen = null;
   eva.vy = 0; eva.onGround = true;
   evaJumpFrom = null;
 }
@@ -1409,8 +1471,8 @@ function schwimmUpdate(dt, inp){
   eva.yaw -= (inp.yaw || 0) * EVA_TURN * dt;
   g.rotation.y = eva.yaw;
   const v = -(inp.pitch || 0) * SCHWIMM_V;
-  let nx = g.position.x - Math.sin(eva.yaw) * v * dt;
-  let nz = g.position.z - Math.cos(eva.yaw) * v * dt;
+  let nx = g.position.x - Math.sin(eva.yaw) * v * dt, nz = g.position.z - Math.cos(eva.yaw) * v * dt;
+  const E = sw.eintauchen; if(E){ E.vor = Math.max(0, E.vor - E.vor * 1.2 * dt); nx -= Math.sin(eva.yaw) * E.vor * dt; nz -= Math.cos(eva.yaw) * E.vor * dt; }   // gleitet nach vorn weiter
   tricks.ausschlag = Math.abs(inp.pitch || 0);
   // Ans Ufer: wieder zu Fuss – eine Etappe kann den Ausstieg festlegen (story.schwimmAusstieg(x, z) -> { x, z } = dort hinaus,
   // false = Mauer: nicht weiter; undefined = wie immer). Hafen (Etappe 4): nur an der Leiter (Live-Wunsch 22.10.2026)
@@ -1430,7 +1492,7 @@ function schwimmUpdate(dt, inp){
     if(a === false){ mx = g.position.x; mz = g.position.z; }      // an der Mauer: bleibt im Wasser
     else {
       const ax = a ? a.x : nx, az = a ? a.z : nz;
-      sw.aktiv = false;
+      sw.aktiv = false; sw.eintauchen = null; if(samu.obj) samu.obj.rotation.x = 0;
       g.position.set(ax, evaFootY(ax, az), az);
       eva.vy = 0; eva.onGround = true;
       return;
@@ -1446,6 +1508,18 @@ function schwimmUpdate(dt, inp){
   if(tauchEingabe() === 0 && y < oben) y = (oben - y < 0.4) ? oben : Math.min(oben, y + 0.4 * dt);
   // die Oberflaeche geht vor: im flachen Wasser liegt "1 m ueber Grund" hoeher als sie – er schwamm dann in der Luft
   g.position.y = Math.min(oben, Math.max(unten, y));
+  if(E){                                                         // eintauchen: abwaerts gebremst, dann weich hinauf an die Oberflaeche
+    let ye = E.y === undefined ? g.position.y : E.y;
+    if(E.luft){ E.vy -= 9.81 * dt; ye += E.vy * dt;                // noch in der Luft: faellt bis zur Oberflaeche
+      const wy = oben + SCHWIMM_TIEF; if(ye <= wy - 0.1){ E.luft = false; platsch(nx, nz, -E.vy); E.vy *= EINTAUCH.mit; } }
+    else { E.vy = Math.min(EINTAUCH.hoch, E.vy + (EINTAUCH.auftrieb - EINTAUCH.bremse * E.vy) * dt); ye += E.vy * dt; }
+    if(ye <= unten){ ye = unten; if(E.vy < 0) E.vy = 0; }
+    E.y = ye; const fig = samu.obj;
+    if(!E.luft && E.vy > 0 && ye >= oben){ g.position.y = oben; sw.eintauchen = null;             // wieder oben: kleine Spritzer, ein Ring
+      if(story.spritzer) story.spritzer(nx, oben + SCHWIMM_TIEF, nz, 12, 0.6); if(story.wasserRing) story.wasserRing(nx, nz, 0.6); }
+    else { g.position.y = ye; if(fig) fig.rotation.x = Math.max(-EINTAUCH.neigung, Math.min(EINTAUCH.neigung, -Math.atan2(E.vy, Math.max(1, E.vor + 0.5)))); }
+  }
+  else if(samu.obj && Math.abs(samu.obj.rotation.x) > 0.001) samu.obj.rotation.x *= Math.max(0, 1 - 5 * dt);   // nach dem Auftauchen die Neigung weich zurueck
   eva.onGround = true;
   state.pos.copy(eva.planeAt);
   evaKmh = Math.abs(v) * 3.6;
@@ -2172,7 +2246,8 @@ const pf = story.preflight = { aktiv: false, t: 0, schritt: 0, gruen: false, el:
 function pfHud(){
   if(!pf.el){
     pf.el = document.createElement('div');
-    pf.el.style.cssText = 'position:absolute;left:16px;top:50%;transform:translateY(-50%);'
+    // oben in der Mitte (Live-Wunsch 02.11.2026: links liegt jetzt der Hoehenbalken, vorher verdeckte das Feld seine Beschriftung)
+    pf.el.style.cssText = 'position:absolute;left:50%;top:16px;transform:translateX(-50%);'
       + 'padding:12px 16px;border-radius:10px;background:rgba(0,0,0,.6);color:#fff;'
       + 'font:16px/1.6 system-ui,sans-serif;min-width:210px;z-index:20;';
     document.body.appendChild(pf.el);
@@ -3057,7 +3132,8 @@ function schubWieJFG(){
   const gy = document.getElementById('gyro'), ra = document.getElementById('radar');
   const ueber = gy && gy.style.display !== 'none' && getComputedStyle(gy).visibility !== 'hidden' ? gy : ra;
   if(!ueber) return;
-  const r = ueber.getBoundingClientRect(), top = Math.round(r.bottom + SCHUB_ABST) + 'px', w = Math.round(r.width - 6) + 'px';
+  // immer unter dem Radar-Platz (Live-Wunsch 02.11.2026): auch wenn das Fahrzeug kein Radar hat (Feuerwehrboot, Rennboot), sitzt er dort
+  const r = (ra || ueber).getBoundingClientRect(), top = (12 + 130 + SCHUB_ABST) + 'px', w = Math.round(r.width - 6) + 'px';
   if(schubEl.style.top !== top) schubEl.style.top = top;
   if(schubEl.style.width !== w){ schubEl.style.width = w; schubEl.style.height = SCHUB_H + 'px'; schubEl.style.right = '12px';
     schubEl.style.borderRadius = '9px'; schubEl.style.gap = '3px'; }
@@ -3078,6 +3154,81 @@ function schubAusblenden(){
   const op = Math.max(0, Math.min(1, 1 - (schubZeit - SCHUB_SICHT) / SCHUB_AUS)).toFixed(2);
   if(op !== schubOp){ schubOp = op; schubEl.style.opacity = op; }
 }
+// ---- Geschwindigkeit im Schubbalken, Hoehenbalken gegenueber (Live-Wunsch 02.11.2026) -------------------------------------
+// Oben links steht in Fahrzeugen nichts mehr (Hoehe, Speed, Schub in %): die Fahrt steht im Schubbalken, und zwar im obersten
+// leuchtenden Segment (bei 0 km/h gar nicht); beim Bremsen mit A im untersten – auch 0 km/h und rueckwaerts (negativ). Im Weltall
+// Warp. Die Hoehe zeigt ein zweiter Balken auf der anderen Bildschirmseite, gespiegelt (gleiche Hoehe, Groesse, Einteilung,
+// Farben, Luecken): 100 % = die hoechste Hoehe des Fahrzeugs bzw. Orts (maxAlt, sonst bis zum Weltall; Mond/Mars: wo man ihn
+// verlaesst), in 10-%-Segmenten, auf 5 % gerundet (ab 95 % leuchtet der volle Balken); die Hoehe in Metern im obersten
+// leuchtenden Segment. Nicht in Booten, im U-Boot und im Weltall.
+const BALKEN_SCHRIFT = 'font:800 14px system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 4px rgba(0,0,0,.8);'
+  + 'display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:visible;';
+function segText(seg, i, txt){
+  seg.forEach((s, j) => { if(!s.dataset.schrift){ s.dataset.schrift = '1'; s.style.cssText += BALKEN_SCHRIFT; } const w = j === i ? txt : ''; if(s.textContent !== w) s.textContent = w; });
+}
+function fahrtText(){
+  if(locale === 'space') return 'Warp ' + warpAnzeige(state.vel.length());                              // global-ok: Engine
+  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);                                     // global-ok: Engine
+  return Math.round(state.vel.dot(f) * 3.6);                                                             // vorwaerts +, rueckwaerts -
+}
+function schubTexte(){
+  if(!schubEl || schubEl.style.display === 'none') return;                                               // global-ok: Engine
+  const g = state.throttle, bremse = g < -0.01, an = Math.round(Math.max(0, Math.min(1, g)) * 10), v = fahrtText();   // global-ok: Engine
+  let i = -1, txt = '';
+  if(bremse){ i = 0; txt = typeof v === 'number' ? v + ' km/h' : v; }
+  else if(an >= 1 && v !== 0){ i = an - 1; txt = typeof v === 'number' ? v + ' km/h' : v; }
+  segText(schubSeg, i, txt);                                                                             // global-ok: Engine
+}
+let hoeheEl = null, hoeheSeg = [], hoeheAlt = '';
+function hoeheMax(){
+  // X-Wing (Live-Wunsch 02.11.2026): bis zur Grenze zum Weltall – auf der Erde SPACE_Y, auf Mond und Mars wo man sie verlaesst (unten)
+  if(locale === 'earth') return isXWing() ? SPACE_Y : ((spec && spec.maxAlt) || SPACE_Y);                                        // global-ok: Engine
+  return (GROUNDS[locale] && GROUNDS[locale].leave) || 1000;                                             // global-ok: Engine
+}
+function hoeheJetzt(){
+  const x = state.pos.x, z = state.pos.z, eb = typeof schattenBoden === 'function' ? schattenBoden(x, z) : null;   // global-ok: Engine
+  const ref = eb !== null ? eb : (GROUNDS[locale] || locale === 'death') ? surfaceY(x, z) : 0.3;          // global-ok: Engine (wie der Hoehenmesser)
+  return Math.max(0, Math.round(state.pos.y - ref));
+}
+// Im U-Boot (Live-Wunsch 02.11.2026) statt der Hoehe die Tiefe: 0 m an der Oberflaeche = 0 %, TIEFE_MAX m = 100 % (tiefer bleibt er voll;
+// das U-Boot taucht bis 22 m ueber den Grund, wie tief das ist, haengt vom Ort ab), auf 5 % gerundet, beschriftet negativ (-35 m)
+const TIEFE_MAX = 100;
+function hoehenBalken(){
+  const uboot = !eva && isSub();                                                                          // global-ok: Engine
+  const zeigen = schubEl && schubEl.style.display !== 'none' && locale !== 'space' && (!isWaterCraft() || uboot);   // global-ok: Engine
+  if(!hoeheEl){
+    hoeheEl = document.createElement('div');
+    hoeheEl.style.cssText = 'position:absolute;left:12px;top:292px;width:24px;height:240px;padding:3px;border-radius:7px;'
+      + 'background:rgba(0,0,0,.45);display:none;flex-direction:column-reverse;gap:2px;pointer-events:none;z-index:15;';
+    for(let i = 0; i < SCHUB_N; i++){ const s = document.createElement('div'); s.style.cssText = 'flex:1;border-radius:3px;opacity:.15;'; hoeheEl.appendChild(s); hoeheSeg.push(s); }   // global-ok: Engine
+    document.body.appendChild(hoeheEl);
+  }
+  if(!zeigen){ if(hoeheAlt !== 'aus'){ hoeheEl.style.display = 'none'; hoeheAlt = 'aus'; } return; }
+  // gespiegelt zum Schubbalken: gleiche Hoehe, Breite, Rundung, Abstaende und Deckkraft (blendet mit ihm aus)
+  const r = schubEl.getBoundingClientRect(), cs = schubEl.style;                                          // global-ok: Engine
+  const lage = Math.round(innerWidth - r.right) + '|' + Math.round(r.top) + '|' + cs.width + '|' + cs.height + '|' + cs.gap + '|' + cs.borderRadius;
+  if(hoeheEl.dataset.lage !== lage){ hoeheEl.dataset.lage = lage; const h = hoeheEl.style;
+    h.left = Math.round(innerWidth - r.right) + 'px'; h.top = Math.round(r.top) + 'px'; h.width = cs.width; h.height = cs.height; h.gap = cs.gap; h.borderRadius = cs.borderRadius; }
+  if(hoeheEl.style.opacity !== cs.opacity) hoeheEl.style.opacity = cs.opacity;
+  const m = uboot ? Math.max(0, Math.round(seaSurfaceY(0, 0, 0) - state.pos.y)) : hoeheJetzt();         // global-ok: Engine
+  const an = Math.max(0, Math.min(SCHUB_N, Math.round(m / (uboot ? TIEFE_MAX : hoeheMax()) * SCHUB_N)));   // global-ok: Engine (5-%-Schritte)
+  const gap = parseFloat(cs.gap) || 2, k = an + '|' + m + '|' + gap;
+  hoeheEl.style.display = 'flex';
+  if(k === hoeheAlt) return; hoeheAlt = k;
+  schubSegmente(hoeheSeg, an / SCHUB_N, gap);                                                             // global-ok: Engine (Farben, Luecken wie der Schub)
+  segText(hoeheSeg, an >= 1 ? an - 1 : -1, an >= 1 ? (uboot ? '-' : '') + m + ' m' : '');
+}
+// ist der Schubbalken aus (auch ueber andere Huellen, z. B. finale.js), ist es der Hoehenbalken auch
+(function hoeheWache(){ try { if(hoeheEl && hoeheEl.style.display !== 'none' && (!schubEl || schubEl.style.display === 'none')){ hoeheEl.style.display = 'none'; hoeheAlt = 'aus'; } } catch(e){} requestAnimationFrame(hoeheWache); })();   // global-ok: Engine
+// oben links: in Fahrzeugen nichts mehr (zu Fuss war es schon aus); das Gyroskop links oben, ueber dem Hoehenbalken (spiegelbildlich zu Radar\n// und Schub, Live-Wunsch 02.11.2026) – im Weltall ist es aus (body.imall), der Hoehenbalken auch: dort ist links alles frei
+(function(){ const st = document.createElement('style'); st.textContent = '#hud { display: none !important; } #gyro { left: 12px !important; right: auto !important; top: 12px !important; } body.ohneRadar #radar { visibility: hidden !important; }'; document.head.appendChild(st); })();
+// Gyroskop auch im U-Boot (Live-Wunsch 02.11.2026: es neigt sich in der Kurve, steigt und sinkt) – die Engine zeichnet es fuer Boote und U-Boot
+// gar nicht (isWaterCraft); im U-Boot darum mit 'kein Wasserfahrzeug' zeichnen lassen. Boote bleiben ohne.
+function hookGyroUboot(){
+  const gyroOrig = updateGyro;                                                                          // global-ok: Engine
+  updateGyro = function(){ if(!(!eva && isSub())) return gyroOrig.apply(this, arguments);                // global-ok: Engine
+    const iw = isWaterCraft; isWaterCraft = () => false; try { return gyroOrig.apply(this, arguments); } finally { isWaterCraft = iw; } };   // global-ok: Engine
+}
 function hookSchubGerade(){
   const holdOrig = thrHold;
   thrHold = function(dir){ if(dir) schubBetaetigt(); return holdOrig.apply(this, arguments); };
@@ -3091,11 +3242,14 @@ function hookSchubGerade(){
   schubBalken = function(){
     if((story.kran4 && story.kran4.aktiv) || story.phase === 'platzhalter' || story.phase === 'reise'){
       if(schubEl && schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; }
+      hoehenBalken();
       return;
     }
     const r = schubOrig.apply(this, arguments);
     schubWieJFG();
     schubAusblenden();
+    schubTexte(); hoehenBalken();                       // Fahrt im Schubbalken, Hoehe gegenueber
+    document.body.classList.toggle('ohneRadar', !eva && isBoat());   // Feuerwehrboot und Rennboot: kein Radar (nur der Schub)  // global-ok: Engine
     return r;
   };
   const geradeOrig = geradeMoeglich;
@@ -3498,7 +3652,7 @@ window.STORY_HOOK = function(){
   hookMars();
   hookVerdreht();
   hookModellHalter();
-  hookSchubGerade();
+  hookSchubGerade(); hookGyroUboot();
   hookJetLandung();
   ohneTodesstern();
   hookLoop();
