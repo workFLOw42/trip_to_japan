@@ -1,6 +1,11 @@
 ﻿# Baut die Engine aus dem Flugspiel-Repo nach engine/ und erzeugt index.html.
 # Aufruf aus dem Projektordner:  powershell -File tools/build_engine.ps1
 # Die Engine bleibt UNVERAENDERT – die Spiellogik haengt sich in story.js per Wrapper ein.
+# Seit 02.11.2026 hat dieses Spiel eine EIGENSTAENDIGE Engine (Nutzer-Entscheidung): engine/engine.js und die Engine-Dateien in engine/
+# bleiben, wie sie sind. Ohne Schalter baut dieses Skript nur index.html und die eigenen Modelle/Toene neu - den Kopf (HUD-Markup,
+# Engine-Skripte) liest es aus engine/flugspiel_kopf.html. Nur mit -EngineNeu holt es die Engine wieder aus ../Flugspiel
+# (vorher fragen: Umbauten an einer Engine gehen nicht automatisch in die anderen).
+param([switch]$EngineNeu)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $src  = Join-Path (Split-Path -Parent $root) 'Flugspiel'
@@ -8,6 +13,8 @@ $dst  = Join-Path $root 'engine'
 $utf8 = New-Object Text.UTF8Encoding $false
 New-Item -ItemType Directory -Force $dst | Out-Null
 
+$kopfDatei = Join-Path $dst 'flugspiel_kopf.html'
+if($EngineNeu){
 $html  = [IO.File]::ReadAllText((Join-Path $src 'Flugspiel.html'), $utf8)
 $lines = $html -split "`r?`n"
 
@@ -33,6 +40,12 @@ $body = @($body[0..($iIsl-1)]) + 'if(window.STORY_HOOK) STORY_HOOK();' + @($body
 $engine = "// AUTOMATISCH ERZEUGT aus ../Flugspiel/Flugspiel.html (tools/build_engine.ps1) – nicht von Hand aendern`n" +
           ($body -join "`n") + "`n"
 [IO.File]::WriteAllText((Join-Path $dst 'engine.js'), $engine, $utf8)
+[IO.File]::WriteAllText($kopfDatei, (($lines[0..($start-1)]) -join "`n"), $utf8)
+} else {
+  if(-not (Test-Path $kopfDatei)){ throw 'engine/flugspiel_kopf.html fehlt' }
+  $lines = [IO.File]::ReadAllText($kopfDatei, $utf8) -split "`r?`n"; $start = $lines.Count
+  'Engine bleibt (eigenstaendig, Stand engine/engine.js) - neu aus dem Flugspiel nur mit -EngineNeu'
+}
 
 # Kopf + HUD-Markup (alles vor dem Engine-Block), Script-Pfade auf engine/ umbiegen
 $head = @()
@@ -50,7 +63,7 @@ foreach($ln in $lines[0..($start-1)]){
   $ln = $ln -replace 'content="Flugspiel"', 'content="Reise nach Japan"'
   $head += $ln
 }
-foreach($a in $assets){ Copy-Item -Force (Join-Path $src $a) (Join-Path $dst $a) }
+if($EngineNeu){ foreach($a in $assets){ Copy-Item -Force (Join-Path $src $a) (Join-Path $dst $a) } }
 
 # Samu als eingebettetes GLB (wie die Flugspiel-Modelle)
 $kb = [IO.File]::ReadAllBytes((Join-Path $root 'models\samu.glb'))

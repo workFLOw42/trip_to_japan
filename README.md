@@ -157,7 +157,7 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | Datei | Inhalt |
 |---|---|
 | `index.html` | wird von `tools/build_engine.ps1` erzeugt (HUD-Markup aus dem Flugspiel, direkt nach `<body>` das Ladebild aus `tools/ladebild.html`) |
-| `engine/` | Flugspiel-Engine + Modelle, **unverändert** kopiert von `tools/build_engine.ps1` |
+| `engine/` | **eigenständige** Engine (Kopie der Flugspiel-Engine, Stand 26.10.2026) + Modelle; `engine/flugspiel_kopf.html` = HUD-Markup und Engine-Skripte für `index.html` |
 | `story.js` | Spiellogik und Etappe 1 – hängt sich per Wrapper in die Engine ein |
 | `objekte.js` | **Objekt-Katalog mit Grenzen** (aus „Das Geheimland“ übernommen, 16.10.2026): jedes Objekt einmal global als Typ (`story.typ`), gesetzt mit `story.setze(typ, etappe, { x, z, dreh, … })`. Jedes Bauteil ist eine Grenze in seiner echten Form (Quader, Zylinder, Kugel, freie Formen in Scheiben) – Samu läuft nicht hinein oder hindurch, wer drinsteckt, kommt immer hinaus. Bewegliche Dinge (`beweglich: true`) nehmen ihre Grenze mit. Bisher nutzt es das Uferdorf in Etappe 5; die übrigen Etappen werden nach und nach umgestellt |
 | `spuren.js` | **Schatten, Laufspuren, Bootsgischt** (wie im Geheimland): Samus Schatten so klein und blass wie Joshis (0,48 m, 60 %), beim Gehen und Laufen Staubwölkchen an jedem Fuß (Farbe je Etappe, nicht auf Beton, Bahn, im Wasser), in jedem Boot Spritzer am Bug und eine Heckwelle, je schneller desto mehr |
@@ -215,7 +215,7 @@ gibt alles frei, außer Objekten mit `userData.fremd = true` (Engine-Modelle mit
 abhängen). Der pre-commit-Hook lehnt `scene.add(` in `story.js`/`etappe*.js` ab; bewusst globale Stellen tragen
 `// global-ok`.
 
-Engine aktualisieren: `powershell -File tools/build_engine.ps1` (Flugspiel-Repo muss daneben liegen).
+Neu bauen: `powershell -File tools/build_engine.ps1` – die Engine bleibt dabei, wie sie ist (eigenständig seit 02.11.2026). Nur mit `-EngineNeu` wird sie wieder aus dem Flugspiel geholt (Flugspiel-Repo muss daneben liegen); vorher klären, ob die anderen Spiele dieselbe Änderung bekommen sollen.
 
 **Version / Offline:** Committen mit `powershell -File tools/commit.ps1 "Nachricht"` – das zählt die Cache-Version
 in `sw.js` hoch, sobald sich eine gecachte Datei ändert. Modelle und große Sounds (`*_glb.js`, `*_snd.js`) liegen in
