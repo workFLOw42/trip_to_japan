@@ -520,6 +520,15 @@ const getippt = {};
 addEventListener('keydown', e => { if(!e.repeat && tippTaste[e.code]) getippt[tippTaste[e.code]] = true; });
 
 // Tasten auswerten (Flanken), einmal pro Bild
+// Kamera zurueck hinter Samu? Ja, wenn er laeuft, springt oder moonwalkt, im Intro, in einem Fahrzeug, beim Schwimmen – und nach X,
+// bis sie wieder hinten ist. Steht er, bleibt sie, wie man sie mit dem rechten Stick eingestellt hat (Live-Wunsch 02.11.2026).
+const kamera = { standard: false };
+story.kameraStandard = () => { kamera.standard = true; };
+story.kameraZurueck = function(){
+  if(kamera.standard){ if(Math.abs(evaOrbit) < 0.003 && Math.abs(evaPitch) < 0.003) kamera.standard = false; else return true; }
+  if(!eva || eva.boat || eva.rover || eva.jet || sw.aktiv || !steuerbar()) return true;
+  return tricks.ausschlag > 0.05 || tricks.moon || !eva.onGround;
+};
 function samuTasten(){
   // Tricks ueberall, wo Samu zu Fuss ist – auch auf Mond und Mars (dort springt er dank geringer
   // Schwerkraft viel hoeher). Gesperrt nur hinter dem Platzhalter-Schild und waehrend des Globus.
@@ -539,6 +548,7 @@ function samuTasten(){
   if((neu('moon') || neu('b')) && tricks.aktiv === 'tanz'){ tricks.aktiv = null; samuAnim(STAND, TRICK_AUSBLENDEN); }
   tricks.moon = frei && k.moon && !tricks.aktiv;
   // B = knien (begleiter.js, Live-Wunsch 18.10.2026: der Hund kommt) – Aerial Evade liegt nicht mehr auf B
+  if(neu('x')) story.kameraStandard();               // X stellt auch die Kamera wieder hinter Samu (wie im Geheimland)
   if(frei && neu('x')) trickStart('tanz');
   if(frei && neu('y')) trickStart('twirl');
   tricks.prev = k; tricks.fzgVorher = amFahrzeug();
@@ -1290,6 +1300,19 @@ function hookIntro(){
   evaActionB = function(){};
   // Modellwechsel (M / D-Pad rechts) gibt es im Spiel nicht – Fahrzeuge waehlt die Geschichte
   cycleModel = function(){};
+  // Die Kamera bleibt stehen (Live-Wunsch 02.11.2026, wie im Geheimland): mit dem rechten Stick gedreht oder gehoben, bleibt sie so,
+  // solange Samu steht – erst wenn er laeuft, springt oder moonwalkt, gleitet sie wie bisher zurueck; X stellt sie zurueck
+  // (story.kameraStandard). Die Engine zieht ohne Eingabe jedes Bild um k zurueck – darum vorher um genau so viel vergroessert.
+  const camHalten = updateCamera;
+  updateCamera = function(){
+    const aktiv = Math.abs(lookX) > 0.01 || Math.abs(lookY) > 0.01;
+    if(eva && !aktiv && (typeof sideView === 'undefined' || sideView === 0) && !story.kameraZurueck()){
+      const k = Math.min(1, EVA_LOOK_RETURN * dtCam);
+      if(k < 0.9){ const o = evaOrbit, p = evaPitch; evaOrbit = o / (1 - k); evaPitch = p / (1 - k);
+        try { return camHalten.apply(this, arguments); } finally { evaOrbit = o; evaPitch = p; } }
+    }
+    return camHalten.apply(this, arguments);
+  };
   // Kamera: erst vorne (Gesicht), langsam heran, dann 180° nach hinten herum.
   const camOrig = updateCamera;
   updateCamera = function(){
