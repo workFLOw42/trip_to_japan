@@ -12192,7 +12192,7 @@ const AMB_GULL_R  = 900;    // m: bis hierher sind Moewen zu hoeren. Etwas mehr 
                             // (170 bis 330 m) plus Schelf — man hoert sie also schon beim Anfahren.
 const AMB_MAX_Y   = 400;    // m Hoehe: darueber verstummt die Kulisse. Ein Flugzeug in Reisehoehe
                             // hoert nur seinen Motor.
-const AMB_GULL_VOL = 0.21;  // 23.10.2026 mit den neuen Aufnahmen: "einen Tick zu laut" (vorher 0,26)
+const AMB_GULL_VOL = 0.19;  // 03.11.2026: 10 % leiser ("vielleicht koennten wir die moewen um etwa 10% leiser machen"); 23.10.2026: 0,21 ("einen Tick zu laut", vorher 0,26)
 const AMB_MEER_VOL = 0.17;  // Meeresrauschen (neue Aufnahme, "einen Tick zu dezent" bei 0,13); AMB_OCEAN_VOL bleibt fuer die Spiele (Wind)  // Grundlautstaerke. Von 0,16 hoch ("das moewen ambiente kann ein wenig
                             // lauter werden") — Kulisse bleibt es trotzdem, der Motor liegt bei
                             // 0,09 bis 0,25 und das Ozeanrauschen bleibt, wo es war ("wind ist super").
