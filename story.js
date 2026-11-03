@@ -3220,7 +3220,7 @@ function schubTexte(){
   else if(an >= 1 && v !== 0){ i = an - 1; txt = typeof v === 'number' ? v + ' km/h' : v; }
   segText(schubSeg, i, txt);                                                                             // global-ok: Engine
 }
-let hoeheEl = null, hoeheSeg = [], hoeheAlt = '';
+let hoeheEl = null, hoeheSeg = [], hoeheAlt = '', hoeheStufe = null;
 function hoeheMax(){
   // X-Wing (Live-Wunsch 02.11.2026): bis zur Grenze zum Weltall – auf der Erde SPACE_Y, auf Mond und Mars wo man sie verlaesst (unten)
   if(locale === 'earth') return isXWing() ? SPACE_Y : ((spec && spec.maxAlt) || SPACE_Y);                                        // global-ok: Engine
@@ -3262,7 +3262,7 @@ function hoehenBalken(){
   }
   if(finaleSprung()){ sprungHoehe(); return; }
   sprungH0 = null;
-  if(!zeigen){ if(hoeheAlt !== 'aus'){ hoeheEl.style.display = 'none'; hoeheAlt = 'aus'; } return; }
+  if(!zeigen){ hoeheStufe = null; if(hoeheAlt !== 'aus'){ hoeheEl.style.display = 'none'; hoeheAlt = 'aus'; } return; }
   // gespiegelt zum Schubbalken: gleiche Hoehe, Breite, Rundung, Abstaende und Deckkraft (blendet mit ihm aus)
   const r = schubEl.getBoundingClientRect(), cs = schubEl.style;                                          // global-ok: Engine
   const lage = Math.round(innerWidth - r.right) + '|' + Math.round(r.top) + '|' + cs.width + '|' + cs.height + '|' + cs.gap + '|' + cs.borderRadius;
@@ -3273,6 +3273,11 @@ function hoehenBalken(){
   // in der Luft (bzw. getaucht) leuchtet immer mindestens das unterste Segment – bis man gelandet ist (Live-Wunsch 03.11.2026, wie im Flugspiel)
   const luft = uboot ? m > 0 : (!state.onGround || m > 0);                                               // global-ok: Engine
   const an = Math.max(luft ? 1 : 0, Math.min(SCHUB_N, Math.round(m / (uboot ? TIEFE_MAX : hoeheMax()) * SCHUB_N)));   // global-ok: Engine (5-%-Schritte)
+  // Neue Stufe des Hoehenbalkens = wie eine Schubeingabe (Live-Wunsch 03.11.2026): wer gleitet, dem blenden die Anzeigen aus; wer steigt
+  // oder sinkt, sieht sie bei jeder neuen Stufe wieder (schnell steigen/sinken: dauernd). Im untersten Segment in der Luft bleiben
+  // sie immer an (dort misst man vor der Landung genau). Schub und Hoehe blenden weiter gemeinsam.
+  if((hoeheStufe !== null && an !== hoeheStufe) || (an === 1 && luft)) schubBetaetigt();
+  hoeheStufe = an;
   const gap = parseFloat(cs.gap) || 2, k = an + '|' + m + '|' + gap;
   hoeheEl.style.display = 'flex';
   if(k === hoeheAlt) return; hoeheAlt = k;
