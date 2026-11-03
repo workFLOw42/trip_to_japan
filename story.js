@@ -581,7 +581,7 @@ function samuTasten(){
 // Watzone), nicht in der Luft, nicht bei Aktionen und Tricks, nicht im Fahrzeug. Zwei Schritte je Durchlauf der Lauf-Animation (Takt
 // der Fuesse), jeder ein zufaelliger der 7 Schnipsel (schritte_snd.js), leicht verstimmt und verschieden laut. Auf dem Mond still
 // (kein Schall im Vakuum). Lautstaerke wie im Flugspiel abgestimmt (dort neben den Moewen 0,21 gerade gut hoerbar).
-const SCHRITT_VOL = { walk: 0.11, run: 0.17 };
+const SCHRITT_VOL = { walk: 0.165, run: 0.255 };   // Live-Wunsch 03.11.2026: 50 % lauter als 0,11 / 0,17
 let schrittBufs = null, schrittLaedt = false, schrittPhase = -1, schrittLetzter = -1;
 function schrittTon(){
   if(!soundOn || !audioCtx || audioCtx.state !== 'running' || !window.SCHRITTE_SND) return;   // global-ok: Engine
