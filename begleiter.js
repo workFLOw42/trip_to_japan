@@ -342,7 +342,7 @@ story.moeweAufgeschreckt = function(quelle){
 // story.js stellt Samus Clip jedes Bild nach dem Zustand (updateSamu -> samuAnim(STAND) im Stehen). Damit es beim Knien
 // nicht gegeneinander arbeitet, zeigt der Stehen-Eintrag (acts.stand / acts.idle) solange auf den Knie- bzw.
 // Aufsteh-Clip: story.js spielt ihn dann selbst und blendet sauber zurueck, wenn er wieder auf "stand" zeigt.
-const knie = { an: false, aufT: 0, stand: null, standName: null };
+const knie = { an: false, aufT: 0, stand: null, standName: null, frei: false };
 function standUmlenken(clip){
   const S = story.samu; if(!S) return;
   if(!knie.standName) knie.standName = S.acts.stand ? 'stand' : 'idle';
@@ -358,6 +358,7 @@ function samuKnien(an){
   const S = story.samu; if(!S || !S.acts.kneel) return;
   knie.an = an;
   if(an){
+    knie.frei = false;                                // der Stick zaehlt erst, wenn er einmal losgelassen war
     if(story.tricks) story.tricks.aktiv = null;
     standUmlenken('kneel');
     hund.kniet = true;
@@ -603,7 +604,10 @@ function hookBegleiter(){
   const updOrig = updateEva;
   updateEva = function(dt, inp){
     if(knie.an && eva && inp){
-      if(Math.abs(inp.pitch || 0) > 0.3 || Math.abs(inp.yaw || 0) > 0.3) samuKnien(false);
+      // Aufstehen per Stick erst, nachdem er nach dem Hinknien einmal losgelassen war (Live-Wunsch 03.11.2026: hielt man ihn beim
+      // Druecken von B noch, stand Samu sofort wieder auf)
+      if(!knie.frei && Math.abs(inp.pitch || 0) < 0.15 && Math.abs(inp.yaw || 0) < 0.15) knie.frei = true;
+      if(knie.frei && (Math.abs(inp.pitch || 0) > 0.3 || Math.abs(inp.yaw || 0) > 0.3)) samuKnien(false);
       else return updOrig.call(this, dt, Object.assign({}, inp, { pitch: 0, yaw: 0 }));
     }
     if(knie.aufT > 0 && eva && inp) return updOrig.call(this, dt, Object.assign({}, inp, { pitch: 0, yaw: 0 }));

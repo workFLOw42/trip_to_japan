@@ -2249,7 +2249,14 @@ const PF_ZEIT = 10;
 const PF_SCHRITTE = ['Bremse halten', 'Links', 'Rechts', 'Hoch', 'Runter', 'Bremse los', 'Gas'];
 const pf = story.preflight = { aktiv: false, t: 0, schritt: 0, gruen: false, el: null };
 
+// Unter dem Hinweisfeld (Live-Wunsch 03.11.2026: Flugrichtungs-Hinweis und Startsequenz lagen beide oben in der Mitte uebereinander):
+// steht ein Hinweis, rueckt das Startsequenz-Feld darunter, sonst bleibt es oben
+function pfOben(){
+  const h = hinweisEl && hinweisEl.textContent && hinweisEl.style.opacity !== '0' ? hinweisEl : null;
+  return (h ? h.offsetTop + h.offsetHeight + 8 : 16) + 'px';
+}
 function pfHud(){
+  if(pf.el){ const o = pfOben(); if(pf.el.style.top !== o) pf.el.style.top = o; }
   if(!pf.el){
     pf.el = document.createElement('div');
     // oben in der Mitte (Live-Wunsch 02.11.2026: links liegt jetzt der Hoehenbalken, vorher verdeckte das Feld seine Beschriftung)
@@ -3199,6 +3206,22 @@ function hoeheJetzt(){
 // Im U-Boot (Live-Wunsch 02.11.2026) statt der Hoehe die Tiefe: 0 m an der Oberflaeche = 0 %, TIEFE_MAX m = 100 % (tiefer bleibt er voll;
 // das U-Boot taucht bis 22 m ueber den Grund, wie tief das ist, haengt vom Ort ab), auf 5 % gerundet, beschriftet negativ (-35 m)
 const TIEFE_MAX = 100;
+// Fallschirmsprung im Finale (Live-Wunsch 03.11.2026, wie im Flugspiel): der Hoehenbalken zeigt die Hoehe, 100 % = die Absprunghoehe.
+// Der Schubbalken ist dann aus (kein Fahrzeug) – der Hoehenbalken steht trotzdem an seinem Platz, so als waere er da.
+let sprungH0 = null;
+const finaleSprung = () => !!(story.finale && (story.finale.schritt === 'fall' || story.finale.schritt === 'schirm'));
+function sprungHoehe(){
+  if(sprungH0 === null) sprungH0 = Math.max(1, hoeheJetzt());
+  const h = hoeheEl.style, lage = 'sprung';
+  if(hoeheEl.dataset.lage !== lage){ hoeheEl.dataset.lage = lage;
+    h.left = '12px'; h.top = (12 + 130 + SCHUB_ABST) + 'px'; h.width = (130 - 6) + 'px'; h.height = SCHUB_H + 'px'; h.gap = '3px'; h.borderRadius = '9px'; }
+  if(h.opacity !== '1') h.opacity = '1';
+  const m = hoeheJetzt(), an = Math.max(1, Math.min(SCHUB_N, Math.round(m / sprungH0 * SCHUB_N))), k = 'sprung|' + an + '|' + m;   // global-ok: Engine
+  h.display = 'flex';
+  if(k === hoeheAlt) return; hoeheAlt = k;
+  schubSegmente(hoeheSeg, an / SCHUB_N, 3);                                                               // global-ok: Engine
+  segText(hoeheSeg, an - 1, m + ' m');
+}
 function hoehenBalken(){
   const uboot = !eva && isSub();                                                                          // global-ok: Engine
   const zeigen = schubEl && schubEl.style.display !== 'none' && locale !== 'space' && (!isWaterCraft() || uboot);   // global-ok: Engine
@@ -3209,6 +3232,8 @@ function hoehenBalken(){
     for(let i = 0; i < SCHUB_N; i++){ const s = document.createElement('div'); s.style.cssText = 'flex:1;border-radius:3px;opacity:.15;'; hoeheEl.appendChild(s); hoeheSeg.push(s); }   // global-ok: Engine
     document.body.appendChild(hoeheEl);
   }
+  if(finaleSprung()){ sprungHoehe(); return; }
+  sprungH0 = null;
   if(!zeigen){ if(hoeheAlt !== 'aus'){ hoeheEl.style.display = 'none'; hoeheAlt = 'aus'; } return; }
   // gespiegelt zum Schubbalken: gleiche Hoehe, Breite, Rundung, Abstaende und Deckkraft (blendet mit ihm aus)
   const r = schubEl.getBoundingClientRect(), cs = schubEl.style;                                          // global-ok: Engine
@@ -3217,7 +3242,9 @@ function hoehenBalken(){
     h.left = Math.round(innerWidth - r.right) + 'px'; h.top = Math.round(r.top) + 'px'; h.width = cs.width; h.height = cs.height; h.gap = cs.gap; h.borderRadius = cs.borderRadius; }
   if(hoeheEl.style.opacity !== cs.opacity) hoeheEl.style.opacity = cs.opacity;
   const m = uboot ? Math.max(0, Math.round(seaSurfaceY(0, 0, 0) - state.pos.y)) : hoeheJetzt();         // global-ok: Engine
-  const an = Math.max(0, Math.min(SCHUB_N, Math.round(m / (uboot ? TIEFE_MAX : hoeheMax()) * SCHUB_N)));   // global-ok: Engine (5-%-Schritte)
+  // in der Luft (bzw. getaucht) leuchtet immer mindestens das unterste Segment – bis man gelandet ist (Live-Wunsch 03.11.2026, wie im Flugspiel)
+  const luft = uboot ? m > 0 : (!state.onGround || m > 0);                                               // global-ok: Engine
+  const an = Math.max(luft ? 1 : 0, Math.min(SCHUB_N, Math.round(m / (uboot ? TIEFE_MAX : hoeheMax()) * SCHUB_N)));   // global-ok: Engine (5-%-Schritte)
   const gap = parseFloat(cs.gap) || 2, k = an + '|' + m + '|' + gap;
   hoeheEl.style.display = 'flex';
   if(k === hoeheAlt) return; hoeheAlt = k;
@@ -3225,7 +3252,7 @@ function hoehenBalken(){
   segText(hoeheSeg, an >= 1 ? an - 1 : -1, an >= 1 ? (uboot ? '-' : '') + m + ' m' : '');
 }
 // ist der Schubbalken aus (auch ueber andere Huellen, z. B. finale.js), ist es der Hoehenbalken auch
-(function hoeheWache(){ try { if(hoeheEl && hoeheEl.style.display !== 'none' && (!schubEl || schubEl.style.display === 'none')){ hoeheEl.style.display = 'none'; hoeheAlt = 'aus'; } } catch(e){} requestAnimationFrame(hoeheWache); })();   // global-ok: Engine
+(function hoeheWache(){ try { if(hoeheEl && hoeheEl.style.display !== 'none' && !finaleSprung() && (!schubEl || schubEl.style.display === 'none')){ hoeheEl.style.display = 'none'; hoeheAlt = 'aus'; } } catch(e){} requestAnimationFrame(hoeheWache); })();   // global-ok: Engine
 // oben links: in Fahrzeugen nichts mehr (zu Fuss war es schon aus); das Gyroskop links oben, ueber dem Hoehenbalken (spiegelbildlich zu Radar\n// und Schub, Live-Wunsch 02.11.2026) – im Weltall ist es aus (body.imall), der Hoehenbalken auch: dort ist links alles frei
 (function(){ const st = document.createElement('style'); st.textContent = '#hud { display: none !important; } #gyro { left: 12px !important; right: auto !important; top: 12px !important; } body.ohneRadar #radar { visibility: hidden !important; }'; document.head.appendChild(st); })();
 // Gyroskop auch im U-Boot (Live-Wunsch 02.11.2026: es neigt sich in der Kurve, steigt und sinkt) – die Engine zeichnet es fuer Boote und U-Boot
@@ -3635,6 +3662,53 @@ function hookPropeller(){
     return r;
   };
 }
+// ---- Propeller der C-400 drehen (Live-Wunsch 03.11.2026, wie im Flugspiel flugspiel_neu.js Abschnitt 15) ----------------------
+// Die Engine dreht nur den Propeller der Mustang (Knoten 'propeler'). Die C-400 (Modell 'Transall') hat vier Naben (Propeller1..4,
+// Kinder von Engine1..4) und 32 Blaetter (BladeCW / BladeCCW), die NICHT an den Naben haengen, sondern direkt am Modell. Nachgemessen
+// (Knoten-Matrizen aufmultipliziert): je Nabe 8 Blaetter, der Blatt-Ursprung liegt genau auf der Wellenachse, die Welle ist das lokale
+// y der Nabe. Darum: jedes Blatt an die naechste Nabe haengen (attach behaelt die Lage) und die Nabe um ihr y drehen; innen und aussen
+// gegenlaeufig (CW/CCW aus den Blattnamen). Der GLTFLoader entfernt Punkte aus den Namen (BladeCW.001 -> BladeCW001). Tempo wie die
+// Mustang (PROP_LEER .. PROP_VOLL nach dem Schub), je Bild hoechstens C400_SCHRITT rad: bei 8 Blaettern (0,79 rad Teilung) und
+// Vollgas waeren es ~0,87 rad je Bild – das Auge saehe stehende oder rueckwaerts laufende Blaetter (Stroboskop).
+const C400_SCHRITT = 0.3;
+const c400 = { hubs: [], speed: 0 }, _c4q = new THREE.Quaternion(), _c4y = new THREE.Vector3(0, 1, 0), _c4a = new THREE.Vector3(), _c4b = new THREE.Vector3();
+function c400Propeller(wurzel){
+  c400.hubs = []; c400.speed = 0;
+  const hubs = [], blaetter = [];
+  wurzel.traverse(o => { if(/^Propeller\d$/.test(o.name)) hubs.push(o); else if(/^BladeC{1,2}W(\.?\d+)?$/.test(o.name)) blaetter.push(o); });
+  if(!hubs.length) return;
+  wurzel.updateMatrixWorld(true);
+  const dreh = hubs.map(() => 0);
+  for(const b of blaetter){
+    b.getWorldPosition(_c4a);
+    let best = 0, bd = Infinity;
+    hubs.forEach((h, i) => { const d = h.getWorldPosition(_c4b).distanceTo(_c4a); if(d < bd){ bd = d; best = i; } });
+    hubs[best].attach(b); dreh[best] += /CCW/.test(b.name) ? -1 : 1;
+  }
+  hubs.forEach((h, i) => c400.hubs.push({ node: h, basis: h.quaternion.clone(), w: 0, dir: dreh[i] < 0 ? -1 : 1 }));
+}
+function hookC400Propeller(){
+  const baueOrig = buildModel;                                                                          // global-ok: Engine
+  buildModel = function(name){
+    const r = baueOrig.apply(this, arguments);
+    c400.hubs = [];
+    if(name === 'Transall') c400Propeller(modelHolder);                                                 // global-ok: Engine
+    return r;
+  };
+  const drehOrig = updatePropSpin;                                                                      // global-ok: Engine
+  updatePropSpin = function(dt){
+    const r = drehOrig.apply(this, arguments);
+    if(c400.hubs.length && c400.hubs[0].node.parent){
+      const soll = (eva || state.crashed) ? 0 : PROP_LEER + Math.max(0, state.throttle) * (PROP_VOLL - PROP_LEER);   // global-ok: Engine
+      c400.speed += (soll - c400.speed) * Math.min(1, dt * (soll > c400.speed ? 1.6 : 0.6));
+      const schritt = Math.min(c400.speed * dt, C400_SCHRITT);
+      for(const h of c400.hubs){ h.w = (h.w + h.dir * schritt) % (Math.PI * 2); h.node.quaternion.copy(h.basis).multiply(_c4q.setFromAxisAngle(_c4y, h.w)); }
+    }
+    return r;
+  };
+  // schon gebaut (das Startmodell kann die Transall sein): gleich einrichten
+  if(MODEL_NAMES[currentModel] === 'Transall') c400Propeller(modelHolder);                              // global-ok: Engine
+}
 window.STORY_HOOK = function(){
   if(typeof strandleben !== 'undefined') strandleben.an = true;   // Forellen im Flachwasser, Seeloewen am Strand (Engine)
   // Live-Wunsch (08.10.2026): Alpha Jet bis 3000 m (Engine: 2200) – der Fuji ist 2 km hoch, der Lavaschacht endet darueber
@@ -3648,7 +3722,7 @@ window.STORY_HOOK = function(){
   hookHud();
   hookHilfe();
   hookTon();
-  hookPropeller();
+  hookPropeller(); hookC400Propeller();
   hookPauseTon();
   hookPad();
   hookSchwimmen();
