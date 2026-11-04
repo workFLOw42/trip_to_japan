@@ -12421,11 +12421,11 @@ function updateEngineSound() {
   engineGain.gain.value = vol;
   engineSrc.playbackRate.value = 0.7 + t * 0.9; // Tonhöhe ∝ Schub
 }
-function playCrash() {
+function playCrash(k) {                       // k: Lautstaerke-Faktor (Feuerwehrauto leiser); 04.11.2026 von 0,9 auf 0,65
   if (!soundOn || !audioCtx || !crashBuf) return;
   const s = audioCtx.createBufferSource();
   s.buffer = crashBuf;
-  const g = audioCtx.createGain(); g.gain.value = 0.9;
+  const g = audioCtx.createGain(); g.gain.value = 0.65 * (k || 1);
   s.connect(g).connect(audioCtx.destination);
   s.start();
 }
@@ -12453,7 +12453,7 @@ function startSiren() {
   sirenOsc = audioCtx.createOscillator();
   sirenOsc.type = 'square';
   sirenGain = audioCtx.createGain();
-  sirenGain.gain.value = 0.06;                 // leise (dein Wunsch: leichtes Tatütata)
+  sirenGain.gain.value = 0.045;                // leise (dein Wunsch: leichtes Tatütata; 04.11.2026 von 0,06 noch etwas leiser)
   sirenOsc.connect(sirenGain).connect(audioCtx.destination);
   sirenOsc.frequency.value = 660;
   sirenOsc.start();
