@@ -17,6 +17,12 @@ Technische Basis ist die Engine des **[Flugspiel](https://github.com/workFLOw42/
 Das Konzept steht in **[Konzept.md](Konzept.md)**. Spielbar sind **Etappe 1 bis 6** (beide Wege), danach folgt
 vorerst ein Platzhalter.
 
+**Stand 04.11.2026:** Fahrzeug-Belegung wie im Flugspiel (siehe *Steuerung in Fahrzeugen*); die Startsequenz endet mit
+**Ausrichten (A)** statt Gas, beim Kurzschluss sind Bremse und Ausrichten getauscht; die Rakete startet mit dem rechten Stick;
+im Finale springt man mit **Y** aus der C-400. Alle Landebahnen haben eine **Befeuerung**, die nachts leuchtet (Wüste, Inseln,
+Festland). Die Transall steht in Etappe 2 auf der Bahn (vorher knapp dahinter). Schub- und Höhenbalken blenden auch wieder ein,
+wenn sich der Schub von selbst ändert. Samu kniet auch aus dem Stand ganz hin. Sirene und Crash-Geräusch einen Hauch leiser.
+
 **Startmenü:** *Neues Spiel* oder – zum Testen – direkt **E2 … E6** und **E6 Höhle** (springt direkt in den Autopiloten
 der Vulkanhöhle) (linker Stick / ← → wählen, A / Enter starten).
 
@@ -38,7 +44,7 @@ unten die Küste, oben das Meer mit den Wracks.
 
 ### Etappe 2 – Die Wüste
 Nur Wüste, kein Wasser: Dünen, Felsen, Kakteen, Flugfeld, Oase mit Palmen. Leise arabische Musik zu Beginn, Wüstenwind.
-- **X-Wing-Falle („1 Tag“):** Startsequenz mit **Kurzschluss** – alles vertauscht (Bremse ↔ Gas, links ↔ rechts,
+- **X-Wing-Falle („1 Tag“):** Startsequenz mit **Kurzschluss** – alles vertauscht (Bremse ↔ Ausrichten, links ↔ rechts,
   hoch ↔ runter), einziger Hinweis ist die rote Leuchte ⇄.
   - geschafft → Flug mit vertauschter Steuerung zum Radarpunkt → **1 Tag**
   - verpasst → Autopilot zum **Mond**, Stein auf der Plattform der Mondbasis holen → **7 Tage**
@@ -151,6 +157,19 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | D-Pad ↑ | H | Anleitung (Pause) |
 | D-Pad ← | T | aktuelle Aufgabe (keine Pause) |
 | D-Pad ↓ | N | Ton an (Stimme) / aus (Untertitel) |
+
+## Steuerung in Fahrzeugen (seit 04.11.2026, einheitlich mit dem Flugspiel)
+
+| Controller | Tastatur | |
+|---|---|---|
+| rechter Stick ↕ | W / S | Schub in Stufen (bleibt stehen) |
+| X halten | C | **Bremse / Umkehrschub** – losgelassen weiter mit der jetzigen Fahrt |
+| A | — | in der Luft **geraderichten** |
+| B | B | **Spezialfunktion** des Fahrzeugs (Wasser, Kisten, Laser, Sonar …) |
+| Y | Y | **ein- und aussteigen** · in der Luft **abspringen** (Mustang und Eurofighter: Schleudersitz) |
+| — | Shift | Boost (am Controller entfallen) |
+| LB / RB halten | — | Blick von der Seite |
+
 
 ## Aufbau
 
