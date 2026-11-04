@@ -3311,7 +3311,11 @@ function hookSchubGerade(){
     return r;
   };
   const schubOrig = schubBalken;
+  // Aendert sich der Schub ohne Schubtaste (z. B. Bremse los -> Schub auf die jetzige Fahrt), ist der ausgeblendete Balken
+  // sofort wieder da (wie im Flugspiel, Live-Wunsch 04.11.2026)
+  let schubWert = null;
   schubBalken = function(){
+    const w = state.throttle; if(schubWert !== null && Math.abs(w - schubWert) > 0.001) schubBetaetigt(); schubWert = w;   // global-ok: Engine
     if((story.kran4 && story.kran4.aktiv) || story.phase === 'platzhalter' || story.phase === 'reise'){
       if(schubEl && schubAlt !== 'aus'){ schubEl.style.display = 'none'; schubAlt = 'aus'; }
       hoehenBalken();

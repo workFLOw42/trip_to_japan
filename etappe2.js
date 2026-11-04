@@ -450,7 +450,7 @@ const FS_SATZ_KURZSCHLUSS = 2;  // Index in FS_TEXT: 'Leuchtet dabei dieses rote
 const FS_HOEHE = 300;          // m ueber Grund
 const FS_TEXT = [
   'Hallo, willkommen an Bord! Ich bin dein Pilot. Wir bringen Hilfsgüter zu einer Oase in der Wüste. Pass gut auf, dann lernst du was!',
-  'Vor jedem Flug machen wir die Startsequenz: Bremse halten… Ruder links und rechts… Nase hoch und runter… Bremse loslassen… und Gas geben!',
+  'Vor jedem Flug machen wir die Startsequenz: Bremse halten… Ruder links und rechts… Nase hoch und runter… Bremse loslassen… und das Flugzeug automatisch gerade ausrichten mit A!',
   'Leuchtet dabei das rote Symbol mit den zwei Pfeilen, hat der Flieger einen Kurzschluss. Dann ist alles vertauscht… und du musst umgekehrt steuern.',
   'Zum Starten gibst du nach der Startsequenz Vollgas. Ab etwa hundertfünfzig Kilometern pro Stunde ziehst du die Nase ganz sanft hoch.',
   'Wir fliegen auf dreihundert Metern Höhe. Halte dich zwischen zweihundertsiebzig… und dreihundertdreißig Metern!',
