@@ -149,7 +149,7 @@ Sechs ganze Wochen hat er Zeit. Vor ihm liegen knifflige Rätsel, wilde Fahrzeug
 1. Hallo, willkommen an Bord! Ich bin dein Pilot. Wir bringen Hilfsgüter zu einer Oase in der Wüste. Pass gut auf, dann lernst du was!
 2. Vor jedem Flug machen wir die Startsequenz: Bremse halten... Ruder links und rechts... Nase hoch und runter... Bremse loslassen... und das Flugzeug automatisch gerade ausrichten mit A!
 3. Leuchtet dabei das rote Symbol mit den zwei Pfeilen, hat der Flieger einen Kurzschluss. Dann ist alles vertauscht... und du musst umgekehrt steuern.
-4. Zum Starten gibst du nach der Startsequenz Vollgas. Ab etwa hundertfünfzig Kilometern pro Stunde ziehst du die Nase ganz sanft hoch.
+4. Zum Starten gibst du nach der Startsequenz vollen Schub mit dem rechten Stick. Ab etwa hundertfünfzig Kilometern pro Stunde ziehst du die Nase ganz sanft hoch.
 5. Wir fliegen auf dreihundert Metern Höhe. Halte dich zwischen zweihundertsiebzig... und dreihundertdreißig Metern!
 6. Die Kisten fliegen mit unserem Schwung nach vorne. Je schneller wir sind, desto früher musst du sie abwerfen.
 7. Merk dir die Regel: Schub in Prozent... mal fünf... ergibt den Abstand in Metern vor dem Ziel! Bei sechzig Prozent Schub wirfst du also dreihundert Meter vorher ab... bei hundert Prozent genau fünfhundert Meter vorher.

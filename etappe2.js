@@ -81,6 +81,7 @@ function baueKulisse(){
   const bahnMat = new THREE.MeshLambertMaterial({ color: 0x8a8274 });
   const bahn = new THREE.Mesh(new THREE.PlaneGeometry(40, 600), bahnMat);
   bahn.rotation.x = -Math.PI / 2; bahn.position.set(18, 0.05, 0); g.add(bahn);
+  story.bahnLichter(g, { x: 18, z: 0, breite: 40, laenge: 600, y: 0.23, anflug: () => true });   // Befeuerung (04.11.2026)
   const strich = new THREE.MeshBasicMaterial({ color: 0xf2f2f2 });
   for(let z = -280; z <= 280; z += 40){
     const s = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 18), strich);
@@ -224,13 +225,13 @@ function updateKamele(dt){
 }
 // ---- Geparkte Fahrzeuge (Kulisse, bis man einsteigt) -----------------------------------------
 // Der X-Wing ist das "eigene" Fahrzeug (state/planeGroup) und braucht keine Kulisse. Nur die
-// Transall steht als Kulisse am Bahnende, bis man einsteigt.
+// Transall steht als Kulisse am Bahnende (auf der Bahn, nicht dahinter – Live-Befund 04.11.2026), bis man einsteigt.
 // Ankunft wie in Etappe 1: Samu schaut nach Norden (-Z), der X-Wing steht ~30 Grad links, die
 // Transall ~30 Grad rechts vor ihm, je gut 100 m entfernt – keiner direkt voraus.
 const ANKUNFT    = { x: 0, z: 380 };
 const XWING_PARK = { x: -18, z: 320, yaw: Math.PI * 0.15 };   // 75 % naeher an der Transall als vorher (60 -> 18 m)
 const PARK = {
-  Transall: { x: 18, z: 320, yaw: 0, obj: null },   // Nase nach Norden (-Z), Bahn liegt laengs Z
+  Transall: { x: 18, z: 278, yaw: 0, obj: null },   // Nase nach Norden (-Z), Bahn liegt laengs Z (bis z 300; vorher z 320 = hinter der Bahn)
 };
 story.e2xwing = XWING_PARK;
 story.e2park = PARK;
@@ -452,7 +453,7 @@ const FS_TEXT = [
   'Hallo, willkommen an Bord! Ich bin dein Pilot. Wir bringen Hilfsgüter zu einer Oase in der Wüste. Pass gut auf, dann lernst du was!',
   'Vor jedem Flug machen wir die Startsequenz: Bremse halten… Ruder links und rechts… Nase hoch und runter… Bremse loslassen… und das Flugzeug automatisch gerade ausrichten mit A!',
   'Leuchtet dabei das rote Symbol mit den zwei Pfeilen, hat der Flieger einen Kurzschluss. Dann ist alles vertauscht… und du musst umgekehrt steuern.',
-  'Zum Starten gibst du nach der Startsequenz Vollgas. Ab etwa hundertfünfzig Kilometern pro Stunde ziehst du die Nase ganz sanft hoch.',
+  'Zum Starten gibst du nach der Startsequenz vollen Schub mit dem rechten Stick. Ab etwa hundertfünfzig Kilometern pro Stunde ziehst du die Nase ganz sanft hoch.',
   'Wir fliegen auf dreihundert Metern Höhe. Halte dich zwischen zweihundertsiebzig… und dreihundertdreißig Metern!',
   'Die Kisten fliegen mit unserem Schwung nach vorne. Je schneller wir sind, desto früher musst du sie abwerfen.',
   'Merk dir die Regel: Schub in Prozent… mal fünf… ergibt den Abstand in Metern vor dem Ziel! Bei sechzig Prozent Schub wirfst du also dreihundert Meter vorher ab… bei hundert Prozent genau fünfhundert Meter vorher.',

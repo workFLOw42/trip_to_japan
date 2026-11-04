@@ -3752,8 +3752,48 @@ function hookC400Propeller(){
   // schon gebaut (das Startmodell kann die Transall sein): gleich einrichten
   if(MODEL_NAMES[currentModel] === 'Transall') c400Propeller(modelHolder);                              // global-ok: Engine
 }
+// ---- Bahnbefeuerung wie im Flugspiel (Live-Wunsch 04.11.2026: "die tollen Lichter, die nachts auch leuchten") ---------------
+// Randlichter alle 15 m (gelblich weiss), Schwellen an beiden Enden (gruen), Anflugbalken hinter den Enden (weiss, 12..60 m,
+// nur wo opt.anflug(x, z) zulaesst). Unbeleuchtete Materialien (MeshBasic): sie leuchten auch nachts. Keine Grenze (flach, klein).
+// opt: { x, z, breite, laenge, y, laengsX (Bahn laengs x statt z), anflug }. Koordinaten im System der Gruppe g.
+const BAHN_LICHT = { rand: new THREE.MeshBasicMaterial({ color: 0xfff1b8 }), schwelle: new THREE.MeshBasicMaterial({ color: 0x5cff7a }),
+  anflug: new THREE.MeshBasicMaterial({ color: 0xffffff }) };
+story.bahnLichter = function(g, o){
+  const je = { rand: [], schwelle: [], anflug: [] }, hb = o.breite / 2, hl = o.laenge / 2;
+  for(let u = -hl; u <= hl + 0.1; u += 15) for(const q of [-(hb + 0.8), hb + 0.8]) je.rand.push([q, u]);
+  const n = Math.max(4, Math.round(o.breite / 3));
+  for(const s of [-1, 1]){
+    for(let i = 0; i < n; i++) je.schwelle.push([-hb + 1.5 + i * (o.breite - 3) / (n - 1), s * (hl + 0.6)]);
+    if(o.anflug) for(let d = 12; d <= 60; d += 12){ const u = s * (hl + d);
+      if(!o.anflug(o.laengsX ? o.x + u : o.x, o.laengsX ? o.z : o.z + u)) break;
+      for(let i = -2; i <= 2; i++) je.anflug.push([i * 2, u]); }
+  }
+  const geo = new THREE.BoxGeometry(0.4, 0.35, 0.4), m = new THREE.Matrix4(), grp = new THREE.Group();
+  grp.userData.keinKoerper = true; grp.userData.deko = true;
+  for(const art in je){
+    const l = je[art]; if(!l.length) continue;
+    const im = new THREE.InstancedMesh(geo, BAHN_LICHT[art], l.length);
+    l.forEach(([q, u], i) => { m.makeTranslation(o.laengsX ? o.x + u : o.x + q, o.y, o.laengsX ? o.z + q : o.z + u); im.setMatrixAt(i, m); });
+    im.instanceMatrix.needsUpdate = true; im.frustumCulled = false;
+    grp.add(im);
+  }
+  g.add(grp); return grp;
+};
+// Inselbahnen der Engine (Etappe 5 Mustang, Etappe 6 Alpha Jet, alle Inseln): die Bahn ist die 24 m breite Flaeche in runwayMat
+function hookBahnLichter(){
+  const bauOrig = buildIsland;                                        // global-ok: Engine
+  buildIsland = function(cx, cz){                                    // global-ok: Engine
+    const g = bauOrig.apply(this, arguments); if(!g) return g;
+    const bahn = g.children.find(o => o.isMesh && o.material === runwayMat && o.geometry.parameters && o.geometry.parameters.width === 24);   // global-ok: Engine
+    const info = islandInfo(cx, cz);                                   // global-ok: Engine
+    if(bahn && info) story.bahnLichter(g, { x: bahn.position.x, z: bahn.position.z, breite: 24, laenge: bahn.geometry.parameters.height,
+      y: ISLAND_Y + 0.18, anflug: (x, z) => Math.hypot(x, z) < info.radius * 0.95 });   // global-ok: Engine
+    return g;
+  };
+}
 window.STORY_HOOK = function(){
-  if(typeof strandleben !== 'undefined') strandleben.an = true;   // Forellen im Flachwasser, Seeloewen am Strand (Engine)
+  if(typeof strandleben !== 'undefined') strandleben.an = true;
+  hookBahnLichter();   // Forellen im Flachwasser, Seeloewen am Strand (Engine)
   // Live-Wunsch (08.10.2026): Alpha Jet bis 3000 m (Engine: 2200) – der Fuji ist 2 km hoch, der Lavaschacht endet darueber
   if(PLANE_SPECS.AlphaJet) PLANE_SPECS.AlphaJet.maxAlt = 3000;
   hookWelt();

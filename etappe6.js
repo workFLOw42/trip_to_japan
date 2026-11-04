@@ -252,6 +252,7 @@ function baueFestland(w){
   const rwM = new THREE.MeshLambertMaterial({ color: 0x888888 }), lnM = new THREE.MeshLambertMaterial({ color: 0xffffff });
   const F = FLUGFELD, flach = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.rotation.x = -Math.PI / 2; o.position.set(x, y, z); g.add(o); return o; };
   flach(new THREE.PlaneGeometry(F.breite, F.laenge), rwM, F.x, ISLAND_Y + 0.02, F.z);
+  story.bahnLichter(g, { x: F.x, z: F.z, breite: F.breite, laenge: F.laenge, y: ISLAND_Y + 0.18, anflug: (x, z) => isOnLand(x, z) });   // Befeuerung (04.11.2026)  // global-ok: Engine
   flach(new THREE.PlaneGeometry(VORFELD.b, VORFELD.l), rwM, VORFELD.x, ISLAND_Y + 0.02, VORFELD.z);
   const rollweg = (FLUGFELD.x - F.breite / 2) - (VORFELD.x + VORFELD.b / 2);
   flach(new THREE.PlaneGeometry(rollweg + 2, 18), rwM, VORFELD.x + VORFELD.b / 2 + rollweg / 2, ISLAND_Y + 0.02, VORFELD.z);
