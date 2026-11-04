@@ -350,9 +350,13 @@ function standUmlenken(clip){
   const ziel = clip ? S.acts[clip] : knie.stand;
   if(!ziel || S.acts[knie.standName] === ziel) return;
   ziel.setLoop(clip ? THREE.LoopOnce : THREE.LoopRepeat); ziel.clampWhenFinished = !!clip;
+  const vorher = S.acts[knie.standName];
   S.acts[knie.standName] = ziel;
   ziel.paused = false; ziel.zuletzt = undefined;
   if(S.cur === knie.standName) S.cur = 'neu';        // neu einblenden lassen (samuAnim prueft den Namen)
+  // Live-Befund 04.11.2026: aus dem Stand kniete Samu nur halb – der verdraengte Clip (Stehen) steht nicht mehr in S.acts, samuAnim hielt ihn
+  // deshalb nie an, er lief mit vollem Gewicht neben dem Knien weiter. Jetzt blendet er hier aus (aus dem Laufen tat das samuAnim schon).
+  if(vorher && vorher !== ziel && !Object.values(S.acts).includes(vorher)) vorher.fadeOut(0.25);
 }
 function samuKnien(an){
   const S = story.samu; if(!S || !S.acts.kneel) return;
