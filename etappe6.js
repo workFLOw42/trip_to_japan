@@ -540,7 +540,7 @@ function nachSequenz(ok){
   story.sprich(['Startsequenz abgeschlossen. Guten Flug!'], null, 'bordcomputer');
   flug.laeuft = true;
   story.ziel = { x: ZIEL6.x, z: ZIEL6.z };
-  story.hinweis('Folge dem roten Punkt im Radar – Start: X / Shift halten');
+  story.hinweis('Folge dem roten Punkt im Radar – Start: rechter Stick nach vorn');
   story.spaeter(8, () => story.hinweis(''));
 }
 // Hinflug: am Ziel (kurz vor dem Berg) Blende -> Hoehle. Absturz -> 7 Tage.

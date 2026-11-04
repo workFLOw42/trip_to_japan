@@ -383,12 +383,12 @@ Globus (still): der Faden wächst von Tokio nach Fukuoka, der lila Punkt wird zu
 
 1. Willkommen an Bord! Heute wird es wild: Du fliegst uns hoch über den Fuji.
 2. Erst die Startsequenz, dann steig auf mindestens zweitausenddreihundert Meter und flieg zum roten Punkt über der weißen Piste.
-3. Dort übernehme ich das Steuer, und du springst mit B ab. Im freien Fall lenkst du mit dem linken Stick, der Schirm geht von allein auf. Lande auf der Piste!
+3. Dort übernehme ich das Steuer, und du springst mit Y ab. Im freien Fall lenkst du mit dem linken Stick, der Schirm geht von allein auf. Lande auf der Piste!
 
 | Situation | Rolle | Text |
 |---|---|---|
 | Startsequenz geschafft | männlich | Sehr gut! Vollgas und ab in die Luft. |
-| Über der Piste, hoch genug | männlich | Ich übernehme! Wir kreisen über der Piste. Spring mit B, wenn du bereit bist! |
+| Über der Piste, hoch genug | männlich | Ich übernehme! Wir kreisen über der Piste. Spring mit Y, wenn du bereit bist! |
 | Absprung (B) | männlich | Viel Spaß! |
 | Auf der Piste gelandet | – | *keine Ansage* – Samu steht gleich auf dem Snowboard, die Abfahrt beginnt |
 | Daneben (Hang) → noch einmal | männlich | Knapp daneben – das war nicht die Piste. Noch einmal! |

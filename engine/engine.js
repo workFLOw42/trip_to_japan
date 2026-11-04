@@ -5394,14 +5394,14 @@ function buttonB(){
     else { showBig('\u{2B07}\u{FE0F}'); bigTimer = 1.2; }   // Hinweis: erst abtauchen
   }
   else if(isCanadair()) dropWater();
-  else if(isAlphaJet() || isMustang()) ejectSeat();
   else if(isTransall()) dropCrate();
 }
 // ---- Y: EIN- UND AUSSTEIGEN --------------------------------------------------------------
 // Eine Taste fuer alles, was man an einem Fahrzeug tun kann: aussteigen, einsteigen, umsteigen.
 // Die Reihenfolge zaehlt: wer in einem Fahrzeug sitzt, will heraus; wer daneben steht, hinein.
 function buttonY(){
-  if(geradeMoeglich()){ geradeStart(); return; }             // in der Luft: Flieger gerade richten
+  // in der Luft: aussteigen (seit 04.11.2026, wie im Flugspiel) – Mustang/AlphaJet mit dem Schleudersitz; geraderichten liegt auf A
+  if(!eva && !state.onGround && !isWaterCraft() && locale !== 'space' && locale !== 'death'){ if(isAlphaJet() || isMustang()) ejectSeat(); return; }
   if(eva){ evaBoardY(); return; }
   // Im FEUERWEHRBOOT: Y steigt AM UFER aus — man faehrt an den Strand und geht von Bord, nicht
   // mitten auf dem Meer. Das muss VOR evaAllowed stehen, denn das sperrt Boote grundsaetzlich
@@ -12728,6 +12728,13 @@ function thrHold(dir){
   if(t - thrLastStep >= THR_REPEAT_MS){ thrStep(dir); thrLastStep = t; }
 }
 
+// Bremse losgelassen (04.11.2026, wie im Flugspiel): Schub so, dass die jetzige Fahrt bleibt (Zielfahrt = vMax * Schub) – zum Anhalten
+// haelt man die Bremse, bis man steht
+function schubHalten(){
+  const vMax = (locale === 'space') ? SPACE_C * warpFactor() : (spec && spec.vMax) || 1;
+  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);
+  return Math.max(0, Math.min(1, state.vel.dot(f) / vMax));
+}
 function readInput() {
   let pitch=0, roll=0, yaw=0, thrDir=0;
 
@@ -12751,7 +12758,7 @@ function readInput() {
     lookY = (keys['KeyI'] ? 1 : 0) - (keys['KeyK'] ? 1 : 0);   // I hebt, K senkt
   }
   // C HALTEN = Umkehrschub -20 % (Bremse), Tastatur-Pendant zu "A halten" am Controller.
-  if(keys['KeyC']) state.throttle = -0.2; else if(cPrev) state.throttle = 0;
+  if(keys['KeyC']) state.throttle = -0.2; else if(cPrev) state.throttle = schubHalten();   // losgelassen: weiter mit der jetzigen Fahrt
   cPrev = !!keys['KeyC'];
   // SHIFT HALTEN = BOOST (Tastatur-Pendant zu X): sofort 100 %, losgelassen -> 50 %.
   const kbBoost = !!(keys['ShiftLeft'] || keys['ShiftRight']);
@@ -12789,23 +12796,21 @@ function readInput() {
         if(ry2 < -0.5) thrDir = +1; else if(ry2 > 0.5) thrDir = -1;
       }
 
-      // A HALTEN = Umkehrschub -20 % (Bremse); beim LOSLASSEN -> Motor 0.
-      const aDown = gp.buttons[0] && gp.buttons[0].pressed;
+      // X HALTEN = Umkehrschub -20 % (Bremse); beim LOSLASSEN weiter mit der jetzigen Fahrt. (Seit 04.11.2026, einheitlich mit dem Flugspiel:
+      // X bremst, A richtet in der Luft gerade, B Spezialfunktion, Y ein/aus bzw. in der Luft abspringen; Boost nur noch Shift.)
+      const aDown = gp.buttons[2] && gp.buttons[2].pressed;
       if(aDown) state.throttle = -0.2;
-      else if(aPrev) state.throttle = 0;   // A gerade losgelassen -> Motor aus
+      else if(aPrev) state.throttle = schubHalten();
       aPrev = aDown;
+      if(edge(gp,0) && geradeMoeglich()) geradeStart();   // A in der Luft: Flieger gerade richten
 
-      // X HALTEN = BOOST: sofort 100 % Schub + extra Beschleunigung; beim LOSLASSEN -> 50 % Schub.
-      const xDown = gp.buttons[2] && gp.buttons[2].pressed;
-      if(xDown){ boostDruck(); }
-      else { boosting = false; if(xPrev){ state.throttle = 0.5; xwingLaunch = false; } }
-      xPrev = xDown;
+      if(!kbBoost) boosting = false;   // Boost nur noch mit Shift (Tastatur)
 
       // Y = EIN- UND AUSSTEIGEN, B = nur noch Aktionen, Modellwechsel auf D-Pad rechts.
       // Vorher lag der Modellwechsel auf Y und das Ein-/Aussteigen mit auf B — wer neben seinem
       // Flieger loeschen wollte, stieg stattdessen ein. Jetzt hat jede Taste eine Aufgabe.
       if(edge(gp,3)) buttonY();       // Y = ein-/aussteigen, umsteigen
-      if(edge(gp,1)) buttonB();       // B = Aktion: Wasser, Loeschen, Schleudersitz, Kisten, huepfen
+      if(edge(gp,1)) buttonB();       // B = Aktion: Wasser, Loeschen, Kisten, Laser, Sonar (zu Fuss: Spiel)
 
       if(edge(gp,9)) resetPlane();    // Start/Menu = Reset
       // D-Pad: oben(12)=Hilfe, unten(13)=Ton an/aus. Links/rechts sind frei — die Seitenansicht

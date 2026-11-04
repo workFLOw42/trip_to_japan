@@ -855,7 +855,7 @@ let skipT = 0;
 function skipTick(dt){
   if(!reden.size){ skipT = 0; return; }
   const gp = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
-  const x = !!keys['KeyX'] || !!(gp && gp.buttons[2] && gp.buttons[2].pressed);
+  const x = !!keys['KeyX'] || !!(eva && gp && gp.buttons[2] && gp.buttons[2].pressed);   // Controller-X nur zu Fuss (im Fahrzeug: Bremse)
   skipT = x ? skipT + dt : 0;
   if(skipT >= 3){ skipT = 0; for(const rd of [...reden]) rd.ueberspringen(); }
 }
@@ -2271,10 +2271,11 @@ function tageVergangen(n){
 }
 
 // ---- Startsequenz (im Konzept: Preflight-Check; die Stimme kann das Wort nicht sprechen) -----
-// Reihenfolge laut Konzept: Bremse halten -> links -> rechts -> hoch -> runter -> Bremse los -> Gas.
+// Reihenfolge laut Konzept: Bremse halten -> links -> rechts -> hoch -> runter -> Bremse los -> Ausrichten (seit 04.11.2026, Live-Wunsch:
+// Bremse = X halten, Ausrichten = A druecken wie in allen Spielen; beim Kurzschluss umgekehrt: Bremse = A, Ausrichten = X; kein Gas mehr).
 // Gewertet wird die Eingabe (in Etappe 1 ohne Kurzschluss). Beliebig oft neu beginnen; 10 s Zeit.
 const PF_ZEIT = 10;
-const PF_SCHRITTE = ['Bremse halten', 'Links', 'Rechts', 'Hoch', 'Runter', 'Bremse los', 'Gas'];
+const PF_SCHRITTE = ['Bremse halten', 'Links', 'Rechts', 'Hoch', 'Runter', 'Bremse los', 'Ausrichten'];
 const pf = story.preflight = { aktiv: false, t: 0, schritt: 0, gruen: false, el: null };
 
 // Unter dem Hinweisfeld (Live-Wunsch 03.11.2026: Flugrichtungs-Hinweis und Startsequenz lagen beide oben in der Mitte uebereinander):
@@ -2322,13 +2323,13 @@ story.pfStart = pfStart;
 
 // Eingaben roh lesen (unabhaengig davon, was die Engine daraus macht)
 function pfEingabe(inp){
-  let bremse = !!keys['KeyC'], gas = !!(keys['ShiftLeft'] || keys['ShiftRight'] || keys['KeyW'] || keys['Space']);
+  // gas = "Ausrichten" (Name bleibt fuer die Gas-Sperre): Controller A, Tastatur A; Bremse: Controller X, Tastatur C
+  let bremse = !!keys['KeyC'], gas = !!keys['KeyA'];
   if(gamepadIndex !== null){
     const gp = navigator.getGamepads()[gamepadIndex];
     if(gp){
-      if(gp.buttons[0] && gp.buttons[0].pressed) bremse = true;
-      if(gp.buttons[2] && gp.buttons[2].pressed) gas = true;
-      if((gp.axes[3] || 0) < -0.5) gas = true;
+      if(gp.buttons[2] && gp.buttons[2].pressed) bremse = true;
+      if(gp.buttons[0] && gp.buttons[0].pressed) gas = true;
     }
   }
   const lr = (inp.yaw || 0) + (inp.roll || 0);   // links/rechts: Stick, Pfeile oder LT/RT, Q/E
@@ -2352,7 +2353,7 @@ function pfSchritt(e){
 function pfUpdate(dt, inp){
   pf.t += dt;
   const e = pfEingabe(inp);
-  // "Bremse los" (5 -> 6) und "Gas" (6 -> gruen) hier, weil pfSchritt Loslassen als Abbruch wertet
+  // "Bremse los" (5 -> 6) und "Ausrichten" (6 -> gruen) hier, weil pfSchritt Loslassen als Abbruch wertet
   if(pf.schritt === 5 && !e.bremse) pf.schritt = 6;
   else if(pf.schritt === 6){
     if(e.bremse) pf.schritt = 1;
@@ -2382,7 +2383,7 @@ function pfGasSperreUpdate(inp){
 }
 function pfFertig(ok){
   pf.aktiv = false;
-  pfGasSperre = true; pfGasStufe = 'gehalten';
+  pfGasSperre = false; pfGasStufe = 'gehalten';   // seit 04.11.2026 gibt der letzte Schritt (Ausrichten) keinen Schub: keine Sperre
   story.preflightZeit = ok ? pf.t : null;
   if(pf.danach){                                   // eigener Ablauf (z. B. Transall-Flugschule)
     const f = pf.danach; pf.danach = null;
@@ -2398,7 +2399,7 @@ function pfFertig(ok){
     story.phase = 'freiflug';
     story.ziel = story.zielFuer ? story.zielFuer(story.etappe) : { x: 0, z: -9000 };   // Radarpunkt
     story.verdreht = pf.kurzschluss;     // Kurzschluss gilt weiter, bis man am Ziel ist
-    hinweis('Folge dem roten Punkt im Radar – Start: X / Shift halten');
+    hinweis('Folge dem roten Punkt im Radar – Start: rechter Stick nach vorn');
     spaeter(8, () => hinweis(''));
   } else {
     pfHud();
@@ -2783,28 +2784,33 @@ function hookMars(){
 
 // ---- Kurzschluss im Flug (X-Wing-Falle gemeistert) --------------------------------------------
 // Nach geschaffter Startsequenz mit Kurzschluss bleibt die Steuerung vertauscht, bis man am Ziel ist:
-// links <-> rechts, hoch <-> runter, rollen gespiegelt; Bremse <-> Gas (C/A <-> Shift/X).
+// links <-> rechts, hoch <-> runter, rollen gespiegelt; Bremse und Ausrichten getauscht (seit 04.11.2026: A halten = Bremse, X = ausrichten;
+// Tastatur: A = Bremse, C = ausrichten).
 function hookVerdreht(){
   const readInputOrig = readInput;
   let gasWar = false;
   let bremseWar = false;
+  let verdrehtX = false;
   readInput = function(){
+    const th = state.throttle;
     const inp = readInputOrig.apply(this, arguments);
     if(!story.verdreht || eva || pf.aktiv){ gasWar = bremseWar = false; return inp; }
-    // Bremse (C / A) gibt jetzt Gas – genau wie sonst X / Shift: am Boden erst auf die Schwebehoehe,
-    // dann Vollgas (boostOrig). Losgelassen 50 % wie bei X, nicht 0 % – sonst sackt man ab.
     const gp = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
-    const gas = !!(keys['KeyC'] || (gp && gp.buttons[0] && gp.buttons[0].pressed));
-    if(gas) boostOrig();
-    else if(gasWar){ state.throttle = 0.5; xwingLaunch = false; boosting = false; }
-    gasWar = gas;
-    // Umgekehrt ist X / Shift jetzt die Bremse: losgelassen 0 % wie sonst A / C. Die Engine setzt
-    // beim Loslassen von X immer 50 % (vor diesem Wrapper) – das wird hier zurueckgenommen.
-    const bremse = !!(keys['ShiftLeft'] || keys['ShiftRight'] || (gp && gp.buttons[2] && gp.buttons[2].pressed));
-    if(!bremse && bremseWar && !gas) state.throttle = 0;
-    bremseWar = bremse;
+    // die Engine-Bremse (X / C) gilt hier nicht: Schub wie vor readInput
+    const engineBremse = !!(keys['KeyC'] || (gp && gp.buttons[2] && gp.buttons[2].pressed));
+    if(engineBremse || bremseWar) state.throttle = th;
+    // Bremse jetzt auf A (Controller) bzw. Taste A: halten -0,2, losgelassen weiter mit der jetzigen Fahrt
+    const bremse = !!(keys['KeyA'] || (gp && gp.buttons[0] && gp.buttons[0].pressed));
+    if(bremse) state.throttle = -0.2; else if(gasWar) state.throttle = schubHalten();
+    gasWar = bremse;
+    // Ausrichten jetzt auf X (Controller) bzw. Taste C (Flanke)
+    if(engineBremse && !bremseWar && geradeMoeglich()){ verdrehtX = true; geradeStart(); verdrehtX = false; }
+    bremseWar = engineBremse;
     return { pitch: -inp.pitch, roll: -inp.roll, yaw: -inp.yaw };
   };
+  // im Kurzschluss richtet A nicht aus (das macht dort X)
+  const geradeStartV = geradeStart;
+  geradeStart = function(){ if(story.verdreht && !eva && !verdrehtX) return; return geradeStartV.apply(this, arguments); };
   const boostOrig = boostDruck;
   boostDruck = function(){
     if(story.verdreht && !eva){ state.throttle = -0.2; return; }      // "Gas" bremst
@@ -2998,13 +3004,13 @@ function hookEinsteigen(){
     const xWar = ub.xRoh; ub.xRoh = x;
     const th = state.throttle;
     const r = inputOrig.apply(this, arguments);
-    if(ub.aktiv && (x || xWar)){ state.throttle = th; boosting = false; }
+    if(false && ub.aktiv && (x || xWar)){ state.throttle = th; boosting = false; }   // seit 04.11.2026 aus: X ist die Bremse, kein Boost mehr
     return r;
   };
   // Aussteigen (Y) waehrend Startsequenz/Autostart/danach nicht erlaubt
   const buttonYOrig = buttonY;
   buttonY = function(){
-    if(geradeMoeglich()) return buttonYOrig.apply(this, arguments);   // in der Luft: die Engine richtet den Flieger gerade
+    if(!eva && !state.onGround && !pf.aktiv) return buttonYOrig.apply(this, arguments);   // in der Luft: aussteigen (Engine; geraderichten liegt auf A)
     if(!eva && (pf.aktiv || (story.phase && !(story.phase === 'mars' && GROUNDS[locale])))) return;
     return buttonYOrig.apply(this, arguments);
   };

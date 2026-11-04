@@ -1,6 +1,6 @@
 // Trip to Japan – Finale am Fukuoka-Beach (nach Etappe 6) mit der C-400 auf dem Vorfeld (Live-Wunsch 13.10.2026: Transall statt
 // Mustang). Laedt nach etappe6c.js, vor der Engine. Welche Stufe es gibt, haengt an den verbrauchten Tagen (Konzept.md, 5-Stufen-Finale):
-//   Stufe 1 (6 Tage)    "Abenteuer" (Fuji-Sprung): Samu fliegt selbst hoch ueber den Fuji. Ueber der Piste uebernimmt der Pilot, B = abspringen,
+//   Stufe 1 (6 Tage)    "Abenteuer" (Fuji-Sprung): Samu fliegt selbst hoch ueber den Fuji. Ueber der Piste uebernimmt der Pilot, Y = abspringen,
 //                       freier Fall (linker Stick lenkt), der Schirm geht von allein auf, Landung auf der verschneiten Piste.
 //                       Danach die Snowboard-Abfahrt (Felsen, Rampen, Rail, Tricks) und die Mega-Rampe hinaus aufs Meer.
 //   Stufe 2 (9-12 Tage) "Rundflug": Samu fliegt selbst durch Ringe um den Fuji und ueber den Gipfel, dann zurueck und landen.
@@ -151,7 +151,7 @@ const TEXT_RUNDFLUG = [
 const TEXT_SPRUNG = [
   'Willkommen an Bord! Heute wird es wild: Du fliegst uns hoch über den Fuji.',
   'Erst die Startsequenz, dann steig auf mindestens zweitausenddreihundert Meter und flieg zum roten Punkt über der weißen Piste.',
-  'Dort übernehme ich das Steuer, und du springst mit B ab. Im freien Fall lenkst du mit dem linken Stick, der Schirm geht von allein auf. Lande auf der Piste!',
+  'Dort übernehme ich das Steuer, und du springst mit Y ab. Im freien Fall lenkst du mit dem linken Stick, der Schirm geht von allein auf. Lande auf der Piste!',
 ];
 function bahnStart(){
   const FL = L().FLUGFELD;
@@ -257,7 +257,7 @@ function sprungFlugUpdate(){
   const d = Math.hypot(state.pos.x - z.x, state.pos.z - z.z);
   if(d < SPRUNG_R && !state.onGround && state.pos.y - ISLAND_Y >= SPRUNG_MIN - 50){   // 50 m Spielraum (HUD rundet)
     fin.schritt = 'pilot'; fin.yaw = new THREE.Euler().setFromQuaternion(state.quat, 'YXZ').y; fin.hoehe = state.pos.y;
-    story.sprich(['Ich übernehme! Wir kreisen über der Piste. Spring mit B, wenn du bereit bist!'], null, 'c400Pilot');
+    story.sprich(['Ich übernehme! Wir kreisen über der Piste. Spring mit Y, wenn du bereit bist!'], null, 'c400Pilot');
   }
 }
 // Der Pilot kreist in der Hoehe ueber dem Zielpunkt (die Engine-Physik ist solange aus)
@@ -300,7 +300,10 @@ function stick(){
 function aktionB(){
   if(fin.schritt === 'welle') welleSpringen();
   else if(fin.schritt === 'abfahrt') springen();
-  else if(fin.schritt === 'pilot') abspringen();
+}
+// Y in der C-400 (seit 04.11.2026 statt B, wie in allen Spielen: Y = aussteigen/abspringen)
+function aktionY(){
+  if(fin.schritt === 'pilot') abspringen();
   else if(fin.schritt === 'flug' && fin.art === 'sprung'){
     story.hinweis('Erst zum roten Punkt über der Piste – mindestens ' + SPRUNG_MIN + ' m hoch!'); story.spaeter(4, () => story.hinweis(''));
   }
@@ -1611,11 +1614,11 @@ function aufgabe(){
     zeilen.push(['Höhe', agl + ' m (Gipfel 2000, max ' + MAX_ALT + ')']);
     if(fin.ringNr < fin.ringe.length){ zeilen.push(['Ring', (fin.ringNr + 1) + ' / ' + fin.ringe.length + ' · ' + d + ' m']); zeilen.push(['Ringhöhe', Math.round(fin.ringe[fin.ringNr].y) + ' m']); }
     else { zeilen.push(['Ziel', 'zurück zur Bahn · ' + d + ' m']); zeilen.push(['Landen', 'Gas auf 20–30 %, langsam sinken']); }
-  } else if(fin.schritt === 'pilot') zeilen.push(['Der Pilot fliegt', 'B: abspringen!']);
+  } else if(fin.schritt === 'pilot') zeilen.push(['Der Pilot fliegt', 'Y: abspringen!']);
   else if(fin.schritt === 'flug'){
     zeilen.push(['Höhe', agl + ' m (mindestens ' + SPRUNG_MIN + ')']);
     zeilen.push(['Piste', d + ' m – roter Punkt im Radar']);
-    zeilen.push(['Dort', 'übernimmt der Pilot, B = abspringen']);
+    zeilen.push(['Dort', 'übernimmt der Pilot, Y = abspringen']);
   }
   return [titel, zeilen];
 }
@@ -1641,7 +1644,7 @@ function testPilot(){
   planeGroup.position.copy(state.pos); planeGroup.quaternion.copy(state.quat); planeGroup.visible = true;
   fin.yaw = 0; fin.hoehe = state.pos.y; fin.schritt = 'pilot'; zielSetzen();
   snapCamera();
-  story.sprich(['Ich übernehme! Wir kreisen über der Piste. Spring mit B, wenn du bereit bist!'], null, 'c400Pilot');
+  story.sprich(['Ich übernehme! Wir kreisen über der Piste. Spring mit Y, wenn du bereit bist!'], null, 'c400Pilot');
 }
 // Test "Finale 3" (Live-Wunsch 14.10.2026): im freien Fall hinter dem Ende der Piste (wie nach der Mega-Rampe), Schirm, dann
 // gleich surfen – mit vielen Riesenwellen (60 % sind 10, 15, 20 oder 30 m hoch, story.finaleRiesen)
@@ -1737,6 +1740,7 @@ function hookFinale(){
   // Live-Befund 14.10.: Y auf der Welle stieg ins Schlauchboot der Engine (Samu ist fuer sie "in der Luft"), B sprang nicht
   // (dropCrate nur mit dem Transall-Modell) – im Finale mit Figur fangen beide Tasten hier ab, vor der Engine
   buttonY = function(){ if(fin.aktiv && hier() && fin.k){ if(fin.schritt === 'welle') surfenAussteigen(); return; }
+    if(fin.aktiv && hier() && !eva && (fin.schritt === 'pilot' || fin.schritt === 'flug')){ aktionY(); return; }   // in der C-400: abspringen
     if(rundflugAussteigbar()){ zurueck('', 'Surfen auf hohen Wellen kommt bald!'); return; }   // nach dem Rundflug am Boden: aussteigen
     return yOrig.apply(this, arguments); };
   const bOrig = buttonB;
@@ -1744,7 +1748,7 @@ function hookFinale(){
   // Y an der C-400 (am Strand, nach Etappe 6)
   const boardYOrig = evaBoardY;
   evaBoardY = function(){ if(c400Nah()){ einsteigen(); return; } return boardYOrig.apply(this, arguments); };
-  // B in der Transall: abspringen / Schirm (statt Kiste). Beim Rundflug tut B nichts (Live-Wunsch)
+  // B in der Transall: keine Kiste (abgesprungen wird seit 04.11.2026 mit Y). Beim Rundflug tut B nichts (Live-Wunsch)
   const dropOrig = dropCrate;
   dropCrate = function(){ if(fin.aktiv && hier()){ aktionB(); return; } return dropOrig.apply(this, arguments); };
   const hudOrig = updateHUD;
