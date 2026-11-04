@@ -202,10 +202,12 @@ Zwischen den Etappen zeigt der **Globus** den bisherigen Weg (blau = München, g
 | `kamel_glb.js` | Kamel für die Herden in Etappe 2 (verkleinert: nur Grundfarbe als 512er JPEG, 1,7 MB) |
 | `c400_glb.js` | Transall-Modell: C-400 als eingebettetes GLB (aus `models/c400.glb`, Nase gedreht); die alte C-160 (`transall_glb.js`) ist aus dem Spiel entfernt, `tools/build_engine.ps1` kopiert sie nicht mehr. Flugwerte bleiben die der Transall |
 | `wueste_snd.js` | Wüsten-Sounds (Musik, Wind) als Base64 |
+| `zug_snd.js` | Fahrgeräusch des Shinkansen (Etappe 6c): 12-s-Schleife, Tempo und Lautstärke folgen der Fahrt |
+| `kulisse.js` | Möwen und Wellen nach dem Abstand zum Strand (ersetzt `updateAmbient` der Engine; im Zug still) |
 | `sw.js`, `manifest.json` | Offline-Cache und App-Installation (PWA) |
 | `ENGINE_RISIKEN.md` | bekannte Stolperstellen der Engine-Übernahme |
 
-Ladeordnung: `samu_glb.js` → `samu_kopf.js` → `story.js` → `objekte.js` → `haeuser.js` → `spuren.js` → `etappe1.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `meeresschildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `shiba_glb.js` → `bellen_snd.js` → `begleiter.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `surfboard_glb.js` → `campfire_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `etappe6c.js` → `snowboard_glb.js` → `wolf_glb.js` → `finale_snd.js` → `finale.js` → `abspann.js` → `joshi_glb.js` → `fuchsi_glb.js` → `gitarre_snd.js` → `strandfreunde.js` → `statistik.js` → `engine/engine.js`. Die Engine ruft am Ende
+Ladeordnung: `samu_glb.js` → `samu_kopf.js` → `story.js` → `kulisse.js` → `objekte.js` → `haeuser.js` → `spuren.js` → `etappe1.js` → `wueste_snd.js` → `kamel_glb.js` → `etappe2.js` → `meeresschildkroete_glb.js` → `fluss_snd.js` → `krokodil_glb.js` → `etappe3.js` → `hafen_glb.js` → `musik_snd.js` → `moewe_glb.js` → `hund_glb.js` → `panda_glb.js` → `fuji_glb.js` → `tiere.js` → `shiba_glb.js` → `bellen_snd.js` → `begleiter.js` → `etappe4.js` → `flucht_glb.js` → `etappe4b.js` → `etappe5.js` → `etappe5b.js` → `zug_glb.js` → `surfboard_glb.js` → `campfire_glb.js` → `godzilla_glb.js` → `samurai_glb.js` → `etappe6.js` → `etappe6b.js` → `etappe6c.js` → `snowboard_glb.js` → `wolf_glb.js` → `finale_snd.js` → `finale.js` → `abspann.js` → `joshi_glb.js` → `fuchsi_glb.js` → `gitarre_snd.js` → `strandfreunde.js` → `statistik.js` → `engine/engine.js`. Die Engine ruft am Ende
 ihres Boot-Blocks `STORY_HOOK` (Wrapper setzen) und `STORY_START` (Startszene) auf – die zwei Zeilen fügt das Build-Skript ein.
 
 **Welten:** Jede Etappe baut ihre Kulisse in eine eigene Gruppe – `story.welt(n).add(obj)`, nie `scene.add(obj)`.
@@ -343,6 +345,7 @@ NC-Lizenzen bedeuten: **nicht kommerziell** – das Spiel darf mit diesen Werken
 | Intense Skiing Carving (Pixabay-ID 447134) | **u_sda88n6jzm** (Pixabay) | Pixabay-Lizenz | Snowboard auf der Piste (Finale) |
 | Can Sliding Across Wooden Desk (Pixabay-ID 98693) | **freesound_community** (Pixabay) | Pixabay-Lizenz | Rail-Grind (Finale) |
 | Soft Wind (Pixabay-ID 477404) | **storegraphic** (Pixabay) | Pixabay-Lizenz | Fallschirm / Snowboard (Finale) |
+| 8 Freight Train (Pixabay-ID 58909) | **freesound_community** (Pixabay) | Pixabay-Lizenz | Fahrgeräusch des Shinkansen (Etappe 6) |
 | Prop Plane (Pixabay-ID 14513) | **freesound_community** (Pixabay) | Pixabay-Lizenz | Propellermotor |
 | Jet Engine (Pixabay-ID 6753) | **freesound_community** (Pixabay) | Pixabay-Lizenz | Düsentriebwerk (X-Wing, Eurofighter) |
 | Thai Motor Boat (Pixabay-ID 64851) | **freesound_community** (Pixabay) | Pixabay-Lizenz | Motorboot (Feuerwehrboot, Schlauchboot) |

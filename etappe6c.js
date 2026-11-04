@@ -373,7 +373,26 @@ story.aufgabeE6c = () => zf.aktiv ? ['Shinkansen – Weichen wählen', [
   ['Wählen', 'das Gleis, das bei beiden grün ist (L-Stick / ← →, ein Druck = ein Gleis)'],
   ['Achtung', 'die Zeichen sind nur kurz zu sehen – bis zum Schluss'],
 ]] : null;
-story.updateE6c = function(){ if(!e6() && zf.aktiv){ zf.aktiv = false; hudAus(); } };
+// Fahrgeraeusch (Wunsch 04.11.2026, wie im Flugspiel: zug_snd.js "8 Freight Train", freesound_community/Pixabay): Schleife, Tempo
+// 0,55..1,3-fach und Lautstaerke nach der Fahrt, im Stand still. Die Meeres-Kulisse schweigt im Zug (kulisse.js fragt story.zugFahrt).
+story.zugFahrt = () => zf.aktiv && hier();
+const ZUG_VOL = 0.32, ZUG_RATE_MIN = 0.55, ZUG_RATE_MAX = 1.3;
+let zugQuelle = null, zugGain = null, zugLaedt = false;
+function zugTon(){
+  if(typeof audioCtx === 'undefined' || !audioCtx || !window.ZUG_SND) return;
+  const v = !zf.aktiv ? 0 : zf.halt ? zf.vHalt : zf.start ? tempo(zf.t) : 0;
+  const an = soundOn && zf.aktiv && hier() && audioCtx.state === 'running';
+  if(an && !zugQuelle && !zugLaedt){ zugLaedt = true;
+    decodeSound(window.ZUG_SND).then(buf => { zugLaedt = false; if(zugQuelle) return;
+      zugGain = audioCtx.createGain(); zugGain.gain.value = 0; zugGain.connect(audioCtx.destination);
+      zugQuelle = audioCtx.createBufferSource(); zugQuelle.buffer = buf; zugQuelle.loop = true; zugQuelle.connect(zugGain); zugQuelle.start(); })
+      .catch(e => { zugLaedt = false; console.warn('Zuggeraeusch:', e); }); }
+  if(!zugQuelle) return;
+  const f = Math.max(0, Math.min(1, v / V_MAX)), anfahrt = Math.min(1, v / 8), t = audioCtx.currentTime;
+  zugGain.gain.setTargetAtTime(an ? ZUG_VOL * anfahrt * (0.5 + 0.5 * f) : 0, t, 0.25);
+  zugQuelle.playbackRate.setTargetAtTime(ZUG_RATE_MIN + (ZUG_RATE_MAX - ZUG_RATE_MIN) * f, t, 0.3);
+}
+story.updateE6c = function(){ if(!e6() && zf.aktiv){ zf.aktiv = false; hudAus(); } zugTon(); };
 story.e6zugTest = { plane, tempo, wegBis, S_ENDE, T_GESAMT };
 
 const hookOrig = window.STORY_HOOK;
