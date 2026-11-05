@@ -571,8 +571,11 @@ function samuTasten(){
   // B = knien (begleiter.js, Live-Wunsch 18.10.2026: der Hund kommt) – Aerial Evade liegt nicht mehr auf B
   if(neu('x')) story.kameraStandard();               // X stellt auch die Kamera wieder hinter Samu (wie im Geheimland)
   if(frei && neu('x')) trickStart('tanz');
-  if(frei && neu('y')) trickStart('twirl');
-  tricks.prev = k; tricks.fzgVorher = amFahrzeug();
+  // Live-Befund 05.11.2026: Y im Surfring nahm das Brett UND twirlte - am Brett (und mit dem Brett in der Hand) gehoert Y dem Brett,
+  // wie oben beim Fahrzeug auch im Bild danach
+  const surfY = !!(story.surfNah6 && story.surfNah6()) || !!(story.surfTraegt && story.surfTraegt());
+  if(frei && !surfY && !tricks.surfVorher && neu('y')) trickStart('twirl');
+  tricks.prev = k; tricks.fzgVorher = amFahrzeug(); tricks.surfVorher = surfY;
   for(const n in getippt) delete getippt[n];
 }
 
@@ -3275,9 +3278,11 @@ function hoehenBalken(){
   if(hoeheEl.dataset.lage !== lage){ hoeheEl.dataset.lage = lage; const h = hoeheEl.style;
     h.left = Math.round(innerWidth - r.right) + 'px'; h.top = Math.round(r.top) + 'px'; h.width = cs.width; h.height = cs.height; h.gap = cs.gap; h.borderRadius = cs.borderRadius; }
   if(hoeheEl.style.opacity !== cs.opacity) hoeheEl.style.opacity = cs.opacity;
-  const m = uboot ? Math.max(0, Math.round(seaSurfaceY(0, 0, 0) - state.pos.y)) : hoeheJetzt();         // global-ok: Engine
+  // Live-Befund 05.11.2026 (Anzeigen blendeten nicht aus): am Boden 0 m und nicht "in der Luft" - gemessen wird gegen die Inselhoehe
+  // 0,3 m, das Festland, die Wueste und der Fuji liegen hoeher; dort stand man mit "1 m" im untersten Segment, und das haelt sie an
+  const m = uboot ? Math.max(0, Math.round(seaSurfaceY(0, 0, 0) - state.pos.y)) : state.onGround ? 0 : hoeheJetzt();   // global-ok: Engine
   // in der Luft (bzw. getaucht) leuchtet immer mindestens das unterste Segment – bis man gelandet ist (Live-Wunsch 03.11.2026, wie im Flugspiel)
-  const luft = uboot ? m > 0 : (!state.onGround || m > 0);                                               // global-ok: Engine
+  const luft = uboot ? m > 0 : !state.onGround;                                                           // global-ok: Engine
   const an = Math.max(luft ? 1 : 0, Math.min(SCHUB_N, Math.round(m / (uboot ? TIEFE_MAX : hoeheMax()) * SCHUB_N)));   // global-ok: Engine (5-%-Schritte)
   // Neue Stufe des Hoehenbalkens = wie eine Schubeingabe (Live-Wunsch 03.11.2026): wer gleitet, dem blenden die Anzeigen aus; wer steigt
   // oder sinkt, sieht sie bei jeder neuen Stufe wieder (schnell steigen/sinken: dauernd). Im untersten Segment in der Luft bleiben

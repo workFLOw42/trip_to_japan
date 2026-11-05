@@ -1536,7 +1536,7 @@ function gischt(dt, tx, tz){
 function gischtWeg(){ if(gisch.g){ scene.remove(gisch.g); gisch.g.traverse(o => { if(o.geometry) o.geometry.dispose(); }); gisch.g = null; } gisch.teile.length = 0; }
 // Waschgang: Samu faellt ins Wasser, kurz unter (gedreht), taucht auf dem Brett auf, naechste Welle
 function waschgangStart(){
-  if(ab.paddeln) paddelnAus();                            // paddelnd gegen den Felsen: danach steht er wie sonst nach dem Waschgang
+  if(ab.paddeln) paddelnAus();                            // paddelnd gegen den Felsen: Waschgang, danach paddelt er wieder
   welle.wasch = 1.8; ab.luft = false; ab.spin = 0; ab.flip = 0; ab.hh = 0; ab.qv = 0;
   // Landering + Schatten sofort weg (Live-Befund 20.10.2026: blieben stehen, Samu trieb davon – sah aus, als fahre der rote
   // Kreis nach vorne weg). landeSchatten blendet sie zwar aus, wird im Waschgang aber gar nicht mehr erreicht
@@ -1553,8 +1553,7 @@ function waschgang(dt){
   state.pos.set(ab.x, wy, ab.z); state.vel.set(WEL.V * 0.5, 0, 0);
   if(welle.wasch <= 0){ welle.wasch = 0; if(ab.waschZ !== undefined){ ab.z = ab.waschZ; ab.a = ab.waschA; ab.waschZ = undefined; }
     ab.y = wellenY(ab.x, ab.z); ab.vy = 0; ab.vb = 5; ab.drift = -WEL.V; figurZurueck();
-    const K = story.samu; if(K && K.acts.swim){ K.acts.swim.stop(); K.cur = null; }   // hart zurueck auf die Stehhaltung
-    haltung(); fin.kal = false; ab.kalT = 0; }
+    paddelnAn(); ab.vp = 0; }                              // Live-Wunsch 05.11.2026 (wie im Flugspiel): danach paddelnd auf dem Brett, A = aufstehen
 }
 // Y: aussteigen -> im Ring am Strand; beim ersten Mal laeuft der Abspann
 function surfenAussteigen(){
@@ -1569,7 +1568,7 @@ function surfenAussteigen(){
     const S = L().SURF || L().STRANDPLATZ;
     if(eva){ eva.group.position.set(S.x + 2, ISLAND_Y, S.z); eva.yaw = -Math.PI / 2; eva.group.rotation.y = eva.yaw; evaOrbit = 0; evaPitch = 0; }
     snapCamera(); story.phase = 'ankunft';
-    if(!welle.abspann && !story.freiesSpiel){ welle.abspann = true; if(story.abspann) story.abspann(); }   // "Ab zum Strand": kein Abspann
+    trag.gesurft = true; brettNehmen();                    // Live-Wunsch 05.11.2026: Brett in der Hand – der Abspann kommt erst, wenn es mit Y zurueckgelegt ist
   });
 }
 story.finaleSurfenAus = surfenAussteigen;
@@ -1578,12 +1577,14 @@ story.finaleSurfenAus = surfenAussteigen;
 // Y am Brett im Sand = Brett in die Hand, Samu laeuft weiter zu Fuss. Ins Wasser laufen = ab der Schwimmgrenze paddeln (auf dem
 // Brett liegen, linker Stick: vor = paddeln, links/rechts = drehen; die Front einer Welle nimmt mit). A = aufstehen bzw. wieder
 // hinlegen (B steht beim Paddeln auch auf). Am Strand angekommen (Watzone/Sand) = Brett wieder in der Hand. Y mit dem Brett in
-// der Hand = es steckt wieder an seinem Platz; beim ersten Mal nach dem Surfen laeuft dann der Abspann (vorher: beim ersten
-// Aussteigen mit Y auf dem Wasser – das geht weiterhin). Im Finale nach der Fallschirmlandung im Wasser wird auch erst gepaddelt.
+// der Hand = es steckt wieder an seinem Platz; erst dann, beim ersten Mal nach dem Surfen, laeuft der Abspann (Live-Wunsch: erst wieder
+// am Strand und das Brett weggelegt; Y auf dem Wasser stellt Samu mit dem Brett in der Hand an den Brettplatz). Nach dem Waschgang paddelt
+// er. Im Finale nach der Fallschirmlandung im Wasser wird auch erst gepaddelt.
 const PADDEL = { V: 3, DREH: 1.8, TIEF: 0.5, WELLE: 0.3, VOR: 0.25 };   // m/s, rad/s, Figur unter der Brettoberkante, Mitnahme auf der Front (Anteil V), Brett nach vorn (m)
 const TRAG_WEG = 500;                                    // m vom Brettplatz: weiter weg (oder eingestiegen, geschwommen) steckt es wieder an seinem Platz
 const trag = { an: false, g: null, ab: null, gesurft: false };
 story.surfBrettWeg = () => trag.an || welle.aktiv;      // etappe6.js: solange man das Brett hat, fehlt es im Sand
+story.surfTraegt = () => trag.an;                        // story.js: Y gehoert dann dem Brett, kein Twirl
 const taste = { a: false, prev: true };                 // A (Controller) bzw. Leertaste, nur der Druck zaehlt
 if(typeof addEventListener === 'function') addEventListener('keydown', e => { if(!e.repeat && e.code === 'Space' && welle.aktiv) taste.a = true; });
 function aGedrueckt(){
