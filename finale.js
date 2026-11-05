@@ -298,7 +298,7 @@ function stick(){
   return { x, y };
 }
 function aktionB(){
-  if(fin.schritt === 'welle') welleSpringen();
+  if(fin.schritt === 'welle'){ if(ab.paddeln) aufstehen(); else welleSpringen(); }   // beim Paddeln steht B auf (wie im Flugspiel)
   else if(fin.schritt === 'abfahrt') springen();
 }
 // Y in der C-400 (seit 04.11.2026 statt B, wie in allen Spielen: Y = aussteigen/abspringen)
@@ -454,7 +454,7 @@ function brettUnter(g){
 const _qk = new THREE.Quaternion(), _ya = new THREE.Vector3(0, 1, 0);
 let knochen = null;
 function haltungKnochen(){
-  const k = story.samu; if(!k || !k.obj || !fin.k || !fin.k.g.userData.brett) return;
+  const k = story.samu; if(!k || !k.obj || !fin.k || !fin.k.g.userData.brett || ab.paddeln) return;   // paddelnd liegt er (swim)
   if(!knochen){ knochen = []; k.obj.traverse(o => { if(BRETT_DREH[o.name] !== undefined) knochen.push([o, BRETT_DREH[o.name]]); }); }
   for(const [o, w] of knochen){
     const u = o.userData;
@@ -1141,7 +1141,7 @@ function fussPunkte(g){
 }
 function fuesseAusrichten(){
   const g = fin.k && fin.k.g, fig = g && g.children[0]; if(!fig || fin.kal || !(ab.kalT > 0.6)) return;
-  if(!g.userData.brett) return;                            // Live-Befund 14.10.: ohne Brett (Freiflug) drehte es die Figur quer
+  if(!g.userData.brett || ab.paddeln) return;              // Live-Befund 14.10.: ohne Brett (Freiflug) drehte es die Figur quer; paddelnd liegt sie
   for(let i = 0; i < 4; i++){
     if(!fussPunkte(g)) return;
     const w = Math.atan2(_fr.x - _fl.x, _fr.z - _fl.z); if(Math.abs(w) < 0.03) break;
@@ -1300,7 +1300,7 @@ function surfBrett(g){
   if(g.children[0] !== b) g.children[0].position.y = 0.045;
   return true;
 }
-function surfenStart(vonMega){
+function surfenStart(vonMega, start){                   // start { x, z, a }: vom Strand hineingepaddelt (dort geht es los)
   if(fx){ fx.schatten.visible = false; fx.spur.visible = false; }
   welle.aktiv = true; welle.H = wellenHoehe(); welle.wasch = 0; welle.wasserT = 0; welle.hoehen.clear(); welle.off.clear(); _rbN = 0; welle.reit.clear(); welle.gezaehlt.clear(); welle.angesagt.clear(); welle.blende = false;
   wellenBauen();
@@ -1316,21 +1316,24 @@ function surfenStart(vonMega){
   surfBrett(fin.k.g);
   if(typeof spurQuelle === 'function') spurQuelle(fin.k.g, { groesse: 1.8 });   // global-ok: Engine (Ringe und Gischt auf der Welle)
   ab.spin = 0; ab.spin0 = 0; ab.flip = 0; ab.stolper = 0; ab.kalT = 0; ab.qv = 0; fin.kal = false; knochen = null;
-  surfPlatz();
+  surfPlatz(start);
   figurZurueck(); haltung();
+  paddelnAn();                                            // Live-Wunsch 05.11.2026 (wie im Flugspiel): erst paddeln, A = aufstehen
   story.hinweis('');
 }
-story.finaleSurfen = surfenStart;
+// Live-Wunsch 05.11.2026: vom Strand aus (etappe6.js, Y am Brett) erst das Brett in die Hand - aufs Wasser geht es ab der Schwimmgrenze
+story.finaleSurfen = (vonMega) => { if(vonMega) surfenStart(true); else brettNehmen(); };
 // strandfreunde.js (Live-Wunsch 23.10.2026: Joshi surft mit): Samus Lage auf der Welle, die Wellenhoehe und das Brett
 story.surfLage = () => welle.aktiv && fin.schritt === 'welle' && fin.k ? { x: ab.x, y: ab.y, z: ab.z, luft: ab.luft, wasch: welle.wasch > 0, blende: welle.blende } : null;
 story.surfWellenY = (x, z) => wellenY(x, z);
 story.surfBrettVorlage = () => { ladeSurf(); return surfVorlage || null; };
 // Startplatz: vor dem Strand auf der Front einer Welle, schraeg zur Welle (immer vor dem Fukuoka-Beach – dort ist die Kueste gerade)
-function surfPlatz(){
-  const K = L().FEST.x, n = reiheBei(K - 220) + 1, H = reiheH(n), a = 0.9;
-  ab.z = L().STRANDPLATZ.z; ab.x = reiheX(n) + vorne(H) * 0.45; ab.a = a;
+// start { x, z, a } (vom Strand hineingepaddelt): genau dort, in Blickrichtung
+function surfPlatz(start){
+  const K = L().FEST.x, n = reiheBei(K - 220) + 1, H = reiheH(n), a = start ? start.a : 0.9;
+  ab.z = start ? start.z : L().STRANDPLATZ.z; ab.x = start ? start.x : reiheX(n) + vorne(H) * 0.45; ab.a = a;
   ab.vb = 7; ab.drift = -WEL.V * WEL.HALT;
-  ab.y = wellenY(ab.x, ab.z); ab.vy = 0; ab.luft = false; ab.wH = H; ab.reitN = null; ab.reitT = 0;
+  ab.y = wellenY(ab.x, ab.z); ab.vy = 0; ab.luft = false; ab.wH = start ? _wH : H; ab.reitN = null; ab.reitT = 0;
   welle.camA = a;
   const cx = Math.cos(a), cz = Math.sin(a);
   camera.position.set(ab.x - cx * 11, ab.y + 5, ab.z - cz * 11);
@@ -1349,6 +1352,8 @@ function welleSchritt(dt){
   k.t += dt; ab.kalT = (ab.kalT || 0) + dt; welle.t += dt; welle.wasserT += dt;
   if(welle.wasch > 0){ waschgang(dt); return; }
   if(welle.blende) return;
+  if(aGedrueckt()){ if(ab.paddeln) aufstehen(); else if(!ab.luft) paddelnAn(); }   // A: aufstehen bzw. wieder hinlegen
+  if(ab.paddeln){ paddelSchritt(dt); return; }
   const st = stick(), rs = rStick(), K = L().FEST.x;
   // Lenken: rechts = rechtsherum (Richtung (cos a, sin a); a = 0 zum Strand, +-90° laengs der Welle, 180° zur See)
   ab.a += st.x * (ab.luft ? 0.8 : 2.0) * dt;
@@ -1402,7 +1407,9 @@ function welleSchritt(dt){
   const nS = reiheBei(ab.x) + 1;
   for(let n = nS; n <= nS + 1; n++){ const H = reiheH(n);
     if(H >= 10 && !welle.angesagt.has(n) && wellenZone(reiheX(n)) > 0.4){ welle.angesagt.add(n); zeige('🌊 Monsterwelle im Anmarsch: ' + Math.round(H) + ' m!', 3); } }
-  if(!ab.luft && (ab.x - K > -12 || ab.x - K < -650 || Math.abs(ab.z - L().STRANDPLATZ.z) > 700)) rausPaddeln();
+  // Live-Wunsch 05.11.2026: am Strand (Watzone/Sand) das Brett in der Hand - vorher ging es 12 m davor kurz schwarz wieder hinaus
+  if(!ab.luft && landHier(ab.x, ab.z)){ anLand(); return; }
+  if(!ab.luft && (ab.x - K > 30 || ab.x - K < -650 || Math.abs(ab.z - L().STRANDPLATZ.z) > 700)) rausPaddeln();
   // Pose: Neigung (vor/hinter) und Schraeglage (links/rechts) aus dem Wasser unter dem Brett, in der Kurve nach innen
   const rx = -dz, rz = dx;
   const neig = Math.atan2(wellenY(ab.x - dx * 0.7, ab.z - dz * 0.7) - wellenY(ab.x + dx * 0.7, ab.z + dz * 0.7), 1.4);
@@ -1529,6 +1536,7 @@ function gischt(dt, tx, tz){
 function gischtWeg(){ if(gisch.g){ scene.remove(gisch.g); gisch.g.traverse(o => { if(o.geometry) o.geometry.dispose(); }); gisch.g = null; } gisch.teile.length = 0; }
 // Waschgang: Samu faellt ins Wasser, kurz unter (gedreht), taucht auf dem Brett auf, naechste Welle
 function waschgangStart(){
+  if(ab.paddeln) paddelnAus();                            // paddelnd gegen den Felsen: danach steht er wie sonst nach dem Waschgang
   welle.wasch = 1.8; ab.luft = false; ab.spin = 0; ab.flip = 0; ab.hh = 0; ab.qv = 0;
   // Landering + Schatten sofort weg (Live-Befund 20.10.2026: blieben stehen, Samu trieb davon – sah aus, als fahre der rote
   // Kreis nach vorne weg). landeSchatten blendet sie zwar aus, wird im Waschgang aber gar nicht mehr erreicht
@@ -1566,8 +1574,125 @@ function surfenAussteigen(){
 }
 story.finaleSurfenAus = surfenAussteigen;
 
+// ---- Brett tragen und paddeln (Live-Wunsch 05.11.2026, wie im Flugspiel getestet) ------------------------------------
+// Y am Brett im Sand = Brett in die Hand, Samu laeuft weiter zu Fuss. Ins Wasser laufen = ab der Schwimmgrenze paddeln (auf dem
+// Brett liegen, linker Stick: vor = paddeln, links/rechts = drehen; die Front einer Welle nimmt mit). A = aufstehen bzw. wieder
+// hinlegen (B steht beim Paddeln auch auf). Am Strand angekommen (Watzone/Sand) = Brett wieder in der Hand. Y mit dem Brett in
+// der Hand = es steckt wieder an seinem Platz; beim ersten Mal nach dem Surfen laeuft dann der Abspann (vorher: beim ersten
+// Aussteigen mit Y auf dem Wasser – das geht weiterhin). Im Finale nach der Fallschirmlandung im Wasser wird auch erst gepaddelt.
+const PADDEL = { V: 3, DREH: 1.8, TIEF: 0.5, WELLE: 0.3, VOR: 0.25 };   // m/s, rad/s, Figur unter der Brettoberkante, Mitnahme auf der Front (Anteil V), Brett nach vorn (m)
+const TRAG_WEG = 500;                                    // m vom Brettplatz: weiter weg (oder eingestiegen, geschwommen) steckt es wieder an seinem Platz
+const trag = { an: false, g: null, ab: null, gesurft: false };
+story.surfBrettWeg = () => trag.an || welle.aktiv;      // etappe6.js: solange man das Brett hat, fehlt es im Sand
+const taste = { a: false, prev: true };                 // A (Controller) bzw. Leertaste, nur der Druck zaehlt
+if(typeof addEventListener === 'function') addEventListener('keydown', e => { if(!e.repeat && e.code === 'Space' && welle.aktiv) taste.a = true; });
+function aGedrueckt(){
+  const gp = gamepadIndex !== null && navigator.getGamepads ? navigator.getGamepads()[gamepadIndex] : null;
+  const a = !!(gp && gp.buttons[0] && gp.buttons[0].pressed), neu = (a && !taste.prev) || taste.a;
+  taste.prev = a; taste.a = false; return neu;
+}
+function brettNehmen(){ ladeSurf(); if(!eva) return; trag.an = true; trag.ab = null; }
+function tragWeg(){ if(trag.g){ scene.remove(trag.g); trag.g = null; } }
+function brettZurueck(){
+  trag.an = false; trag.ab = null; tragWeg();
+  if(trag.gesurft && !welle.abspann && !story.freiesSpiel){ welle.abspann = true; if(story.abspann) story.abspann(); }   // "Ab zum Strand": kein Abspann
+}
+const _tq = new THREE.Quaternion();
+// jedes Bild (updateHUD): hineinpaddeln (vorgemerkt von evaEnterDinghy), das getragene Brett an Samu, sonst zurueck an seinen Platz
+function tragSchritt(){
+  if(trag.ab){ const p = trag.ab; trag.ab = null; if(trag.an && eva && !fin.aktiv){ trag.an = false; tragWeg(); surfenStart(false, p); return; } }
+  if(!trag.an){ tragWeg(); return; }
+  const S = L().SURF, sw = story.schwimm;
+  if(!eva || eva.boat || eva.rover || locale !== 'earth' || story.phase !== 'ankunft' || fin.aktiv || (sw && sw.aktiv)
+    || (S && Math.hypot(eva.group.position.x - S.x, eva.group.position.z - S.z) > TRAG_WEG)){ trag.an = false; tragWeg(); return; }
+  if(!trag.g){ if(!surfVorlage) return;                  // laedt noch
+    const h = new THREE.Group(), b = surfVorlage.clone(true); b.rotation.y = Math.PI; h.add(b);   // Nase nach vorn (wie surfBrett)
+    b.traverse(o => { if(o.isMesh) o.castShadow = true; }); scene.add(h); trag.g = h; }
+  // rechts unter dem Arm, hochkant, Nase nach vorn (wie im Flugspiel)
+  const p = eva.group.position, y = eva.yaw, rx = Math.cos(y), rz = -Math.sin(y);
+  trag.g.position.set(p.x + rx * 0.33, p.y + 0.95, p.z + rz * 0.33);
+  trag.g.quaternion.setFromAxisAngle(_Y, y).multiply(_tq.setFromAxisAngle(_Z, Math.PI / 2));
+}
+// Land oder Watzone (dort steht Samu) – dieselbe Pruefung wie beim Schwimmen (story.js schwimmUpdate)
+function landHier(x, z){
+  if(typeof evaSolid === 'function' && evaSolid(x, z) && !isOpenWater(x, z)) return true;
+  if(isOnBeach(x, z) || isOnLand(x, z)) return true;
+  return !!(story.watGrund && !(story.watEigeneWelt && story.watEigeneWelt()) && story.watGrund(x, z) !== null);
+}
+// am Strand angekommen: kurz schwarz, Samu steht dort zu Fuss, das Brett in der Hand
+function anLand(){
+  if(welle.blende) return; welle.blende = true;
+  const x = ab.x, z = ab.z, yaw = fin.k ? fin.k.yaw : -Math.PI / 2;
+  story.schwarz('', 0.4, () => {
+    welle.blende = false; if(!welle.aktiv) return;
+    welle.aktiv = false; trag.gesurft = true;
+    wellenWeg(); gischtWeg(); landeWeg();
+    aufraeumen();
+    bahnStart(); planeGroup.visible = false;
+    const c = story.e6c400 && story.e6c400(); if(c) c.visible = true;
+    evaExit();
+    if(eva){ eva.group.position.set(x, evaFootY(x, z), z); eva.yaw = yaw; eva.group.rotation.y = yaw; evaOrbit = 0; evaPitch = 0; eva.vy = 0; eva.onGround = true; }
+    snapCamera(); story.phase = 'ankunft';
+    brettNehmen();
+  });
+}
+// hinlegen: Samu liegt auf dem Brett und paddelt (Clip 'swim')
+function paddelnAn(){
+  if(!fin.k || !fin.k.g) return;
+  ab.paddeln = true; ab.vp = Math.min(PADDEL.V, (ab.v || 0) * 0.3); ab.pT = 0; ab.schub = 0;
+  ab.luft = false; ab.vy = 0; ab.spin = 0; ab.spin0 = 0; ab.flip = 0; ab.qv = 0;
+  if(lande.g) lande.g.visible = false;
+  figurZurueck(); fin.kal = false; knochen = null;
+  kAnim('swim');
+  taste.prev = true; taste.a = false;                    // ein gehaltenes A zaehlt nicht
+}
+function paddelnAus(){
+  ab.paddeln = false;
+  const b = fin.k && fin.k.g.userData.brett; if(b) b.position.z = 0;
+  const K = story.samu; if(K && K.acts.swim) K.acts.swim.timeScale = 1;
+}
+// aufstehen: mit derselben Fahrt weiter (die Welle zieht sie dann weich nach), Stehhaltung wie nach dem Waschgang
+function aufstehen(){
+  if(!ab.paddeln) return;
+  paddelnAus();
+  const dx = Math.cos(ab.a);
+  ab.vb = Math.max(4, ab.vp + 4);
+  ab.drift = dx * ab.vp + (ab.schub || 0) - WEL.V - dx * ab.vb;
+  ab.y = wellenY(ab.x, ab.z); ab.vy = 0; ab.luft = false; ab.spin = 0; ab.spin0 = 0; ab.flip = 0; ab.qv = 0; ab.yAlt = undefined; ab.wyJetzt = undefined;
+  figurZurueck();
+  const K = story.samu; if(K && K.acts.swim){ K.acts.swim.stop(); K.cur = null; }   // hart zurueck auf die Stehhaltung
+  haltung(); fin.kal = false; ab.kalT = 0;
+}
+function paddelSchritt(dt){
+  const k = fin.k, st = stick(), K = L().FEST.x;
+  ab.pT = (ab.pT || 0) + dt;
+  ab.a += st.x * PADDEL.DREH * dt;                         // wie beim Surfen: rechts = rechtsherum
+  const ziel = Math.max(0, -st.y) * PADDEL.V - Math.max(0, st.y) * 0.8;
+  ab.vp += (ziel - ab.vp) * Math.min(1, 2 * dt);
+  const dx = Math.cos(ab.a), dz = Math.sin(ab.a);
+  wellenY(ab.x, ab.z);
+  ab.schub = _wF >= 0 && ab.x - K < -10 ? WEL.V * PADDEL.WELLE : 0;   // die Front nimmt mit (nicht mehr im Auslauf am Strand)
+  const vx = dx * ab.vp + ab.schub, vz = dz * ab.vp;
+  ab.x += vx * dt; ab.z += vz * dt;
+  if(meotoSchritt(dt, vx, vz)) return;                    // Felsen: Waschgang
+  if(ab.pT > 1.5 && landHier(ab.x, ab.z)){ anLand(); return; }   // gerade erst hinein: nicht gleich wieder heraus
+  if(ab.x - K > 30 || ab.x - K < -650 || Math.abs(ab.z - L().STRANDPLATZ.z) > 700){ rausPaddeln(); return; }
+  const wy = wellenY(ab.x, ab.z); ab.y = wy; ab.wH = _wH; ab.v = Math.hypot(vx, vz); ab.vz = vz; ab.vy = 0;
+  const neig = Math.atan2(wellenY(ab.x - dx * 0.9, ab.z - dz * 0.9) - wellenY(ab.x + dx * 0.9, ab.z + dz * 0.9), 1.8);
+  k.yaw = Math.atan2(-dx, -dz);
+  k.g.quaternion.setFromAxisAngle(_Y, k.yaw).multiply(_qb.setFromAxisAngle(_X, -neig));
+  k.g.position.set(ab.x, wy - 0.03, ab.z);
+  const fig = k.g.children[0], b = k.g.userData.brett;
+  if(fig && fig !== b){ fig.rotation.set(0, 0, 0); fig.position.set(0, 0.045 - PADDEL.TIEF, 0); }
+  if(b) b.position.z = -PADDEL.VOR;                        // Brett unter dem Oberkoerper
+  const S = story.samu; if(S && S.acts.swim) S.acts.swim.timeScale = 0.35 + Math.abs(ab.vp) / PADDEL.V * 0.6;
+  state.pos.set(ab.x, wy, ab.z); state.vel.set(vx, 0, vz); state.onGround = true; state.throttle = 0;
+  if(lande.g) lande.g.visible = false;
+}
+
 // ---- Zurueck an die C-400 (geschafft oder noch einmal) -------------------------------------------------------------
 function aufraeumen(){
+  if(ab.paddeln) paddelnAus();                            // sonst blieben Fuss-/Knochenhaltung beim naechsten Snowboarden aus
   fin.aktiv = false; fin.schritt = null; story.ziel = null;
   if(fin.k){ scene.remove(fin.k.g); fin.k = null; }
   if(fin.flieger){ scene.remove(fin.flieger.g); fin.flieger = null; }
@@ -1739,7 +1864,8 @@ function hookFinale(){
   const yOrig = buttonY;
   // Live-Befund 14.10.: Y auf der Welle stieg ins Schlauchboot der Engine (Samu ist fuer sie "in der Luft"), B sprang nicht
   // (dropCrate nur mit dem Transall-Modell) – im Finale mit Figur fangen beide Tasten hier ab, vor der Engine
-  buttonY = function(){ if(fin.aktiv && hier() && fin.k){ if(fin.schritt === 'welle') surfenAussteigen(); return; }
+  buttonY = function(){ if(trag.an && eva && hier()){ brettZurueck(); return; }   // Brett in der Hand: steckt wieder an seinem Platz
+    if(fin.aktiv && hier() && fin.k){ if(fin.schritt === 'welle') surfenAussteigen(); return; }
     if(fin.aktiv && hier() && !eva && (fin.schritt === 'pilot' || fin.schritt === 'flug')){ aktionY(); return; }   // in der C-400: abspringen
     if(rundflugAussteigbar()){ zurueck('', 'Surfen auf hohen Wellen kommt bald!'); return; }   // nach dem Rundflug am Boden: aussteigen
     return yOrig.apply(this, arguments); };
@@ -1747,7 +1873,14 @@ function hookFinale(){
   buttonB = function(){ if(fin.aktiv && hier() && fin.k){ aktionB(); return; } if(story.freiesSpiel && c400Nah() && !fin.aktiv){ einsteigen('rundflug'); return; } return bOrig.apply(this, arguments); };
   // Y an der C-400 (am Strand, nach Etappe 6)
   const boardYOrig = evaBoardY;
-  evaBoardY = function(){ if(c400Nah()){ einsteigen(); return; } return boardYOrig.apply(this, arguments); };
+  evaBoardY = function(){ if(trag.an && eva && hier()){ brettZurueck(); return; } if(c400Nah()){ einsteigen(); return; } return boardYOrig.apply(this, arguments); };
+  // Live-Wunsch 05.11.2026: mit dem Brett in der Hand ab der Schwimmgrenze paddeln statt schwimmen - umgeschaltet im naechsten Bild
+  // (tragSchritt), nicht mitten in updateEva (surfenStart nimmt die Fussfigur weg)
+  const dinghyOrig = evaEnterDinghy;                                                       // global-ok: Engine (story.js: Schwimmen)
+  evaEnterDinghy = function(x, z){                                                         // global-ok: Engine
+    if(trag.an && eva && hier()){ trag.ab = { x, z, a: Math.atan2(-Math.cos(eva.yaw), -Math.sin(eva.yaw)) }; return; }
+    return dinghyOrig.apply(this, arguments);
+  };
   // B in der Transall: keine Kiste (abgesprungen wird seit 04.11.2026 mit Y). Beim Rundflug tut B nichts (Live-Wunsch)
   const dropOrig = dropCrate;
   dropCrate = function(){ if(fin.aktiv && hier()){ aktionB(); return; } return dropOrig.apply(this, arguments); };
@@ -1757,6 +1890,7 @@ function hookFinale(){
     if(fin.testPilot && hier() && story.phase === 'ankunft' && eva && story.e6fujiMesh){ fin.testPilot = false; testPilot(); }
     if(fin.testRiesen && hier() && story.phase === 'ankunft' && eva && story.e6fujiMesh){ fin.testRiesen = false; testRiesen(); }
     if(hier() && story.phase === 'ankunft' && surfVorlage === null) ladeSurf();          // Surfbrett vorab laden
+    if(hier()) tragSchritt();                              // Brett in der Hand, hineinpaddeln
     if(fin.aktiv && hier()) hud();
     return r;
   };
@@ -1839,7 +1973,7 @@ function hookFinale(){
       // Live-Befund 14.10. (2): hinter Samu in Brettrichtung (nach links und rechts gleich), erhoeht – laengs der Welle steht
       // die Wand daneben im Bild, nach dem Sprung ueber den Kamm sieht man die naechste Welle anrollen
       let d = (ab.a || 0) - welle.camA; d = Math.atan2(Math.sin(d), Math.cos(d)); welle.camA += d * 0.06;
-      const H = ab.wH || welle.H, cx = Math.cos(welle.camA), cz = Math.sin(welle.camA), hi = 9 + H * 0.4, ho = 3 + H * 0.35;
+      const H = ab.wH || welle.H, cx = Math.cos(welle.camA), cz = Math.sin(welle.camA), hi = ab.paddeln ? 7 : 9 + H * 0.4, ho = ab.paddeln ? 2.8 : 3 + H * 0.35;   // paddelnd naeher (wie im Flugspiel)
       _cp.set(p.x - cx * hi, Math.max(p.y, 0) + ho, p.z - cz * hi); fin.camY = undefined;
       camera.position.lerp(_cp, 0.12); camera.up.set(0, 1, 0);
       camera.position.y = Math.max(camera.position.y, wellenY(camera.position.x, camera.position.z) + 1.5);   // nie in der Welle

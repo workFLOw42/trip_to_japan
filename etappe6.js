@@ -724,6 +724,7 @@ function updateE6(dt){
   }
   const surfZeigen = story.phase === 'ankunft' && !!eva && locale === 'earth';
   if(surf.ring) surf.ring.zeigen(surfZeigen);
+  if(surf.obj) surf.obj.visible = !(story.surfBrettWeg && story.surfBrettWeg());   // Live-Wunsch 05.11.2026: in der Hand/auf dem Wasser fehlt es im Sand
   if(surf.marke) story.setzeMarke(surf.marke, SURF.x, ISLAND_Y, SURF.z, 1.9, surfZeigen);
   if(surfZeigen && !c400Marke && story.baueMarke) c400Marke = story.baueMarke(0xffd23f, story.finaleSchild ? story.finaleSchild() : '');
   if(c400Marke) story.setzeMarke(c400Marke, VORFELD.x, ISLAND_Y, VORFELD.z, 9, surfZeigen && !!welt.c400);
