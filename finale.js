@@ -1837,6 +1837,18 @@ function hookFinale(){
     spurWasserY = function(x, z){ return welle.aktiv && hier() ? wellenY(x, z) : wyOrig.apply(this, arguments); }; }
   if(typeof untergrundAt === 'function'){ const ugOrig = untergrundAt;                                  // global-ok: Engine
     untergrundAt = function(x, z, y){ if(welle.aktiv && hier() && !isOnLand(x, z)) return 'wasser'; return ugOrig.apply(this, arguments); }; }
+  // Live-Befund 05.11.2026 (im Flugspiel: Orca-Finnen auf Hoehe der Wiese): beim Surfen liegt die Engine-See um WEL.SEE tiefer (wellenBauen:
+  // ground.position.y) – seaYAt gab aber die alte Hoehe zurueck, Orcas, Fische und Boote schwammen 3,5 m ueber dem sichtbaren Wasser.
+  // Jetzt die gezeigte Flaeche: unter dem Wellenfeld die Welle (am Rand weich wie das Mesh), sonst die abgesenkte See.
+  if(typeof seaYAt === 'function'){ const syOrig = seaYAt;                                             // global-ok: Engine
+    seaYAt = function(x, z){                                                                            // global-ok: Engine
+      const y0 = syOrig.apply(this, arguments);
+      if(!(welle.aktiv && welle.mesh && hier())) return y0;
+      const m = welle.mesh.position, e = Math.max(Math.abs(x - m.x) / (welle.NX1 - 1) / welle.SX * 2, Math.abs(z - m.z) / 300);
+      const unten = y0 + WEL.SEE; if(e >= 1) return unten;
+      const r = Math.max(0, Math.min(1, (e - 0.85) / 0.15));
+      return wellenY(x, z) * (1 - r) + unten * r;
+    }; }
   // Toene: Finale-Toene nachfuehren; beim Surfen die Strandkulisse (Moewen + Meer) in voller Lautstaerke
   const ambOrig = updateAmbient;
   updateAmbient = function(dt){
