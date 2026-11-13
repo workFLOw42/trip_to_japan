@@ -3216,6 +3216,7 @@ const BALKEN_SCHRIFT = 'font:800 14px system-ui,sans-serif;color:#fff;text-shado
 function segText(seg, i, txt){
   seg.forEach((s, j) => { if(!s.dataset.schrift){ s.dataset.schrift = '1'; s.style.cssText += BALKEN_SCHRIFT; } const w = j === i ? txt : ''; if(s.textContent !== w) s.textContent = w; });
 }
+story.segText = segText;                                  // etappe6c.js: Fahrt des Shinkansen im Schubbalken
 function fahrtText(){
   if(locale === 'space') return 'Warp ' + warpAnzeige(state.vel.length());                              // global-ok: Engine
   const f = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quat);                                     // global-ok: Engine

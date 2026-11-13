@@ -1568,7 +1568,9 @@ function surfenAussteigen(){
     const S = L().SURF || L().STRANDPLATZ;
     if(eva){ eva.group.position.set(S.x + 2, ISLAND_Y, S.z); eva.yaw = -Math.PI / 2; eva.group.rotation.y = eva.yaw; evaOrbit = 0; evaPitch = 0; }
     snapCamera(); story.phase = 'ankunft';
-    trag.gesurft = true; brettNehmen();                    // Live-Wunsch 05.11.2026: Brett in der Hand – der Abspann kommt erst, wenn es mit Y zurueckgelegt ist
+    // Live-Wunsch 13.11.2026: das Brett steckt gleich wieder an seinem Platz im Sand (Samu steht daneben wie bisher); beim
+    // ersten Mal nach dem Surfen laeuft damit gleich der Abspann (vorher: Brett in der Hand, Abspann erst nach dem Zuruecklegen)
+    trag.gesurft = true; brettZurueck();
   });
 }
 story.finaleSurfenAus = surfenAussteigen;
@@ -1578,7 +1580,7 @@ story.finaleSurfenAus = surfenAussteigen;
 // Brett liegen, linker Stick: vor = paddeln, links/rechts = drehen; die Front einer Welle nimmt mit). A = aufstehen bzw. wieder
 // hinlegen (B steht beim Paddeln auch auf). Am Strand angekommen (Watzone/Sand) = Brett wieder in der Hand. Y mit dem Brett in
 // der Hand = es steckt wieder an seinem Platz; erst dann, beim ersten Mal nach dem Surfen, laeuft der Abspann (Live-Wunsch: erst wieder
-// am Strand und das Brett weggelegt; Y auf dem Wasser stellt Samu mit dem Brett in der Hand an den Brettplatz). Nach dem Waschgang paddelt
+// am Strand und das Brett weggelegt; Y auf dem Wasser stellt Samu an den Brettplatz, das Brett steckt dann gleich wieder). Nach dem Waschgang paddelt
 // er. Im Finale nach der Fallschirmlandung im Wasser wird auch erst gepaddelt.
 const PADDEL = { V: 3, DREH: 1.8, TIEF: 0.5, WELLE: 0.3, VOR: 0.25 };   // m/s, rad/s, Figur unter der Brettoberkante, Mitnahme auf der Front (Anteil V), Brett nach vorn (m)
 const TRAG_WEG = 500;                                    // m vom Brettplatz: weiter weg (oder eingestiegen, geschwommen) steckt es wieder an seinem Platz

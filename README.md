@@ -23,6 +23,9 @@ im Finale springt man mit **Y** aus der C-400. Alle Landebahnen haben eine **Bef
 Festland). Die Transall steht in Etappe 2 auf der Bahn (vorher knapp dahinter). Schub- und Höhenbalken blenden auch wieder ein,
 wenn sich der Schub von selbst ändert. Samu kniet auch aus dem Stand ganz hin. Sirene und Crash-Geräusch einen Hauch leiser.
 
+**Stand 13.11.2026:** Shinkansen-Tempo im Schubbalken statt oben links. Y auf dem Wasser steckt das Surfbrett gleich wieder in den
+Sand. Am Kran kostet ein zu früh gelöster Container, der zurück auf den Kai kommt, einen Fehler.
+
 **Startmenü:** *Neues Spiel* oder – zum Testen – direkt **E2 … E6** und **E6 Höhle** (springt direkt in den Autopiloten
 der Vulkanhöhle) (linker Stick / ← → wählen, A / Enter starten).
 
@@ -87,6 +90,8 @@ Hafenbecken mit Kai (glattes Wasser), Frachtschiff längsseits (Ladung als Fäch
   - Ohne Last hängt der Haken senkrecht, ganz oben hängt die Last fest unter der Katze – dort beruhigt sie sich sofort.
   - **HUD:** Pendelpunkt (grün = ruhig), Winkel und Marker groß, Seil, Abstand zu dem, was darunter liegt
     (grün = aufgesetzt), Wind, Container, Fehler, Zeit. Über einem Lager-Container „▼ tiefer“ / „B: anhängen“.
+  - Wer neben einer Lücke löst, bekommt den Container zurück auf den Kai **und einen Fehler** (zu früh losgelassen).
+    Ohne Fehler geht nur, ihn sanft wieder auf seinen eigenen Lagerplatz zu stellen.
   - **Ladeplan:** Draufsicht mit Fächer, Lücken, Drehbereich, Ausleger und Haken; je Lücke Winkel und Marker, dazu
     Seil-Richtwerte (greifen 31 m · über der Ladung bis 24 m · in der Lücke 26,5 m). Wie man eine Lücke schafft,
     steht bewusst nicht drin.
@@ -125,7 +130,7 @@ Startbahn mit dem **Alpha Jet**. Voraus der **Mount Fuji** (2 km hoch, steht im 
   0 → 300 → 0 km/h, 23 Runden: oben im HUD je Gleis zwei Symbole (grün ok / rot durchgestrichen), genau ein Gleis ist bei
   beiden grün. L-Stick: ein Druck = ein Gleis. Wahlzeit 2 / 1,5 / 1 s (bis 150 / bis 250 / darüber), dann **2 s Ruhe** (HUD
   leer), Signale erst nach der Wahl sichtbar. **3 Gleise erst beim Bremsen ab ~195 km/h** (das neue Gleis zweigt in der Mitte
-  ab). Kamera über dem Triebwagen. Falsches Gleis → Notbremsung → **7 Tage**; alles richtig → Einfahrt Fukuoka-Beach → **4 Tage**.
+  ab). Kamera über dem Triebwagen, das Tempo steht im **Schubbalken** rechts (wie in allen Fahrzeugen). Falsches Gleis → Notbremsung → **7 Tage**; alles richtig → Einfahrt Fukuoka-Beach → **4 Tage**.
 - **Ende (beide Wege):** Globus – der Faden wächst von Tokio nach **Fukuoka**, der lila Punkt wird zur 🌊. Danach steht Samu
   am **Fukuoka-Beach**: Meer mit weißem **Torii** und den **Meoto-Iwa** (Vorbild Sakurai-Futamigaura), Strand mit Palmen,
   Surfbrett im Sand (Ring „Surfen“, kommt bald), Lagerfeuer mit Samurai, eine Samurai-Gruppe, Godzillas; dahinter das Vorfeld

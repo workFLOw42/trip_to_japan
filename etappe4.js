@@ -599,8 +599,12 @@ function kranB(){
   const luecke = LUECKEN.find(l => !l.belegt && Math.hypot(l.x - p.x, l.z - p.z) < Math.max(l.tol, 1.4) + 1.2);
   kran.haengt = null;
   if(!luecke){
-    // irgendwo abgesetzt: zurueck auf den Lagerplatz (nicht verloren), 1 Fehler wenn es faellt
-    if(hoehe > 0.6){ fehler('Container fallen gelassen'); }
+    // irgendwo abgesetzt: zurueck auf den Lagerplatz (nicht verloren). Live-Befund 13.11.2026: zu frueh losgelassen (neben
+    // der Luecke, sanft auf der Ladung) war kein Fehler. Jetzt kostet jedes Zuruecksetzen einen Fehler - frei bleibt nur,
+    // ihn sanft wieder auf seinen eigenen Lagerplatz zu stellen (bewusst zurueckgelegt).
+    const lp = STAPEL[kran.lager.indexOf(c)], heim = lp && Math.hypot(lp.x - p.x, lp.z - p.z) < 2.5;
+    if(hoehe > 0.6) fehler('Container fallen gelassen');
+    else if(!heim) fehler('zu früh losgelassen');
     c.ziel = null; legeZurueck(c);
     return;
   }

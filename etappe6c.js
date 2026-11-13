@@ -316,12 +316,8 @@ function hud(){
     zf.hudEl = document.createElement('div'); zf.hudEl.setAttribute('data-etappe-hud', '1');
     zf.hudEl.style.cssText = 'position:absolute;left:50%;top:70px;transform:translateX(-50%);display:flex;gap:26px;pointer-events:none;z-index:12;font-family:system-ui,sans-serif;';
     document.body.appendChild(zf.hudEl);
-    zf.tachoEl = document.createElement('div'); zf.tachoEl.setAttribute('data-etappe-hud', '1');
-    // Live-Wunsch: Tempo oben links wie das Flieger-HUD (das ist im Zug aus), nicht unten rechts
-    zf.tachoEl.style.cssText = 'position:absolute;top:10px;left:12px;color:#fff;font-size:18px;line-height:1.5;text-shadow:1px 1px 2px rgba(0,0,0,.7);pointer-events:none;user-select:none;z-index:12;';
-    document.body.appendChild(zf.tachoEl);
   }
-  zf.hudEl.style.display = zf.aktiv ? 'flex' : 'none'; zf.tachoEl.style.display = zf.aktiv ? 'block' : 'none';
+  zf.hudEl.style.display = zf.aktiv ? 'flex' : 'none';
   const r = zf.runden[zf.ri], n = zf.zeigt && r ? r.n : zf.n;
   const sig = (zf.zeigt ? 'z' + zf.ri : 'r') + '|' + n + '|' + zf.gleis;
   if(sig !== zf._sig){
@@ -335,13 +331,28 @@ function hud(){
     }
     zf.hudEl.innerHTML = h;
   }
-  const v = zf.halt ? zf.vHalt : (zf.start ? tempo(zf.t) : 0);
-  zf.tachoEl.innerHTML = 'Shinkansen<br>Speed: ' + Math.round(v * 3.6) + ' km/h';
 }
-// Flieger-HUD (Modell, Hoehe, Schub) und Schubbalken passen nicht zum Zug -> waehrend der Fahrt aus
-// (der Schubbalken folgt planeGroup.visible -> aus, solange der Flieger unsichtbar ist)
+// Fahrt im Standard-Schubbalken (Live-Wunsch 13.11.2026, vorher "Shinkansen / Speed" oben links): gefuellt nach Tempo
+// (300 km/h = voll), die km/h im obersten leuchtenden Segment wie in allen Fahrzeugen. Er blendet im Zug nicht aus - der
+// Zug faehrt von selbst, es gibt keine Schubeingabe. Platz und Groesse wie story.js schubWieJFG (unter dem Radar).
+function zugSchub(){
+  if(!schubEl) return;
+  const v = zf.halt ? zf.vHalt : (zf.start ? tempo(zf.t) : 0), g = Math.max(0, Math.min(1, v / V_MAX));
+  const an = Math.round(g * 10), kmh = Math.round(v * 3.6);
+  const ra = document.getElementById('radar'), rw = ra ? ra.getBoundingClientRect().width : 0;
+  const s = schubEl.style, w = Math.round((rw > 20 ? rw : 130) - 6) + 'px', top = (12 + 130 + 20) + 'px';
+  if(s.display !== 'flex') s.display = 'flex';
+  if(s.opacity !== '1') s.opacity = '1';
+  if(s.top !== top) s.top = top;
+  if(s.width !== w){ s.width = w; s.height = '293px'; s.right = '12px'; s.borderRadius = '9px'; s.gap = '3px'; }
+  const k = 'zug|' + an + '|' + kmh;
+  if(schubAlt === k) return; schubAlt = k;
+  schubSegmente(schubSeg, g, 3, 'boot');                 // alle Abstaende gleich (keine Flieger-Stufen)
+  if(story.segText) story.segText(schubSeg, an >= 1 && kmh > 0 ? an - 1 : -1, kmh + ' km/h');
+}
+// Flieger-HUD (Modell, Hoehe, Schub) passt nicht zum Zug -> waehrend der Fahrt aus; den Schubbalken fuellt zugSchub
 function hudEngine(an){ for(const id of ['hud', 'gyro']){ const el = document.getElementById(id); if(el) el.style.visibility = an ? '' : 'hidden'; } }
-function hudAus(){ if(zf.hudEl){ zf.hudEl.style.display = 'none'; zf.tachoEl.style.display = 'none'; } }
+function hudAus(){ if(zf.hudEl) zf.hudEl.style.display = 'none'; }
 
 // ---- Hooks ----------------------------------------------------------------------------------------------------
 function hookE6c(){
@@ -365,6 +376,8 @@ function hookE6c(){
   // Schatten des (unsichtbaren) Fliegers nicht aufs Gleis
   const schattenOrig = updateShadow;
   updateShadow = function(){ if(hier() && zf.aktiv){ if(planeShadow) planeShadow.visible = false; if(ovalShadow) ovalShadow.visible = false; return; } return schattenOrig.apply(this, arguments); };
+  const schubOrig = schubBalken;
+  schubBalken = function(){ if(hier() && zf.aktiv){ zugSchub(); return; } return schubOrig.apply(this, arguments); };
   const gyroOrig = updateGyro;
   updateGyro = function(){ if(hier() && zf.aktiv){ const g = document.getElementById('gyro'); if(g) g.style.display = 'none'; return; } return gyroOrig.apply(this, arguments); };
 }
